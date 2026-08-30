@@ -149,10 +149,16 @@ export async function dispatchOmgRequest(request, config, requestFetch = fetch) 
     body: JSON.stringify({ message: 'Install Oh My Github App workflow', content: Buffer.from(workflow).toString('base64'), branch: request.defaultBranch })
   })
   if (!create.ok) throw new Error(`Repository workflow bootstrap returned ${create.status}`)
-  const dispatch = await requestFetch(`${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/actions/workflows/opencode.yml/dispatches`, {
-    method: 'POST', headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` },
-    body: JSON.stringify({ ref: request.defaultBranch, inputs })
-  })
+  const dispatchUrl = `${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/actions/workflows/opencode.yml/dispatches`
+  let dispatch
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    dispatch = await requestFetch(dispatchUrl, {
+      method: 'POST', headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` },
+      body: JSON.stringify({ ref: request.defaultBranch, inputs })
+    })
+    if (dispatch.ok || dispatch.status !== 404) break
+    await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)))
+  }
   if (!dispatch.ok) throw new Error(`Bootstrapped workflow dispatch returned ${dispatch.status}`)
   return { route: 'bootstrapped', repository: request.repository }
 }
