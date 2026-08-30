@@ -21,14 +21,15 @@ non-`/omg` events, and mints an installation-scoped token. It checks
 `.github/workflows/opencode.yml` on the target repository's default branch:
 
 - When the file exists, the App dispatches that repository-local wrapper.
-- When the lookup returns 404, the service dispatches the centralized
-  `.github/workflows/opencode.yml` entry workflow in `GauntletLoop/OhMyGithub` with
-  the target repository inputs.
+- When the lookup returns 404, the App creates a thin repository-local wrapper
+  that calls the centralized reusable workflow, then dispatches that wrapper.
+  This keeps the Actions run and logs in the repository containing the `/omg`
+  issue without copying the pipeline implementation.
 
 Both routes call `.github/workflows/opencode-reusable.yml`. That reusable
 workflow is the only copy of the OpenCode build, verification, remediation,
-delivery, publishing, reporting, and cleanup pipeline. The fallback mints its
-target token from the central `OMG_APP_ID` and `OMG_APP_PRIVATE_KEY` Actions
-secrets; tokens are never carried in workflow inputs.
+delivery, publishing, reporting, and cleanup pipeline. The local wrapper uses
+the repository's `GITHUB_TOKEN`; installation credentials and tokens are never
+carried in workflow inputs.
 
 Keep the webhook secret out of the repository and this wiki.
