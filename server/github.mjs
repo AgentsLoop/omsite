@@ -38,6 +38,47 @@ export function verifyWebhookSignature(body, signature, secret) {
   return expected.length === actual.length && timingSafeEqual(expected, actual)
 }
 
+export function repositoryWorkflow(owner = 'GauntletLoop', repo = 'OhMyGithub', ref = 'main') {
+  return [
+    'name: OMG',
+    'run-name: "OMG #${{ inputs.issue_number }} — ${{ inputs.issue_title }}"',
+    '',
+    'on:',
+    '  workflow_dispatch:',
+    '    inputs:',
+    '      issue_number: { required: true }',
+    '      request: { required: true }',
+    '      issue_title: { required: true }',
+    "      labels_json: { required: false, default: '[]' }",
+    '      sender: { required: true }',
+    '      source: { required: false, default: github-app }',
+    '      target_ref: { required: false }',
+    '',
+    'permissions:',
+    '  contents: write',
+    '  issues: write',
+    '  pull-requests: write',
+    '  id-token: write',
+    '',
+    'jobs:',
+    '  opencode:',
+    `    uses: ${owner}/${repo}/.github/workflows/opencode-reusable.yml@${ref}`,
+    '    with:',
+    '      target_repository: ${{ github.repository }}',
+    '      target_owner: ${{ github.repository_owner }}',
+    '      target_repo: ${{ github.event.repository.name }}',
+    '      target_ref: ${{ inputs.target_ref || github.event.repository.default_branch }}',
+    '      issue_number: ${{ inputs.issue_number }}',
+    '      request: ${{ inputs.request }}',
+    '      issue_title: ${{ inputs.issue_title }}',
+    '      labels_json: ${{ inputs.labels_json }}',
+    '      sender: ${{ inputs.sender }}',
+    '      use_app_token: false',
+    '    secrets: inherit',
+    ''
+  ].join('\n')
+}
+
 export function omgRequest(event, payload) {
   if (!['issues', 'issue_comment'].includes(event)) return null
   if (payload.sender?.type === 'Bot' || payload.issue?.pull_request) return null
@@ -102,10 +143,16 @@ export async function dispatchOmgRequest(request, config, requestFetch = fetch) 
     return { route: 'local', repository: request.repository }
   }
   if (workflowResponse.status !== 404) throw new Error(`Workflow lookup returned ${workflowResponse.status}`)
-  const fallback = await requestFetch(`${api}/repos/${encodeURIComponent(config.fallbackOwner)}/${encodeURIComponent(config.fallbackRepo)}/actions/workflows/${encodeURIComponent(config.fallbackWorkflow)}/dispatches`, {
-    method: 'POST', headers: { ...commonHeaders, authorization: `Bearer ${config.fallbackToken}` },
-    body: JSON.stringify({ ref: config.fallbackRef || 'main', inputs: { ...inputs, target_repository: request.repository, target_owner: request.owner, target_repo: request.repo, target_ref: request.defaultBranch, installation_id: String(request.installationId) } })
+  const workflow = repositoryWorkflow(config.fallbackOwner, config.fallbackRepo, config.fallbackRef)
+  const create = await requestFetch(`${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/contents/.github/workflows/opencode.yml`, {
+    method: 'PUT', headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` },
+    body: JSON.stringify({ message: 'Install Oh My Github App workflow', content: Buffer.from(workflow).toString('base64'), branch: request.defaultBranch })
   })
-  if (!fallback.ok) throw new Error(`Central fallback workflow dispatch returned ${fallback.status}`)
-  return { route: 'fallback', repository: `${config.fallbackOwner}/${config.fallbackRepo}` }
+  if (!create.ok) throw new Error(`Repository workflow bootstrap returned ${create.status}`)
+  const dispatch = await requestFetch(`${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/actions/workflows/opencode.yml/dispatches`, {
+    method: 'POST', headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` },
+    body: JSON.stringify({ ref: request.defaultBranch, inputs })
+  })
+  if (!dispatch.ok) throw new Error(`Bootstrapped workflow dispatch returned ${dispatch.status}`)
+  return { route: 'bootstrapped', repository: request.repository }
 }

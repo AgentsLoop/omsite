@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHmac, generateKeyPairSync } from 'node:crypto'
-import { dispatchOmgRequest, extractUrls, omgRequest, slugify, verifyWebhookSignature } from './github.mjs'
+import { dispatchOmgRequest, extractUrls, omgRequest, repositoryWorkflow, slugify, verifyWebhookSignature } from './github.mjs'
 test('extracts OpenCode, preview, PR and screenshots from issue comments', () => {
   const issue = { body: 'started' }, comments = [{ body: 'Live OpenCode: https://quiet-field.trycloudflare.com/work/session/ses_123' }, { body: 'Public game: https://bright-game.trycloudflare.com\nPR https://github.com/GauntletLoop/OhMyGithub/pull/96\n![shot](https://raw.githubusercontent.com/GauntletLoop/OhMyGithub/abc/project/screenshots/final-game.png)' }]
   const result = extractUrls(issue, comments)
@@ -38,7 +38,7 @@ test('verifies webhook signatures without accepting malformed signatures', () =>
 function response(status, data = {}) { return { ok: status >= 200 && status < 300, status, json: async () => data } }
 function dispatchConfig() {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
-  return { appId: 123, privateKey, fallbackOwner: 'GauntletLoop', fallbackRepo: 'OhMyGithub', fallbackWorkflow: 'opencode.yml', fallbackToken: 'central-token' }
+  return { appId: 123, privateKey, fallbackOwner: 'GauntletLoop', fallbackRepo: 'OhMyGithub', fallbackRef: 'main' }
 }
 
 test('dispatches the repository-local workflow when it exists', async () => {
@@ -55,20 +55,27 @@ test('dispatches the repository-local workflow when it exists', async () => {
   assert.equal(calls.at(-1).options.headers.authorization, 'Bearer installation-token')
 })
 
-test('dispatches the centralized fallback when the target has no workflow', async () => {
+test('bootstraps and dispatches a local wrapper when the target has no workflow', async () => {
   const calls = []
   const result = await dispatchOmgRequest(omgRequest('issue_comment', webhook), dispatchConfig(), async (url, options = {}) => {
     calls.push({ url, options })
     if (url.includes('/access_tokens')) return response(201, { token: 'installation-token' })
-    if (url.includes('/contents/')) return response(404)
+    if (url.includes('/contents/') && options.method !== 'PUT') return response(404)
+    if (url.includes('/contents/') && options.method === 'PUT') return response(201)
     return response(204)
   })
-  assert.equal(result.route, 'fallback')
-  const last = calls.at(-1), body = JSON.parse(last.options.body)
-  assert.match(last.url, /GauntletLoop\/OhMyGithub\/actions\/workflows\/opencode\.yml\/dispatches$/)
-  assert.equal(last.options.headers.authorization, 'Bearer central-token')
-  assert.equal(body.inputs.target_repository, 'octo/example')
-  assert.equal(body.inputs.target_owner, 'octo')
-  assert.equal(body.inputs.target_repo, 'example')
-  assert.equal(body.inputs.installation_id, '42')
+  assert.equal(result.route, 'bootstrapped')
+  const create = calls.at(-2), dispatch = calls.at(-1)
+  assert.equal(create.options.method, 'PUT')
+  assert.equal(create.options.headers.authorization, 'Bearer installation-token')
+  assert.match(Buffer.from(JSON.parse(create.options.body).content, 'base64').toString(), /uses: GauntletLoop\/OhMyGithub\/.github\/workflows\/opencode-reusable.yml@main/)
+  assert.match(dispatch.url, /octo\/example\/actions\/workflows\/opencode\.yml\/dispatches$/)
+  assert.equal(dispatch.options.headers.authorization, 'Bearer installation-token')
+  assert.equal(JSON.parse(dispatch.options.body).ref, 'trunk')
+})
+
+test('repository wrapper keeps execution in the issue repository', () => {
+  const workflow = repositoryWorkflow()
+  assert.match(workflow, /target_repository: \$\{\{ github.repository \}\}/)
+  assert.match(workflow, /use_app_token: false/)
 })

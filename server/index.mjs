@@ -26,9 +26,7 @@ const githubApp = {
   privateKey: String(process.env.GITHUB_APP_PRIVATE_KEY || '').replaceAll('\\n', '\n'),
   fallbackOwner: process.env.OMG_FALLBACK_OWNER || 'GauntletLoop',
   fallbackRepo: process.env.OMG_FALLBACK_REPO || 'OhMyGithub',
-  fallbackWorkflow: process.env.OMG_FALLBACK_WORKFLOW || 'opencode.yml',
-  fallbackRef: process.env.OMG_FALLBACK_REF || 'main',
-  fallbackToken: process.env.OMG_FALLBACK_TOKEN || githubToken
+  fallbackRef: process.env.OMG_FALLBACK_REF || 'main'
 }
 const sessionSecret = process.env.SESSION_SECRET || randomBytes(32).toString('hex')
 mkdirSync(gamesDir, { recursive: true })
@@ -101,7 +99,7 @@ app.post('/api/github/webhooks', express.raw({ type: 'application/json', limit: 
     const payload = JSON.parse(req.body.toString('utf8'))
     const request = omgRequest(String(req.headers['x-github-event'] || ''), payload)
     if (!request) return res.status(202).json({ accepted: false })
-    if (!githubApp.appId || !githubApp.privateKey || !githubApp.fallbackToken) {
+    if (!githubApp.appId || !githubApp.privateKey) {
       return res.status(503).json({ error: 'GitHub App dispatch is not configured' })
     }
     const dispatched = await dispatchOmgRequest(request, githubApp)

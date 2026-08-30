@@ -20,8 +20,8 @@ production-mode local check.
 - `GITHUB_TOKEN`: creates anonymous `/goal` issues and raises GitHub API limits.
 - `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_WEBHOOK_SECRET`:
   authenticate signed App webhooks and mint installation-scoped tokens.
-- `OMG_FALLBACK_TOKEN`: dispatches the central `opencode.yml` entry workflow
-  when the installed repository does not contain `.github/workflows/opencode.yml`.
+- `OMG_FALLBACK_OWNER`, `OMG_FALLBACK_REPO`, and `OMG_FALLBACK_REF`: identify
+  the centralized reusable workflow used by bootstrapped repository wrappers.
 - `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`: optional GitHub login.
 - `FIREBASE_SERVICE_ACCOUNT_BASE64`: Firebase service-account JSON, base64 encoded.
 - `PUBLISH_TOKEN`: bearer token shared with the Actions secret
@@ -30,9 +30,9 @@ production-mode local check.
 
 The webhook router validates `X-Hub-Signature-256`, ignores bot and non-`/omg`
 events, and checks the target repository's default branch. A present local
-workflow is dispatched with the installation token. A 404 dispatches the same
-entry workflow centrally with target inputs; both routes call the same
-`opencode-reusable.yml` pipeline.
+workflow is dispatched with the installation token. A 404 creates a thin local
+wrapper and dispatches it in the target repository; both routes call the same
+central `opencode-reusable.yml` pipeline.
 
 Deploy the Docker service to A1 with `../scripts/deploy-omgithub-a1.sh`. The
 container publishes only to `127.0.0.1:8794`; host Caddy terminates TLS for

@@ -29,12 +29,13 @@ The A1 Caddyfile must route both `omgithub.com` and `*.omgithub.com` to
 `POST /api/github/webhooks` validates the GitHub signature and normalizes
 eligible `issues` and `issue_comment` `/omg` events. The service mints an
 installation-scoped token, checks `.github/workflows/opencode.yml` on the
-target default branch, and dispatches that workflow when it exists. Only a
-confirmed 404 takes the centralized `GauntletLoop/OhMyGithub` fallback route.
+target default branch, and dispatches that workflow when it exists. On a
+confirmed 404 it creates and dispatches a thin local wrapper that calls the
+centralized `GauntletLoop/OhMyGithub` reusable workflow.
 
-The two workflow files have distinct roles: `opencode.yml` handles local,
-legacy, and centralized fallback entry events, while
+The two workflow files have distinct roles: `opencode.yml` handles local and
+legacy entry events, while
 `opencode-reusable.yml` owns the shared build,
 verification, delivery, publishing, reporting, and cleanup pipeline. The
-fallback reusable run mints its target token from `OMG_APP_ID` and
-`OMG_APP_PRIVATE_KEY`; never pass an installation token as a workflow input.
+bootstrapped wrapper runs in the issue repository with its `GITHUB_TOKEN`;
+never pass an installation token as a workflow input.
