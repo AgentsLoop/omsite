@@ -17,8 +17,8 @@ const baseHost = new URL(origin).hostname.toLowerCase()
 const publicHosts = [...new Set([baseHost, ...String(process.env.PUBLIC_ALIASES || 'lolgames.net').split(',').map(value => value.trim().toLowerCase()).filter(Boolean)])]
 const dataDir = resolve(process.env.DATA_DIR || join(root, 'data'))
 const gamesDir = join(dataDir, 'games')
-const owner = process.env.GITHUB_OWNER || 'agents-dev'
-const repo = process.env.GITHUB_REPO || 'aiplay'
+const owner = process.env.GITHUB_OWNER || 'Issuefy'
+const repo = process.env.GITHUB_REPO || 'OhMyGithub'
 const githubToken = process.env.GITHUB_TOKEN || ''
 const publishToken = process.env.PUBLISH_TOKEN || ''
 const githubApp = {
