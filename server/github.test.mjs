@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { createHmac, generateKeyPairSync } from 'node:crypto'
 import { dispatchOmgRequest, extractUrls, omgRequest, slugify, verifyWebhookSignature } from './github.mjs'
 test('extracts OpenCode, preview, PR and screenshots from issue comments', () => {
-  const issue = { body: 'started' }, comments = [{ body: 'Live OpenCode: https://quiet-field.trycloudflare.com/work/session/ses_123' }, { body: 'Public game: https://bright-game.trycloudflare.com\nPR https://github.com/Issuefy/OhMyGithub/pull/96\n![shot](https://raw.githubusercontent.com/Issuefy/OhMyGithub/abc/project/screenshots/final-game.png)' }]
+  const issue = { body: 'started' }, comments = [{ body: 'Live OpenCode: https://quiet-field.trycloudflare.com/work/session/ses_123' }, { body: 'Public game: https://bright-game.trycloudflare.com\nPR https://github.com/GauntletLoop/OhMyGithub/pull/96\n![shot](https://raw.githubusercontent.com/GauntletLoop/OhMyGithub/abc/project/screenshots/final-game.png)' }]
   const result = extractUrls(issue, comments)
   assert.match(result.opencode, /ses_123/); assert.equal(result.preview, 'https://bright-game.trycloudflare.com'); assert.match(result.pr, /pull\/96/); assert.equal(result.screenshots.length, 1)
 })
@@ -38,7 +38,7 @@ test('verifies webhook signatures without accepting malformed signatures', () =>
 function response(status, data = {}) { return { ok: status >= 200 && status < 300, status, json: async () => data } }
 function dispatchConfig() {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
-  return { appId: 123, privateKey, fallbackOwner: 'Issuefy', fallbackRepo: 'OhMyGithub', fallbackWorkflow: 'opencode.yml', fallbackToken: 'central-token' }
+  return { appId: 123, privateKey, fallbackOwner: 'GauntletLoop', fallbackRepo: 'OhMyGithub', fallbackWorkflow: 'opencode.yml', fallbackToken: 'central-token' }
 }
 
 test('dispatches the repository-local workflow when it exists', async () => {
@@ -65,7 +65,7 @@ test('dispatches the centralized fallback when the target has no workflow', asyn
   })
   assert.equal(result.route, 'fallback')
   const last = calls.at(-1), body = JSON.parse(last.options.body)
-  assert.match(last.url, /Issuefy\/OhMyGithub\/actions\/workflows\/opencode\.yml\/dispatches$/)
+  assert.match(last.url, /GauntletLoop\/OhMyGithub\/actions\/workflows\/opencode\.yml\/dispatches$/)
   assert.equal(last.options.headers.authorization, 'Bearer central-token')
   assert.equal(body.inputs.target_repository, 'octo/example')
   assert.equal(body.inputs.target_owner, 'octo')

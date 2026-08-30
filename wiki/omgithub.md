@@ -30,7 +30,7 @@ The A1 Caddyfile must route both `omgithub.com` and `*.omgithub.com` to
 eligible `issues` and `issue_comment` `/omg` events. The service mints an
 installation-scoped token, checks `.github/workflows/opencode.yml` on the
 target default branch, and dispatches that workflow when it exists. Only a
-confirmed 404 takes the centralized `Issuefy/OhMyGithub` fallback route.
+confirmed 404 takes the centralized `GauntletLoop/OhMyGithub` fallback route.
 
 The two workflow files have distinct roles: `opencode.yml` handles local,
 legacy, and centralized fallback entry events, while
