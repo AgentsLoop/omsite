@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cookies, nonce, sign, verify } from './auth.mjs'
-import { extractUrls, github, slugify } from './github.mjs'
+import { dispatchOmgRequest, extractUrls, github, omgRequest, slugify, verifyWebhookSignature } from './github.mjs'
 import { createStore } from './store.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -21,6 +21,15 @@ const owner = process.env.GITHUB_OWNER || 'agents-dev'
 const repo = process.env.GITHUB_REPO || 'aiplay'
 const githubToken = process.env.GITHUB_TOKEN || ''
 const publishToken = process.env.PUBLISH_TOKEN || ''
+const githubApp = {
+  appId: process.env.GITHUB_APP_ID || '',
+  privateKey: String(process.env.GITHUB_APP_PRIVATE_KEY || '').replaceAll('\\n', '\n'),
+  fallbackOwner: process.env.OMG_FALLBACK_OWNER || 'Issuefy',
+  fallbackRepo: process.env.OMG_FALLBACK_REPO || 'OhMyGithub',
+  fallbackWorkflow: process.env.OMG_FALLBACK_WORKFLOW || 'opencode.yml',
+  fallbackRef: process.env.OMG_FALLBACK_REF || 'main',
+  fallbackToken: process.env.OMG_FALLBACK_TOKEN || githubToken
+}
 const sessionSecret = process.env.SESSION_SECRET || randomBytes(32).toString('hex')
 mkdirSync(gamesDir, { recursive: true })
 
@@ -82,6 +91,23 @@ app.get('/auth/github/callback', async (req, res) => {
     const profile = await github('/user', tokenData.access_token); setSession(res, { login: profile.login, name: profile.name, avatar_url: profile.avatar_url, html_url: profile.html_url, token: tokenData.access_token })
     res.redirect(`/${profile.login}`)
   } catch (error) { res.status(400).send(`GitHub sign-in failed: ${error.message}`) }
+})
+
+app.post('/api/github/webhooks', express.raw({ type: 'application/json', limit: '2mb' }), async (req, res, next) => {
+  try {
+    if (!verifyWebhookSignature(req.body, req.headers['x-hub-signature-256'], process.env.GITHUB_WEBHOOK_SECRET || '')) {
+      return res.status(401).json({ error: 'Invalid webhook signature' })
+    }
+    const payload = JSON.parse(req.body.toString('utf8'))
+    const request = omgRequest(String(req.headers['x-github-event'] || ''), payload)
+    if (!request) return res.status(202).json({ accepted: false })
+    if (!githubApp.appId || !githubApp.privateKey || !githubApp.fallbackToken) {
+      return res.status(503).json({ error: 'GitHub App dispatch is not configured' })
+    }
+    const dispatched = await dispatchOmgRequest(request, githubApp)
+    console.log(`OMG webhook routed ${request.repository}#${request.issueNumber} through ${dispatched.route}`)
+    res.status(202).json({ accepted: true, route: dispatched.route })
+  } catch (error) { next(error) }
 })
 
 app.use(express.json({ limit: '2mb' }))
