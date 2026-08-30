@@ -1,8 +1,8 @@
 # Oh My Github App
 
-The public GitHub App is owned by the `Issuefy` organization and is available
+The public GitHub App is owned by the `GauntletLoop` organization and is available
 at [Oh My Github App](https://github.com/apps/oh-my-github-app). It is installed
-for all current and future repositories in `Issuefy`, and can be installed by
+for all current and future repositories in `GauntletLoop`, and can be installed by
 other users or organizations because the App is public.
 
 The App has repository metadata read access and Issues read/write access. It
@@ -22,7 +22,7 @@ non-`/omg` events, and mints an installation-scoped token. It checks
 
 - When the file exists, the App dispatches that repository-local wrapper.
 - When the lookup returns 404, the service dispatches the centralized
-  `.github/workflows/opencode.yml` entry workflow in `Issuefy/OhMyGithub` with
+  `.github/workflows/opencode.yml` entry workflow in `GauntletLoop/OhMyGithub` with
   the target repository inputs.
 
 Both routes call `.github/workflows/opencode-reusable.yml`. That reusable
