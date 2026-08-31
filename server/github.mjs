@@ -83,7 +83,6 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '      issue_title: { required: true }',
     "      labels_json: { required: false, default: '[]' }",
     '      sender: { required: true }',
-    '      target_ref: { required: true }',
     '',
     'permissions:',
     '  contents: write',
@@ -95,7 +94,6 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '  opencode:',
     `    uses: ${owner}/${repo}/.github/workflows/opencode-reusable.yml@${ref}`,
     '    with:',
-    '      target_ref: ${{ inputs.target_ref }}',
     '      issue_number: ${{ inputs.issue_number }}',
     '      request: ${{ inputs.request }}',
     '      issue_title: ${{ inputs.issue_title }}',
@@ -163,7 +161,7 @@ export async function dispatchOmgRequest(request, config, requestFetch = fetch) 
     }
     return false
   }
-  const workflowPath = `/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/contents/.github/workflows/opencode.yml?ref=${encodeURIComponent(request.defaultBranch)}`
+  const workflowPath = `/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/contents/.github/workflows/opencode.yml?ref=${encodeURIComponent(request.targetRef)}`
   const workflowResponse = await requestFetch(`${api}${workflowPath}`, {
     headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` }
   })
@@ -201,13 +199,12 @@ export async function dispatchOmgRequest(request, config, requestFetch = fetch) 
     request: request.request,
     issue_title: request.issueTitle,
     labels_json: JSON.stringify(request.labels),
-    sender: request.sender,
-    target_ref: request.targetRef
+    sender: request.sender
   }
   if (workflowResponse.ok) {
     const dispatch = await requestFetch(`${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/actions/workflows/opencode.yml/dispatches`, {
       method: 'POST', headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` },
-      body: JSON.stringify({ ref: request.defaultBranch, inputs })
+      body: JSON.stringify({ ref: request.targetRef, inputs })
     })
     if (!dispatch.ok) throw new Error(`Repository-local workflow dispatch returned ${dispatch.status}`)
     return { route: 'local', repository: request.repository }
@@ -216,7 +213,7 @@ export async function dispatchOmgRequest(request, config, requestFetch = fetch) 
   const workflow = repositoryWorkflow(config.fallbackOwner, config.fallbackRepo, config.fallbackRef)
   const create = await requestFetch(`${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/contents/.github/workflows/opencode.yml`, {
     method: 'PUT', headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` },
-    body: JSON.stringify({ message: 'Install Oh My Github App workflow', content: Buffer.from(workflow).toString('base64'), branch: request.defaultBranch })
+    body: JSON.stringify({ message: 'Install Oh My Github App workflow', content: Buffer.from(workflow).toString('base64'), branch: request.targetRef })
   })
   if (!create.ok) throw new Error(`Repository workflow bootstrap returned ${create.status}`)
   const dispatchUrl = `${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/actions/workflows/opencode.yml/dispatches`
@@ -224,7 +221,7 @@ export async function dispatchOmgRequest(request, config, requestFetch = fetch) 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     dispatch = await requestFetch(dispatchUrl, {
       method: 'POST', headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` },
-      body: JSON.stringify({ ref: request.defaultBranch, inputs })
+      body: JSON.stringify({ ref: request.targetRef, inputs })
     })
     if (dispatch.ok || dispatch.status !== 404) break
     await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)))

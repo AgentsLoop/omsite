@@ -21,14 +21,15 @@ The webhook service verifies `X-Hub-Signature-256`, ignores bot-authored and
 non-`OpenCode`-labeled issue events, and mints an installation-scoped token. It
 accepts only issue creation with `OpenCode` already present or addition of that
 exact label; comments and edits never execute work. It checks
-`.github/workflows/opencode.yml` on the target repository's default branch:
+`.github/workflows/opencode.yml` on the selected branch:
 
 An optional first issue-body line `branch: <existing-branch>` selects the target
 checkout and pull-request base. The App removes that metadata line from the
 OpenCode prompt and validates the branch before routing. Invalid or nonexistent
-branches receive an issue comment and stop before dispatch. The workflow
-definition itself remains dispatched from the default branch, with the selected
-branch forwarded through `target_ref`.
+branches receive an issue comment and stop before dispatch. The App dispatches
+the workflow from the selected branch. A repository-owned wrapper therefore
+uses the reusable pipeline revision from that branch; a bootstrapped wrapper
+continues to call the central pipeline.
 
 Before dispatching or bootstrapping a wrapper, the service verifies that the
 installation token has Actions, Contents, Issues, and Workflows

@@ -62,7 +62,7 @@ test('dispatches the repository-local workflow when it exists', async () => {
   assert.equal(result.route, 'local')
   assert.match(calls.at(-1).url, /octo\/example\/actions\/workflows\/opencode\.yml\/dispatches$/)
   assert.equal(JSON.parse(calls.at(-1).options.body).ref, 'trunk')
-  assert.equal(JSON.parse(calls.at(-1).options.body).inputs.target_ref, 'trunk')
+  assert.equal('target_ref' in JSON.parse(calls.at(-1).options.body).inputs, false)
   assert.equal(calls.at(-1).options.headers.authorization, 'Bearer installation-token')
 })
 
@@ -101,8 +101,9 @@ test('validates and forwards a custom issue branch without including metadata in
   assert.equal(result.route, 'local')
   const dispatch = calls.at(-1)
   const payload = JSON.parse(dispatch.options.body)
-  assert.equal(payload.ref, 'trunk')
-  assert.equal(payload.inputs.target_ref, 'codex/omgithub-site')
+  assert.equal(calls.some(call => call.url.includes('/contents/.github/workflows/opencode.yml?ref=codex%2Fomgithub-site')), true)
+  assert.equal(payload.ref, 'codex/omgithub-site')
+  assert.equal('target_ref' in payload.inputs, false)
   assert.equal(payload.inputs.request, 'Build a tiny browser page.')
 })
 
@@ -161,8 +162,8 @@ test('uses the notification token when the installation cannot comment', async (
   assert.equal(calls.at(-1).options.headers.authorization, 'Bearer service-token')
 })
 
-test('repository wrapper forwards only issue data and target branch', () => {
+test('repository wrapper uses the workflow dispatch branch', () => {
   const workflow = repositoryWorkflow()
-  assert.match(workflow, /target_ref: \$\{\{ inputs.target_ref \}\}/)
+  assert.doesNotMatch(workflow, /target_ref/)
   assert.doesNotMatch(workflow, /target_repository|use_app_token|installation_id/)
 })
