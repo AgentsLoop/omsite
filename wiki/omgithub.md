@@ -30,9 +30,9 @@ The A1 Caddyfile must route both `omgithub.com` and `*.omgithub.com` to
 eligible `issues.opened` events that contain the exact `OpenCode` label and
 `issues.labeled` events that add it. Comments, edits, bots, pull requests, and
 other labels are ignored. The service mints an installation-scoped token and
-checks `.github/workflows/opencode.yml` on the target default branch. It leaves
-native issue-trigger workflows alone, dispatches dispatch-only wrappers, and on
-a confirmed 404 creates and dispatches a thin local wrapper that calls the centralized
+checks `.github/workflows/opencode.yml` on the target default branch. It
+dispatches dispatch-only wrappers and, on a confirmed 404, creates and dispatches
+a thin local wrapper that calls the centralized
 `AgentsLoop/OhMyGithub` reusable workflow.
 
 Before dispatching or bootstrapping, it checks the installation's required write
@@ -41,10 +41,10 @@ when any are missing.
 
 The first issue-body line may be `branch: <existing-branch>`. The App strips the
 directive from the implementation request, validates the branch, and forwards
-it as `target_ref`. A local workflow with a native `issues` trigger is not
-dispatched again; this prevents one label event from creating duplicate runs.
+it as `target_ref`. Repository-local workflows should remain dispatch-only so
+one App event creates exactly one run.
 
-The two workflow files have distinct roles: `opencode.yml` handles label and
+The two workflow files have distinct roles: `opencode.yml` handles only
 App-dispatched entry events, while `opencode-reusable.yml` owns the shared build,
 verification, delivery, publishing, reporting, and cleanup pipeline. The
 bootstrapped wrapper runs in the issue repository with its `GITHUB_TOKEN`;

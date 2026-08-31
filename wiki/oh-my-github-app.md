@@ -36,9 +36,8 @@ request stops before an Actions run is created. If Issues write access itself is
 missing, the service uses its configured notification token when that token can
 access the repository.
 
-- When the file handles `issues` events itself, the App leaves execution to that
-  native trigger instead of creating a duplicate dispatch.
-- When the file is a dispatch-only wrapper, the App dispatches it.
+- When the file is a dispatch-only wrapper, the App dispatches it. Keep the
+  repository-local workflow dispatch-only so the App is the sole issue router.
 - When the lookup returns 404, the App creates a thin repository-local wrapper
   that calls the centralized reusable workflow, then dispatches that wrapper.
   This keeps the Actions run and logs in the repository containing the `OpenCode`
