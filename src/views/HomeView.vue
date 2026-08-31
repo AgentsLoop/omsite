@@ -34,7 +34,13 @@ import { useRouter } from 'vue-router'
 import GameCard from '../components/GameCard.vue'
 const props = defineProps({ me: Object })
 const router = useRouter(), prompt = ref(''), loading = ref(false), error = ref(''), projects = ref([]), loadingProjects = ref(true)
-async function loadProjects() { loadingProjects.value = true; const r = await fetch(props.me ? '/api/projects?mine=1' : '/api/projects'); projects.value = r.ok ? (await r.json()).projects : []; loadingProjects.value = false }
+async function loadProjects() {
+  loadingProjects.value = true
+  try {
+    const r = await fetch(props.me ? '/api/projects?mine=1' : '/api/projects')
+    projects.value = r.ok ? (await r.json()).projects : []
+  } catch { projects.value = [] } finally { loadingProjects.value = false }
+}
 async function create() {
   if (!prompt.value.trim() || loading.value) return
   loading.value = true; error.value = ''

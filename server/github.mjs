@@ -101,7 +101,11 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '      issue_title: ${{ inputs.issue_title }}',
     '      labels_json: ${{ inputs.labels_json }}',
     '      sender: ${{ inputs.sender }}',
-    '    secrets: inherit',
+    '    secrets:',
+    '      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}',
+    '      OPENCODE_AUTH_JSON: ${{ secrets.OPENCODE_AUTH_JSON }}',
+    '      AGENTSWEB_SSH_PUBLIC_KEY: ${{ secrets.AGENTSWEB_SSH_PUBLIC_KEY }}',
+    '      OMGHITHUB_PUBLISH_TOKEN: ${{ secrets.OMGHITHUB_PUBLISH_TOKEN }}',
     ''
   ].join('\n')
 }
@@ -168,6 +172,14 @@ export async function dispatchOmgRequest(request, config, requestFetch = fetch) 
   if (request.missingOpenCodeLabel) {
     const commented = await commentOnIssue('Please add the `OpenCode` label to this issue to execute it.')
     return { route: 'missing-opencode-label', repository: request.repository, commented }
+  }
+  const permissionResponse = await requestFetch(`${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/collaborators/${encodeURIComponent(request.sender)}/permission`, {
+    headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` }
+  })
+  const permission = permissionResponse.ok ? (await permissionResponse.json()).permission : ''
+  if (!['admin', 'maintain', 'write'].includes(permission)) {
+    const commented = await commentOnIssue(`⚠️ **OpenCode did not start.**\n\n@${request.sender || 'the issue author'} needs write, maintain, or admin access to \`${request.repository}\` to start an OpenCode run.`)
+    return { route: 'unauthorized-actor', repository: request.repository, commented }
   }
   const workflowPath = `/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/contents/.github/workflows/opencode.yml?ref=${encodeURIComponent(request.targetRef)}`
   const workflowResponse = await requestFetch(`${api}${workflowPath}`, {

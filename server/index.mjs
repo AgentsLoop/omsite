@@ -21,6 +21,9 @@ const owner = process.env.GITHUB_OWNER || 'AgentsLoop'
 const repo = process.env.GITHUB_REPO || 'OhMyGithub'
 const githubToken = process.env.GITHUB_TOKEN || ''
 const publishToken = process.env.PUBLISH_TOKEN || ''
+const ZIP_MAX_ENTRIES = 5000
+const ZIP_MAX_ENTRY_BYTES = 25 * 1024 * 1024
+const ZIP_MAX_TOTAL_BYTES = 100 * 1024 * 1024
 const githubApp = {
   appId: process.env.GITHUB_APP_ID || '',
   privateKey: String(process.env.GITHUB_APP_PRIVATE_KEY || '').replaceAll('\\n', '\n'),
@@ -193,15 +196,24 @@ app.post('/api/publish', express.raw({ type: ['application/zip', 'application/oc
     }
     if (!authorized) return res.status(401).json({ error: 'Invalid publish token' })
     const issue = String(req.headers['x-omgithub-issue'] || ''), pr = String(req.headers['x-omgithub-pr'] || ''), sourceKey = `${repoOwner}/${repoName}#${pr || issue}`
-    const rows = await projects(), existing = rows.find(row => row.source_key === sourceKey)
+    const rows = await projects(), existing = await store.bySourceKey(sourceKey)
     const normalizedName = slugify(req.headers['x-omgithub-name'] || `${repoName}-${pr || issue}`)
     const requested = normalizedName.length < 3 ? `game-${normalizedName}` : normalizedName
     let slug = existing?.slug || requested, suffix = 1
     while (!existing && rows.some(row => row.slug === slug)) { suffix += 1; slug = `${requested.slice(0, 48 - String(suffix).length)}-${suffix}` }
     const destination = safeGamePath(slug), staging = `${destination}.staging-${process.pid}`
     rmSync(staging, { recursive: true, force: true }); mkdirSync(staging, { recursive: true })
-    const zip = new AdmZip(req.body)
-    for (const entry of zip.getEntries()) { const normalized = entry.entryName.replaceAll('\\', '/'); if (normalized.startsWith('/') || normalized.split('/').includes('..')) throw new Error(`Unsafe ZIP entry: ${entry.entryName}`) }
+    const zip = new AdmZip(req.body), entries = zip.getEntries()
+    if (entries.length > ZIP_MAX_ENTRIES) throw new Error('ZIP contains too many entries')
+    let extractedBytes = 0
+    for (const entry of entries) {
+      const normalized = entry.entryName.replaceAll('\\', '/')
+      const size = Number(entry.header.size)
+      if (normalized.startsWith('/') || normalized.split('/').includes('..')) throw new Error(`Unsafe ZIP entry: ${entry.entryName}`)
+      if (!Number.isSafeInteger(size) || size < 0 || size > ZIP_MAX_ENTRY_BYTES) throw new Error(`ZIP entry exceeds the ${ZIP_MAX_ENTRY_BYTES} byte limit`)
+      extractedBytes += size
+      if (extractedBytes > ZIP_MAX_TOTAL_BYTES) throw new Error('ZIP uncompressed content exceeds the total size limit')
+    }
     zip.extractAllTo(staging, true); rmSync(destination, { recursive: true, force: true }); mkdirSync(dirname(destination), { recursive: true }); await import('node:fs/promises').then(fs => fs.rename(staging, destination))
     const screenshots = JSON.parse(String(req.headers['x-omgithub-screenshots'] || '[]'))
     const ownerLogin = String(req.headers['x-omgithub-actor'] || repoOwner)
@@ -213,7 +225,7 @@ app.post('/api/publish', express.raw({ type: ['application/zip', 'application/oc
 
 app.use(async (req, res, next) => {
   const slug = hostSlug(req); if (!slug) return next()
-  const project = (await projects()).find(row => row.slug === slug); if (!project) return res.status(404).send('Game not found')
+  const project = await store.bySlug(slug); if (!project) return res.status(404).send('Game not found')
   if (req.path === '/manifest.webmanifest') return res.type('application/manifest+json').send(JSON.stringify({ name: project.title, short_name: project.title.slice(0, 28), description: project.description, start_url: '/', scope: '/', display: 'standalone', background_color: '#0c0c0d', theme_color: '#ff6719', icons: [{ src: '/omgithub-icon.svg', sizes: '192x192', type: 'image/svg+xml', purpose: 'any maskable' }, { src: '/omgithub-icon.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }] }))
   if (req.path === '/omgithub-icon.svg') return res.type('image/svg+xml').send(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#111"/><text x="256" y="360" text-anchor="middle" font-family="system-ui" font-size="330" font-weight="800" fill="#ff6719">O</text></svg>`)
   if (req.path === '/omgithub-sw.js') return res.type('application/javascript').send(`self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));self.addEventListener('fetch',()=>{});`)

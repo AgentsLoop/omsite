@@ -72,6 +72,7 @@ test('dispatches the repository-local workflow when it exists', async () => {
   const result = await dispatchOmgRequest(omgRequest('issues', webhook), dispatchConfig(), async (url, options = {}) => {
     calls.push({ url, options })
     if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
+    if (url.includes('/collaborators/octocat/permission')) return response(200, { permission: 'write' })
     if (url.includes('/contents/')) return response(200)
     return response(204)
   })
@@ -87,6 +88,7 @@ test('bootstraps and dispatches a local wrapper when the target has no workflow'
   const result = await dispatchOmgRequest(omgRequest('issues', webhook), dispatchConfig(), async (url, options = {}) => {
     calls.push({ url, options })
     if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
+    if (url.includes('/collaborators/octocat/permission')) return response(200, { permission: 'write' })
     if (url.includes('/contents/') && options.method !== 'PUT') return response(404)
     if (url.includes('/contents/') && options.method === 'PUT') return response(201)
     return response(204)
@@ -110,6 +112,7 @@ test('validates and forwards a custom issue branch without including metadata in
   const result = await dispatchOmgRequest(omgRequest('issues', branchWebhook), dispatchConfig(), async (url, options = {}) => {
     calls.push({ url, options })
     if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
+    if (url.includes('/collaborators/octocat/permission')) return response(200, { permission: 'write' })
     if (url.includes('/branches/codex%2Fomgithub-site')) return response(200)
     if (url.includes('/contents/')) return response(200)
     return response(204)
@@ -133,6 +136,7 @@ test('comments and skips dispatch when a requested branch does not exist', async
   const result = await dispatchOmgRequest(omgRequest('issues', branchWebhook), dispatchConfig(), async (url, options = {}) => {
     calls.push({ url, options })
     if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
+    if (url.includes('/collaborators/octocat/permission')) return response(200, { permission: 'write' })
     if (url.includes('/branches/missing%2Fref')) return response(404)
     if (url.endsWith('/issues/7/comments')) return response(201)
     return response(500)
@@ -149,6 +153,7 @@ test('comments on the issue and skips dispatch when installation permissions are
     if (url.includes('/access_tokens')) {
       return response(201, { token: 'installation-token', permissions: { ...requiredPermissions, workflows: 'read' } })
     }
+    if (url.includes('/collaborators/octocat/permission')) return response(200, { permission: 'write' })
     if (url.endsWith('/issues/7/comments')) return response(201)
     return response(500)
   })
@@ -169,6 +174,7 @@ test('uses the notification token when the installation cannot comment', async (
     if (url.includes('/access_tokens')) {
       return response(201, { token: 'installation-token', permissions: { ...requiredPermissions, issues: 'read' } })
     }
+    if (url.includes('/collaborators/octocat/permission')) return response(200, { permission: 'write' })
     if (url.endsWith('/issues/7/comments') && options.headers.authorization === 'Bearer service-token') return response(201)
     if (url.endsWith('/issues/7/comments')) return response(403)
     return response(500)
@@ -177,6 +183,19 @@ test('uses the notification token when the installation cannot comment', async (
   assert.equal(result.commented, true)
   assert.deepEqual(result.missingPermissions, ['issues: write'])
   assert.equal(calls.at(-1).options.headers.authorization, 'Bearer service-token')
+})
+
+test('comments and skips dispatch for actors without write access', async () => {
+  const calls = []
+  const result = await dispatchOmgRequest(omgRequest('issues', webhook), dispatchConfig(), async (url, options = {}) => {
+    calls.push({ url, options })
+    if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
+    if (url.includes('/collaborators/octocat/permission')) return response(200, { permission: 'triage' })
+    if (url.endsWith('/issues/7/comments')) return response(201)
+    return response(500)
+  })
+  assert.deepEqual(result, { route: 'unauthorized-actor', repository: 'octo/example', commented: true })
+  assert.equal(calls.some(call => call.url.includes('/actions/workflows/')), false)
 })
 
 test('repository wrapper uses the workflow dispatch branch', () => {

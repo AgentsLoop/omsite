@@ -6,11 +6,14 @@
     <section class="screens-section"><h2>Screenshots</h2><div class="store-shots"><img v-for="shot in project.screenshots" :key="shot" :src="shot" alt="Game screenshot" @click="selected = shot" /></div><p v-if="!project.screenshots.length">No screenshots were attached to this pull request.</p></section>
     <div v-if="selected" class="lightbox" @click="selected = ''"><img :src="selected" alt="Screenshot enlarged" /></div>
   </main>
-  <main v-else class="studio-loading"><span class="spinner large"></span></main>
+  <main v-else class="studio-loading"><span v-if="loading" class="spinner large"></span><p v-else>Project unavailable.</p></main>
 </template>
 <script setup>
-import { onMounted, ref } from 'vue'; import { useRoute } from 'vue-router'
-const route = useRoute(), project = ref(null), selected = ref('')
+import { ref, watch } from 'vue'; import { useRoute } from 'vue-router'
+const route = useRoute(), project = ref(null), selected = ref(''), loading = ref(true)
 async function share() { await navigator.clipboard?.writeText(location.href) }
-onMounted(async () => { const r = await fetch(`/api/github/${route.params.owner}/${route.params.repo}/pull/${route.params.number}`); if (r.ok) project.value = await r.json() })
+watch(() => [route.params.owner, route.params.repo, route.params.number], async ([owner, repo, number]) => {
+  loading.value = true; project.value = null
+  try { const r = await fetch(`/api/github/${owner}/${repo}/pull/${number}`); if (r.ok) project.value = await r.json() } finally { loading.value = false }
+}, { immediate: true })
 </script>

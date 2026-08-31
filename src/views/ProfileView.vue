@@ -5,7 +5,10 @@
   </main>
 </template>
 <script setup>
-import { onMounted, ref } from 'vue'; import { useRoute } from 'vue-router'; import GameCard from '../components/GameCard.vue'
+import { ref, watch } from 'vue'; import { useRoute } from 'vue-router'; import GameCard from '../components/GameCard.vue'
 const route = useRoute(), profile = ref(null), projects = ref([]), loading = ref(true)
-onMounted(async () => { const r = await fetch(`/api/profiles/${route.params.login}`); if (r.ok) { const d = await r.json(); profile.value = d.profile; projects.value = d.projects } loading.value = false })
+watch(() => route.params.login, async login => {
+  loading.value = true; profile.value = null; projects.value = []
+  try { const r = await fetch(`/api/profiles/${login}`); if (r.ok) { const d = await r.json(); profile.value = d.profile; projects.value = d.projects } } finally { loading.value = false }
+}, { immediate: true })
 </script>
