@@ -44,8 +44,8 @@ directive from the implementation request, validates the branch, and forwards
 it as `target_ref`. Repository-local workflows should remain dispatch-only so
 one App event creates exactly one run.
 
-The two workflow files have distinct roles: `opencode.yml` handles only
-App-dispatched entry events, while `opencode-reusable.yml` owns the shared build,
+The two workflow files have distinct roles: `opencode.yml` is a thin
+dispatch-to-`uses:` wrapper, while `opencode-reusable.yml` owns the shared build,
 verification, delivery, publishing, reporting, and cleanup pipeline. The
 bootstrapped wrapper runs in the issue repository with its `GITHUB_TOKEN`;
 never pass an installation token as a workflow input.
