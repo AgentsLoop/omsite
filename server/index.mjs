@@ -17,14 +17,15 @@ const baseHost = new URL(origin).hostname.toLowerCase()
 const publicHosts = [...new Set([baseHost, ...String(process.env.PUBLIC_ALIASES || 'lolgames.net').split(',').map(value => value.trim().toLowerCase()).filter(Boolean)])]
 const dataDir = resolve(process.env.DATA_DIR || join(root, 'data'))
 const gamesDir = join(dataDir, 'games')
-const owner = process.env.GITHUB_OWNER || 'GauntletLoop'
+const owner = process.env.GITHUB_OWNER || 'AgentsLoop'
 const repo = process.env.GITHUB_REPO || 'OhMyGithub'
 const githubToken = process.env.GITHUB_TOKEN || ''
 const publishToken = process.env.PUBLISH_TOKEN || ''
 const githubApp = {
   appId: process.env.GITHUB_APP_ID || '',
   privateKey: String(process.env.GITHUB_APP_PRIVATE_KEY || '').replaceAll('\\n', '\n'),
-  fallbackOwner: process.env.OMG_FALLBACK_OWNER || 'GauntletLoop',
+  notificationToken: githubToken,
+  fallbackOwner: process.env.OMG_FALLBACK_OWNER || 'AgentsLoop',
   fallbackRepo: process.env.OMG_FALLBACK_REPO || 'OhMyGithub',
   fallbackRef: process.env.OMG_FALLBACK_REF || 'main'
 }
@@ -104,7 +105,8 @@ app.post('/api/github/webhooks', express.raw({ type: 'application/json', limit: 
     }
     const dispatched = await dispatchOmgRequest(request, githubApp)
     console.log(`OMG webhook routed ${request.repository}#${request.issueNumber} through ${dispatched.route}`)
-    res.status(202).json({ accepted: true, route: dispatched.route })
+    const accepted = !['permissions-missing', 'invalid-branch'].includes(dispatched.route)
+    res.status(202).json({ accepted, route: dispatched.route, missing_permissions: dispatched.missingPermissions || [], commented: dispatched.commented })
   } catch (error) { next(error) }
 })
 
@@ -119,10 +121,35 @@ app.post('/api/issues', async (req, res, next) => {
     const prompt = String(req.body.prompt || '').trim(); if (prompt.length < 8 || prompt.length > 12000) return res.status(400).json({ error: 'Prompt must be between 8 and 12,000 characters.' })
     const user = userFor(req), token = user?.token || githubToken
     if (!token) return res.status(503).json({ error: 'GitHub issue creation is not configured.' })
-    const first = prompt.split('\n')[0].replace(/^\/goal\s*/i, '').slice(0, 110)
-    const body = `/goal ${prompt.replace(/^\/goal\s*/i, '')}\n\n---\nCreated with [OmGithub](${origin})${user ? ` by @${user.login}` : ''}.`
-    const issue = await github(`/repos/${owner}/${repo}/issues`, token, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: `/goal ${first}`, body }) })
-    res.status(201).json({ number: issue.number, github_url: issue.html_url, omgithub_path: `/${owner}/${repo}/issues/${issue.number}` })
+    const first = prompt.split('\n')[0].slice(0, 110)
+    const body = `${prompt}\n\n---\nCreated with [OmGithub](${origin})${user ? ` by @${user.login}` : ''}.`
+    const issue = await github(`/repos/${owner}/${repo}/issues`, token, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: first, body }) })
+    const labelToken = githubToken || token
+    try {
+      for (const label of ['Goal', 'OpenCode']) {
+        await github(`/repos/${owner}/${repo}/issues/${issue.number}/labels`, labelToken, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ labels: [label] })
+        })
+      }
+    } catch (error) {
+      const warning = [
+        '⚠️ **OpenCode did not start.**',
+        '',
+        'OmGithub created this issue but could not apply the required `Goal` and `OpenCode` labels.',
+        'A repository administrator must grant the configured token Issues write access, then add the `OpenCode` label to retry.'
+      ].join('\n')
+      try {
+        await github(`/repos/${owner}/${repo}/issues/${issue.number}/comments`, token, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ body: warning })
+        })
+      } catch {}
+      return res.status(201).json({ number: issue.number, github_url: issue.html_url, omgithub_path: `/${owner}/${repo}/issues/${issue.number}`, started: false, warning: error.message })
+    }
+    res.status(201).json({ number: issue.number, github_url: issue.html_url, omgithub_path: `/${owner}/${repo}/issues/${issue.number}`, started: true })
   } catch (e) { next(e) }
 })
 
@@ -147,7 +174,7 @@ app.get('/api/github/:owner/:repo/pull/:number', async (req, res, next) => {
     const creator = published?.owner_login || (pr.user.type === 'Bot' || /\[bot\]$/i.test(pr.user.login) ? req.params.owner : pr.user.login)
     let creatorAvatar = published?.owner_avatar || ''
     if (!creatorAvatar) { try { creatorAvatar = (await github(`/users/${encodeURIComponent(creator)}`, githubToken)).avatar_url } catch { creatorAvatar = `https://github.com/${creator}.png` } }
-    res.json({ number: pr.number, title: published?.title || pr.title.replace(/^OpenCode:\s*/i, '').replace(/^\/goal\s*/i, ''), description: published?.description || description.slice(0, 500), status: pr.merged ? 'merged' : pr.state, github_url: pr.html_url, owner: creator, owner_avatar: creatorAvatar, screenshots: [...new Set([...(published?.screenshots || []), ...fromFiles, ...urls.screenshots])], play_url: published?.url || urls.preview, install_url: published?.install_url || '' })
+    res.json({ number: pr.number, title: published?.title || pr.title.replace(/^OpenCode:\s*/i, ''), description: published?.description || description.slice(0, 500), status: pr.merged ? 'merged' : pr.state, github_url: pr.html_url, owner: creator, owner_avatar: creatorAvatar, screenshots: [...new Set([...(published?.screenshots || []), ...fromFiles, ...urls.screenshots])], play_url: published?.url || urls.preview, install_url: published?.install_url || '' })
   } catch (e) { next(e) }
 })
 

@@ -27,15 +27,25 @@ The A1 Caddyfile must route both `omgithub.com` and `*.omgithub.com` to
 ## GitHub App request routing
 
 `POST /api/github/webhooks` validates the GitHub signature and normalizes
-eligible `issues` and `issue_comment` `/omg` events. The service mints an
-installation-scoped token, checks `.github/workflows/opencode.yml` on the
-target default branch, and dispatches that workflow when it exists. On a
-confirmed 404 it creates and dispatches a thin local wrapper that calls the
-centralized `GauntletLoop/OhMyGithub` reusable workflow.
+eligible `issues.opened` events that contain the exact `OpenCode` label and
+`issues.labeled` events that add it. Comments, edits, bots, pull requests, and
+other labels are ignored. The service mints an installation-scoped token and
+checks `.github/workflows/opencode.yml` on the target default branch. It leaves
+native issue-trigger workflows alone, dispatches dispatch-only wrappers, and on
+a confirmed 404 creates and dispatches a thin local wrapper that calls the centralized
+`AgentsLoop/OhMyGithub` reusable workflow.
 
-The two workflow files have distinct roles: `opencode.yml` handles local and
-legacy entry events, while
-`opencode-reusable.yml` owns the shared build,
+Before dispatching or bootstrapping, it checks the installation's required write
+permissions and comments on the triggering issue without starting an Actions run
+when any are missing.
+
+The first issue-body line may be `branch: <existing-branch>`. The App strips the
+directive from the implementation request, validates the branch, and forwards
+it as `target_ref`. A local workflow with a native `issues` trigger is not
+dispatched again; this prevents one label event from creating duplicate runs.
+
+The two workflow files have distinct roles: `opencode.yml` handles label and
+App-dispatched entry events, while `opencode-reusable.yml` owns the shared build,
 verification, delivery, publishing, reporting, and cleanup pipeline. The
 bootstrapped wrapper runs in the issue repository with its `GITHUB_TOKEN`;
 never pass an installation token as a workflow input.

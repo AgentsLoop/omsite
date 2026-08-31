@@ -1,31 +1,40 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHmac, generateKeyPairSync } from 'node:crypto'
-import { dispatchOmgRequest, extractUrls, omgRequest, repositoryWorkflow, slugify, verifyWebhookSignature } from './github.mjs'
+import { dispatchOmgRequest, extractUrls, omgRequest, parseIssueRequest, repositoryWorkflow, slugify, verifyWebhookSignature } from './github.mjs'
 test('extracts OpenCode, preview, PR and screenshots from issue comments', () => {
-  const issue = { body: 'started' }, comments = [{ body: 'Live OpenCode: https://quiet-field.trycloudflare.com/work/session/ses_123' }, { body: 'Public game: https://bright-game.trycloudflare.com\nPR https://github.com/GauntletLoop/OhMyGithub/pull/96\n![shot](https://raw.githubusercontent.com/GauntletLoop/OhMyGithub/abc/project/screenshots/final-game.png)' }]
+  const issue = { body: 'started' }, comments = [{ body: 'Live OpenCode: https://quiet-field.trycloudflare.com/work/session/ses_123' }, { body: 'Public game: https://bright-game.trycloudflare.com\nPR https://github.com/AgentsLoop/OhMyGithub/pull/96\n![shot](https://raw.githubusercontent.com/AgentsLoop/OhMyGithub/abc/project/screenshots/final-game.png)' }]
   const result = extractUrls(issue, comments)
   assert.match(result.opencode, /ses_123/); assert.equal(result.preview, 'https://bright-game.trycloudflare.com'); assert.match(result.pr, /pull\/96/); assert.equal(result.screenshots.length, 1)
 })
 test('normalizes a game name for subdomain allocation', () => assert.equal(slugify('Football Physics!'), 'football-physics'))
+test('extracts a first-line branch directive from the request', () => {
+  assert.deepEqual(parseIssueRequest({ title: 'Fallback', body: 'branch: codex/omgithub-site\n\nBuild a tiny browser page.' }, 'main'), {
+    request: 'Build a tiny browser page.', targetRef: 'codex/omgithub-site', branchSpecified: true, branchError: ''
+  })
+  assert.match(parseIssueRequest({ body: 'branch: bad branch\n\nBuild it' }, 'main').branchError, /Invalid branch directive/)
+  assert.equal(parseIssueRequest({ title: 'Fallback', body: 'Build on the default branch' }, 'main').targetRef, 'main')
+})
 
 const webhook = {
-  action: 'created', installation: { id: 42 }, sender: { login: 'octocat', type: 'User' },
+  action: 'opened', installation: { id: 42 }, sender: { login: 'octocat', type: 'User' },
   repository: { full_name: 'octo/example', default_branch: 'trunk' },
-  issue: { number: 7, title: 'Build it', body: 'details', labels: [{ name: 'Goal' }] },
-  comment: { body: '/omg build a tiny game' }
+  issue: { number: 7, title: 'Build it', body: 'Build a tiny game', labels: [{ name: 'Goal' }, { name: 'OpenCode' }] }
 }
 
 test('normalizes an eligible OMG webhook request', () => {
-  assert.deepEqual(omgRequest('issue_comment', webhook), {
+  assert.deepEqual(omgRequest('issues', webhook), {
     owner: 'octo', repo: 'example', repository: 'octo/example', defaultBranch: 'trunk', installationId: 42,
-    issueNumber: 7, issueTitle: 'Build it', request: '/omg build a tiny game', deliveryEvent: 'issue_comment',
-    deliveryAction: 'created', sender: 'octocat', labels: ['Goal']
+    issueNumber: 7, issueTitle: 'Build it', request: 'Build a tiny game', targetRef: 'trunk', branchSpecified: false, branchError: '', deliveryEvent: 'issues',
+    deliveryAction: 'opened', sender: 'octocat', labels: ['Goal', 'OpenCode']
   })
-  assert.equal(omgRequest('issue_comment', { ...webhook, sender: { type: 'Bot' } }), null)
-  assert.equal(omgRequest('issue_comment', { ...webhook, comment: { body: 'nothing to do' } }), null)
-  const issueRequest = omgRequest('issues', { ...webhook, action: 'opened', issue: { ...webhook.issue, title: '/omg title request', body: 'context only' } })
-  assert.equal(issueRequest.request, '/omg title request')
+  assert.equal(omgRequest('issues', { ...webhook, sender: { type: 'Bot' } }), null)
+  assert.equal(omgRequest('issue_comment', { ...webhook, action: 'created', comment: { body: 'Build it' } }), null)
+  assert.equal(omgRequest('issues', { ...webhook, action: 'edited' }), null)
+  assert.equal(omgRequest('issues', { ...webhook, issue: { ...webhook.issue, labels: [{ name: 'Goal' }] } }), null)
+  const labeledRequest = omgRequest('issues', { ...webhook, action: 'labeled', label: { name: 'OpenCode' } })
+  assert.equal(labeledRequest.request, 'Build a tiny game')
+  assert.equal(omgRequest('issues', { ...webhook, action: 'labeled', label: { name: 'Goal' } }), null)
 })
 
 test('verifies webhook signatures without accepting malformed signatures', () => {
@@ -36,30 +45,33 @@ test('verifies webhook signatures without accepting malformed signatures', () =>
 })
 
 function response(status, data = {}) { return { ok: status >= 200 && status < 300, status, json: async () => data } }
+const requiredPermissions = { actions: 'write', contents: 'write', issues: 'write', pull_requests: 'write', workflows: 'write' }
 function dispatchConfig() {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
-  return { appId: 123, privateKey, fallbackOwner: 'GauntletLoop', fallbackRepo: 'OhMyGithub', fallbackRef: 'main' }
+  return { appId: 123, privateKey, fallbackOwner: 'AgentsLoop', fallbackRepo: 'OhMyGithub', fallbackRef: 'main' }
 }
 
 test('dispatches the repository-local workflow when it exists', async () => {
   const calls = []
-  const result = await dispatchOmgRequest(omgRequest('issue_comment', webhook), dispatchConfig(), async (url, options = {}) => {
+  const result = await dispatchOmgRequest(omgRequest('issues', webhook), dispatchConfig(), async (url, options = {}) => {
     calls.push({ url, options })
-    if (url.includes('/access_tokens')) return response(201, { token: 'installation-token' })
+    if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
     if (url.includes('/contents/')) return response(200)
     return response(204)
   })
   assert.equal(result.route, 'local')
   assert.match(calls.at(-1).url, /octo\/example\/actions\/workflows\/opencode\.yml\/dispatches$/)
   assert.equal(JSON.parse(calls.at(-1).options.body).ref, 'trunk')
+  assert.equal(JSON.parse(calls.at(-1).options.body).inputs.installation_id, '42')
+  assert.equal(JSON.parse(calls.at(-1).options.body).inputs.target_ref, 'trunk')
   assert.equal(calls.at(-1).options.headers.authorization, 'Bearer installation-token')
 })
 
 test('bootstraps and dispatches a local wrapper when the target has no workflow', async () => {
   const calls = []
-  const result = await dispatchOmgRequest(omgRequest('issue_comment', webhook), dispatchConfig(), async (url, options = {}) => {
+  const result = await dispatchOmgRequest(omgRequest('issues', webhook), dispatchConfig(), async (url, options = {}) => {
     calls.push({ url, options })
-    if (url.includes('/access_tokens')) return response(201, { token: 'installation-token' })
+    if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
     if (url.includes('/contents/') && options.method !== 'PUT') return response(404)
     if (url.includes('/contents/') && options.method === 'PUT') return response(201)
     return response(204)
@@ -68,10 +80,98 @@ test('bootstraps and dispatches a local wrapper when the target has no workflow'
   const create = calls.at(-2), dispatch = calls.at(-1)
   assert.equal(create.options.method, 'PUT')
   assert.equal(create.options.headers.authorization, 'Bearer installation-token')
-  assert.match(Buffer.from(JSON.parse(create.options.body).content, 'base64').toString(), /uses: GauntletLoop\/OhMyGithub\/.github\/workflows\/opencode-reusable.yml@main/)
+  assert.match(Buffer.from(JSON.parse(create.options.body).content, 'base64').toString(), /uses: AgentsLoop\/OhMyGithub\/.github\/workflows\/opencode-reusable.yml@main/)
   assert.match(dispatch.url, /octo\/example\/actions\/workflows\/opencode\.yml\/dispatches$/)
   assert.equal(dispatch.options.headers.authorization, 'Bearer installation-token')
   assert.equal(JSON.parse(dispatch.options.body).ref, 'trunk')
+})
+
+test('validates and forwards a custom issue branch without including metadata in the prompt', async () => {
+  const calls = []
+  const branchWebhook = {
+    ...webhook,
+    issue: { ...webhook.issue, body: 'branch: codex/omgithub-site\n\nBuild a tiny browser page.' }
+  }
+  const result = await dispatchOmgRequest(omgRequest('issues', branchWebhook), dispatchConfig(), async (url, options = {}) => {
+    calls.push({ url, options })
+    if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
+    if (url.includes('/branches/codex%2Fomgithub-site')) return response(200)
+    if (url.includes('/contents/')) return response(200)
+    return response(204)
+  })
+  assert.equal(result.route, 'local')
+  const dispatch = calls.at(-1)
+  const payload = JSON.parse(dispatch.options.body)
+  assert.equal(payload.ref, 'trunk')
+  assert.equal(payload.inputs.target_ref, 'codex/omgithub-site')
+  assert.equal(payload.inputs.request, 'Build a tiny browser page.')
+})
+
+test('comments and skips dispatch when a requested branch does not exist', async () => {
+  const calls = []
+  const branchWebhook = {
+    ...webhook,
+    issue: { ...webhook.issue, body: 'branch: missing/ref\n\nBuild it' }
+  }
+  const result = await dispatchOmgRequest(omgRequest('issues', branchWebhook), dispatchConfig(), async (url, options = {}) => {
+    calls.push({ url, options })
+    if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
+    if (url.includes('/branches/missing%2Fref')) return response(404)
+    if (url.endsWith('/issues/7/comments')) return response(201)
+    return response(500)
+  })
+  assert.equal(result.route, 'invalid-branch')
+  assert.equal(result.commented, true)
+  assert.equal(calls.some(call => call.url.includes('/actions/workflows/')), false)
+})
+
+test('does not duplicate a workflow that already handles issue events', async () => {
+  const calls = []
+  const result = await dispatchOmgRequest(omgRequest('issues', webhook), dispatchConfig(), async (url, options = {}) => {
+    calls.push({ url, options })
+    if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
+    if (url.includes('/contents/')) return response(200, { content: Buffer.from('on:\n  workflow_dispatch:\n  issues:\n    types: [opened, labeled]\n').toString('base64') })
+    return response(500)
+  })
+  assert.equal(result.route, 'native')
+  assert.equal(calls.some(call => call.url.includes('/actions/workflows/')), false)
+})
+
+test('comments on the issue and skips dispatch when installation permissions are missing', async () => {
+  const calls = []
+  const result = await dispatchOmgRequest(omgRequest('issues', webhook), dispatchConfig(), async (url, options = {}) => {
+    calls.push({ url, options })
+    if (url.includes('/access_tokens')) {
+      return response(201, { token: 'installation-token', permissions: { ...requiredPermissions, workflows: 'read' } })
+    }
+    if (url.endsWith('/issues/7/comments')) return response(201)
+    return response(500)
+  })
+  assert.deepEqual(result, {
+    route: 'permissions-missing', repository: 'octo/example',
+    missingPermissions: ['workflows: write'], commented: true
+  })
+  assert.equal(calls.some(call => call.url.includes('/actions/workflows/')), false)
+  const comment = calls.find(call => call.url.endsWith('/issues/7/comments'))
+  assert.match(JSON.parse(comment.options.body).body, /workflows: write/)
+})
+
+test('uses the notification token when the installation cannot comment', async () => {
+  const calls = []
+  const config = { ...dispatchConfig(), notificationToken: 'service-token' }
+  const result = await dispatchOmgRequest(omgRequest('issues', webhook), config, async (url, options = {}) => {
+    calls.push({ url, options })
+    if (url.includes('/access_tokens')) {
+      return response(201, { token: 'installation-token', permissions: { ...requiredPermissions, issues: 'read' } })
+    }
+    if (url.endsWith('/issues/7/comments') && options.headers.authorization === 'Bearer service-token') return response(201)
+    if (url.endsWith('/issues/7/comments')) return response(403)
+    return response(500)
+  })
+  assert.equal(result.route, 'permissions-missing')
+  assert.equal(result.commented, true)
+  assert.deepEqual(result.missingPermissions, ['issues: write'])
+  assert.equal(calls.at(-1).options.headers.authorization, 'Bearer service-token')
 })
 
 test('repository wrapper keeps execution in the issue repository', () => {
