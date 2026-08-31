@@ -105,7 +105,7 @@ app.post('/api/github/webhooks', express.raw({ type: 'application/json', limit: 
     }
     const dispatched = await dispatchOmgRequest(request, githubApp)
     console.log(`OMG webhook routed ${request.repository}#${request.issueNumber} through ${dispatched.route}`)
-    const accepted = !['permissions-missing', 'invalid-branch'].includes(dispatched.route)
+    const accepted = !['missing-opencode-label', 'permissions-missing', 'invalid-branch'].includes(dispatched.route)
     res.status(202).json({ accepted, route: dispatched.route, missing_permissions: dispatched.missingPermissions || [], commented: dispatched.commented })
   } catch (error) { next(error) }
 })

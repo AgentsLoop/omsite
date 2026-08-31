@@ -111,8 +111,9 @@ export function omgRequest(event, payload) {
   if (payload.sender?.type === 'Bot' || payload.issue?.pull_request) return null
   const labels = (payload.issue?.labels || []).map(label => typeof label === 'string' ? label : label.name).filter(Boolean)
   const openedWithOpenCode = payload.action === 'opened' && labels.includes('OpenCode')
+  const openedWithoutOpenCode = payload.action === 'opened' && !labels.includes('OpenCode')
   const openCodeAdded = payload.action === 'labeled' && payload.label?.name === 'OpenCode' && labels.includes('OpenCode')
-  if (!openedWithOpenCode && !openCodeAdded) return null
+  if (!openedWithOpenCode && !openedWithoutOpenCode && !openCodeAdded) return null
   if (!payload.installation?.id || !payload.repository?.full_name || !payload.issue?.number) return null
   const [owner, repo] = payload.repository.full_name.split('/')
   const parsed = parseIssueRequest(payload.issue, payload.repository.default_branch || 'main')
@@ -131,7 +132,8 @@ export function omgRequest(event, payload) {
     deliveryEvent: event,
     deliveryAction: payload.action,
     sender: payload.sender?.login || '',
-    labels
+    labels,
+    missingOpenCodeLabel: openedWithoutOpenCode
   }
 }
 
@@ -162,6 +164,10 @@ export async function dispatchOmgRequest(request, config, requestFetch = fetch) 
       if (comment.ok) return true
     }
     return false
+  }
+  if (request.missingOpenCodeLabel) {
+    const commented = await commentOnIssue('Please add the `OpenCode` label to this issue to execute it.')
+    return { route: 'missing-opencode-label', repository: request.repository, commented }
   }
   const workflowPath = `/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/contents/.github/workflows/opencode.yml?ref=${encodeURIComponent(request.targetRef)}`
   const workflowResponse = await requestFetch(`${api}${workflowPath}`, {

@@ -26,15 +26,31 @@ test('normalizes an eligible OMG webhook request', () => {
   assert.deepEqual(omgRequest('issues', webhook), {
     owner: 'octo', repo: 'example', repository: 'octo/example', defaultBranch: 'trunk', installationId: 42,
     issueNumber: 7, issueTitle: 'Build it', request: 'Build a tiny game', targetRef: 'trunk', branchSpecified: false, branchError: '', deliveryEvent: 'issues',
-    deliveryAction: 'opened', sender: 'octocat', labels: ['Goal', 'OpenCode']
+    deliveryAction: 'opened', sender: 'octocat', labels: ['Goal', 'OpenCode'], missingOpenCodeLabel: false
   })
   assert.equal(omgRequest('issues', { ...webhook, sender: { type: 'Bot' } }), null)
   assert.equal(omgRequest('issue_comment', { ...webhook, action: 'created', comment: { body: 'Build it' } }), null)
   assert.equal(omgRequest('issues', { ...webhook, action: 'edited' }), null)
-  assert.equal(omgRequest('issues', { ...webhook, issue: { ...webhook.issue, labels: [{ name: 'Goal' }] } }), null)
+  const missingLabelRequest = omgRequest('issues', { ...webhook, issue: { ...webhook.issue, labels: [{ name: 'Goal' }] } })
+  assert.equal(missingLabelRequest.missingOpenCodeLabel, true)
   const labeledRequest = omgRequest('issues', { ...webhook, action: 'labeled', label: { name: 'OpenCode' } })
   assert.equal(labeledRequest.request, 'Build a tiny game')
   assert.equal(omgRequest('issues', { ...webhook, action: 'labeled', label: { name: 'Goal' } }), null)
+})
+
+test('comments on newly opened issues missing the OpenCode label without dispatching', async () => {
+  const calls = []
+  const request = omgRequest('issues', { ...webhook, issue: { ...webhook.issue, labels: [{ name: 'Goal' }] } })
+  const result = await dispatchOmgRequest(request, dispatchConfig(), async (url, options = {}) => {
+    calls.push({ url, options })
+    if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
+    if (url.endsWith('/issues/7/comments')) return response(201)
+    return response(500)
+  })
+  assert.deepEqual(result, { route: 'missing-opencode-label', repository: 'octo/example', commented: true })
+  assert.equal(calls.some(call => call.url.includes('/actions/workflows/')), false)
+  const comment = calls.find(call => call.url.endsWith('/issues/7/comments'))
+  assert.match(JSON.parse(comment.options.body).body, /Please add the `OpenCode` label/)
 })
 
 test('verifies webhook signatures without accepting malformed signatures', () => {

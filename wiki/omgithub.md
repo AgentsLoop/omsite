@@ -30,10 +30,14 @@ The A1 Caddyfile must route both `omgithub.com` and `*.omgithub.com` to
 eligible `issues.opened` events that contain the exact `OpenCode` label and
 `issues.labeled` events that add it. Comments, edits, bots, pull requests, and
 other labels are ignored. The service mints an installation-scoped token and
-checks `.github/workflows/opencode.yml` on the target default branch. It
+checks `.github/workflows/opencode.yml` on the selected branch. It
 dispatches dispatch-only wrappers and, on a confirmed 404, creates and dispatches
 a thin local wrapper that calls the centralized
 `AgentsLoop/OhMyGithub` reusable workflow.
+
+For a newly opened human issue without `OpenCode`, the service posts an
+actionable reminder to add the label and stops before workflow lookup or
+dispatch. Adding `OpenCode` later is the supported retry.
 
 Before dispatching or bootstrapping, it checks the installation's required write
 permissions and comments on the triggering issue without starting an Actions run
