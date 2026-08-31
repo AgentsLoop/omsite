@@ -23,8 +23,8 @@ accepts only issue creation with `OpenCode` already present or addition of that
 exact label; comments and edits never execute work. It checks
 `.github/workflows/opencode.yml` on the selected branch:
 
-An optional first issue-body line `branch: <existing-branch>` selects the target
-checkout and pull-request base. The App removes that metadata line from the
+An optional issue-title suffix `branch: <existing-branch>` selects the target
+checkout and pull-request base. The App removes that metadata suffix from the
 OpenCode prompt and validates the branch before routing. Invalid or nonexistent
 branches receive an issue comment and stop before dispatch. The App dispatches
 the workflow from the selected branch. A repository-owned wrapper therefore

@@ -8,11 +8,11 @@ test('extracts OpenCode, preview, PR and screenshots from issue comments', () =>
   assert.match(result.opencode, /ses_123/); assert.equal(result.preview, 'https://bright-game.trycloudflare.com'); assert.match(result.pr, /pull\/96/); assert.equal(result.screenshots.length, 1)
 })
 test('normalizes a game name for subdomain allocation', () => assert.equal(slugify('Football Physics!'), 'football-physics'))
-test('extracts a first-line branch directive from the request', () => {
-  assert.deepEqual(parseIssueRequest({ title: 'Fallback', body: 'branch: codex/omgithub-site\n\nBuild a tiny browser page.' }, 'main'), {
-    request: 'Build a tiny browser page.', targetRef: 'codex/omgithub-site', branchSpecified: true, branchError: ''
+test('extracts a title-suffix branch directive without changing the request body', () => {
+  assert.deepEqual(parseIssueRequest({ title: 'Custom branch smoke test branch: codex/omgithub-site', body: 'Build a tiny browser page.' }, 'main'), {
+    request: 'Build a tiny browser page.', title: 'Custom branch smoke test', targetRef: 'codex/omgithub-site', branchSpecified: true, branchError: ''
   })
-  assert.match(parseIssueRequest({ body: 'branch: bad branch\n\nBuild it' }, 'main').branchError, /Invalid branch directive/)
+  assert.match(parseIssueRequest({ title: 'Build it branch: bad branch' }, 'main').branchError, /Invalid branch directive/)
   assert.equal(parseIssueRequest({ title: 'Fallback', body: 'Build on the default branch' }, 'main').targetRef, 'main')
 })
 
@@ -89,7 +89,7 @@ test('validates and forwards a custom issue branch without including metadata in
   const calls = []
   const branchWebhook = {
     ...webhook,
-    issue: { ...webhook.issue, body: 'branch: codex/omgithub-site\n\nBuild a tiny browser page.' }
+    issue: { ...webhook.issue, title: 'Custom branch smoke test branch: codex/omgithub-site', body: 'Build a tiny browser page.' }
   }
   const result = await dispatchOmgRequest(omgRequest('issues', branchWebhook), dispatchConfig(), async (url, options = {}) => {
     calls.push({ url, options })
@@ -105,13 +105,14 @@ test('validates and forwards a custom issue branch without including metadata in
   assert.equal(payload.ref, 'codex/omgithub-site')
   assert.equal('target_ref' in payload.inputs, false)
   assert.equal(payload.inputs.request, 'Build a tiny browser page.')
+  assert.equal(payload.inputs.issue_title, 'Custom branch smoke test')
 })
 
 test('comments and skips dispatch when a requested branch does not exist', async () => {
   const calls = []
   const branchWebhook = {
     ...webhook,
-    issue: { ...webhook.issue, body: 'branch: missing/ref\n\nBuild it' }
+    issue: { ...webhook.issue, title: 'Build it branch: missing/ref' }
   }
   const result = await dispatchOmgRequest(omgRequest('issues', branchWebhook), dispatchConfig(), async (url, options = {}) => {
     calls.push({ url, options })

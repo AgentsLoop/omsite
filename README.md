@@ -37,11 +37,10 @@ and is dispatched with the installation token. A 404 creates a thin local
 wrapper and dispatches it in the target repository; both dispatch routes call
 the same central `opencode-reusable.yml` pipeline.
 
-An optional first body line `branch: <existing-branch>` selects the target
-checkout and pull-request base. The router removes the directive from the
-request, verifies that the branch exists, and dispatches the workflow from that
-branch. Invalid branches are reported on the issue without starting an Actions
-run.
+An optional issue-title suffix `branch: <existing-branch>` selects the target
+checkout and pull-request base. The router removes the suffix from the request,
+verifies that the branch exists, and dispatches the workflow from that branch.
+Invalid branches are reported on the issue without starting an Actions run.
 
 Before dispatch or bootstrap, the router checks that the installation token grants
 Actions, Contents, Issues, and Workflows write access. If any are

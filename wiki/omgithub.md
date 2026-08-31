@@ -39,8 +39,8 @@ Before dispatching or bootstrapping, it checks the installation's required write
 permissions and comments on the triggering issue without starting an Actions run
 when any are missing.
 
-The first issue-body line may be `branch: <existing-branch>`. The App strips the
-directive from the implementation request, validates the branch, and dispatches
+The issue title may end with `branch: <existing-branch>`. The App strips the
+suffix from the implementation request, validates the branch, and dispatches
 the workflow from that branch. Repository-local workflows should remain
 dispatch-only so one App event creates exactly one run.
 

@@ -35,20 +35,22 @@ export function slugify(value) { return String(value || 'game').toLowerCase().re
 
 export function parseIssueRequest(issue, defaultBranch = 'main') {
   const body = String(issue?.body || '')
-  const lines = body.split(/\r?\n/)
-  const directive = lines[0]?.match(/^branch:\s*(.*?)\s*$/i)
-  if (!directive) return { request: body.trim() || String(issue?.title || '').trim(), targetRef: defaultBranch, branchSpecified: false, branchError: '' }
+  const title = String(issue?.title || '').trim()
+  const directive = title.match(/(?:^|\s)branch:\s*(.*?)\s*$/i)
+  const requestTitle = directive ? title.slice(0, directive.index).trim() : title
+  if (!directive) return { request: body.trim() || requestTitle, title: requestTitle, targetRef: defaultBranch, branchSpecified: false, branchError: '' }
   const targetRef = directive[1].trim()
   const invalid = !targetRef || targetRef.length > 255 || targetRef === '@' || targetRef.startsWith('-') ||
     targetRef.startsWith('/') || targetRef.endsWith('/') || targetRef.endsWith('.') || targetRef.endsWith('.lock') ||
     targetRef.includes('..') || targetRef.includes('@{') || targetRef.includes('//') ||
     targetRef.split('/').some(part => part.startsWith('.')) || /[\u0000-\u0020\u007f~^:?*[\]\\]/.test(targetRef)
-  const request = lines.slice(1).join('\n').trim() || String(issue?.title || '').trim()
+  const request = body.trim() || requestTitle
   return {
     request,
+    title: requestTitle,
     targetRef: invalid ? defaultBranch : targetRef,
     branchSpecified: true,
-    branchError: invalid ? 'Invalid branch directive. Use `branch: <existing-branch>` as the first line of the issue body.' : ''
+    branchError: invalid ? 'Invalid branch directive. End the issue title with `branch: <existing-branch>`.' : ''
   }
 }
 
@@ -121,7 +123,7 @@ export function omgRequest(event, payload) {
     defaultBranch: payload.repository.default_branch || 'main',
     installationId: payload.installation.id,
     issueNumber: payload.issue.number,
-    issueTitle: payload.issue.title || '',
+    issueTitle: parsed.title,
     request: parsed.request,
     targetRef: parsed.targetRef,
     branchSpecified: parsed.branchSpecified,
@@ -188,7 +190,7 @@ export async function dispatchOmgRequest(request, config, requestFetch = fetch) 
       headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` }
     })
     if (branchResponse.status === 404) {
-      const body = `⚠️ **OpenCode did not start.**\n\nThe requested branch \`${request.targetRef}\` does not exist in \`${request.repository}\`. Update the first issue-body line and remove/re-add the \`OpenCode\` label to retry.`
+      const body = `⚠️ **OpenCode did not start.**\n\nThe requested branch \`${request.targetRef}\` does not exist in \`${request.repository}\`. Update the issue-title suffix and remove/re-add the \`OpenCode\` label to retry.`
       const commented = await commentOnIssue(body)
       return { route: 'invalid-branch', repository: request.repository, targetRef: request.targetRef, commented }
     }
