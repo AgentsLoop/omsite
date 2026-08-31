@@ -5,7 +5,6 @@ const REQUIRED_INSTALLATION_PERMISSIONS = {
   actions: 'write',
   contents: 'write',
   issues: 'write',
-  pull_requests: 'write',
   workflows: 'write'
 }
 
@@ -84,9 +83,7 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '      issue_title: { required: true }',
     "      labels_json: { required: false, default: '[]' }",
     '      sender: { required: true }',
-    '      source: { required: false, default: github-app }',
-    '      target_ref: { required: false }',
-    '      installation_id: { required: false }',
+    '      target_ref: { required: true }',
     '',
     'permissions:',
     '  contents: write',
@@ -98,16 +95,12 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '  opencode:',
     `    uses: ${owner}/${repo}/.github/workflows/opencode-reusable.yml@${ref}`,
     '    with:',
-    '      target_repository: ${{ github.repository }}',
-    '      target_owner: ${{ github.repository_owner }}',
-    '      target_repo: ${{ github.event.repository.name }}',
-    '      target_ref: ${{ inputs.target_ref || github.event.repository.default_branch }}',
+    '      target_ref: ${{ inputs.target_ref }}',
     '      issue_number: ${{ inputs.issue_number }}',
     '      request: ${{ inputs.request }}',
     '      issue_title: ${{ inputs.issue_title }}',
     '      labels_json: ${{ inputs.labels_json }}',
     '      sender: ${{ inputs.sender }}',
-    '      use_app_token: false',
     '    secrets: inherit',
     ''
   ].join('\n')
@@ -174,13 +167,6 @@ export async function dispatchOmgRequest(request, config, requestFetch = fetch) 
   const workflowResponse = await requestFetch(`${api}${workflowPath}`, {
     headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` }
   })
-  if (workflowResponse.ok) {
-    const workflowData = await workflowResponse.json()
-    const workflowSource = workflowData?.content ? Buffer.from(workflowData.content, 'base64').toString('utf8') : ''
-    if (/^\s+issues:\s*$/m.test(workflowSource)) {
-      return { route: 'native', repository: request.repository, targetRef: request.targetRef }
-    }
-  }
   const missingPermissions = missingInstallationPermissions(tokenData.permissions)
   if (missingPermissions.length) {
     const body = [
@@ -216,8 +202,6 @@ export async function dispatchOmgRequest(request, config, requestFetch = fetch) 
     issue_title: request.issueTitle,
     labels_json: JSON.stringify(request.labels),
     sender: request.sender,
-    source: 'github-app',
-    installation_id: String(request.installationId),
     target_ref: request.targetRef
   }
   if (workflowResponse.ok) {

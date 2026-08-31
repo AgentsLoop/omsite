@@ -9,10 +9,11 @@ The App has repository metadata read access and Issues read/write access. It
 subscribes only to the `Issues` event. Its configured webhook endpoint is
 `https://omgithub.com/api/github/webhooks`.
 
-The App also has Actions, Contents, and Pull requests read/write access so it
-can dispatch workflows, create an OpenCode branch, and open the resulting pull
-request in an installed repository. Existing installations must approve newly
-requested permissions before those capabilities become active.
+The App also has Actions and Contents read/write access so it can dispatch or
+bootstrap the repository-local workflow. The dispatched workflow uses the
+repository's own `GITHUB_TOKEN` for branches and pull requests. Existing
+installations must approve newly requested permissions before those capabilities
+become active.
 
 ## Request routing
 
@@ -30,14 +31,13 @@ definition itself remains dispatched from the default branch, with the selected
 branch forwarded through `target_ref`.
 
 Before dispatching or bootstrapping a wrapper, the service verifies that the
-installation token has Actions, Contents, Issues, Pull requests, and Workflows
+installation token has Actions, Contents, Issues, and Workflows
 write access. Missing permissions are posted to the triggering issue and the
 request stops before an Actions run is created. If Issues write access itself is
 missing, the service uses its configured notification token when that token can
 access the repository.
 
-- When the file is a dispatch-only wrapper, the App dispatches it. Keep the
-  repository-local workflow dispatch-only so the App is the sole issue router.
+- When the dispatch-only file exists, the App dispatches it.
 - When the lookup returns 404, the App creates a thin repository-local wrapper
   that calls the centralized reusable workflow, then dispatches that wrapper.
   This keeps the Actions run and logs in the repository containing the `OpenCode`

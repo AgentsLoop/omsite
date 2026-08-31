@@ -45,7 +45,7 @@ test('verifies webhook signatures without accepting malformed signatures', () =>
 })
 
 function response(status, data = {}) { return { ok: status >= 200 && status < 300, status, json: async () => data } }
-const requiredPermissions = { actions: 'write', contents: 'write', issues: 'write', pull_requests: 'write', workflows: 'write' }
+const requiredPermissions = { actions: 'write', contents: 'write', issues: 'write', workflows: 'write' }
 function dispatchConfig() {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
   return { appId: 123, privateKey, fallbackOwner: 'AgentsLoop', fallbackRepo: 'OhMyGithub', fallbackRef: 'main' }
@@ -62,7 +62,6 @@ test('dispatches the repository-local workflow when it exists', async () => {
   assert.equal(result.route, 'local')
   assert.match(calls.at(-1).url, /octo\/example\/actions\/workflows\/opencode\.yml\/dispatches$/)
   assert.equal(JSON.parse(calls.at(-1).options.body).ref, 'trunk')
-  assert.equal(JSON.parse(calls.at(-1).options.body).inputs.installation_id, '42')
   assert.equal(JSON.parse(calls.at(-1).options.body).inputs.target_ref, 'trunk')
   assert.equal(calls.at(-1).options.headers.authorization, 'Bearer installation-token')
 })
@@ -125,18 +124,6 @@ test('comments and skips dispatch when a requested branch does not exist', async
   assert.equal(calls.some(call => call.url.includes('/actions/workflows/')), false)
 })
 
-test('does not duplicate a workflow that already handles issue events', async () => {
-  const calls = []
-  const result = await dispatchOmgRequest(omgRequest('issues', webhook), dispatchConfig(), async (url, options = {}) => {
-    calls.push({ url, options })
-    if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
-    if (url.includes('/contents/')) return response(200, { content: Buffer.from('on:\n  workflow_dispatch:\n  issues:\n    types: [opened, labeled]\n').toString('base64') })
-    return response(500)
-  })
-  assert.equal(result.route, 'native')
-  assert.equal(calls.some(call => call.url.includes('/actions/workflows/')), false)
-})
-
 test('comments on the issue and skips dispatch when installation permissions are missing', async () => {
   const calls = []
   const result = await dispatchOmgRequest(omgRequest('issues', webhook), dispatchConfig(), async (url, options = {}) => {
@@ -174,8 +161,8 @@ test('uses the notification token when the installation cannot comment', async (
   assert.equal(calls.at(-1).options.headers.authorization, 'Bearer service-token')
 })
 
-test('repository wrapper keeps execution in the issue repository', () => {
+test('repository wrapper forwards only issue data and target branch', () => {
   const workflow = repositoryWorkflow()
-  assert.match(workflow, /target_repository: \$\{\{ github.repository \}\}/)
-  assert.match(workflow, /use_app_token: false/)
+  assert.match(workflow, /target_ref: \$\{\{ inputs.target_ref \}\}/)
+  assert.doesNotMatch(workflow, /target_repository|use_app_token|installation_id/)
 })

@@ -44,7 +44,7 @@ dispatching the workflow definition from the default branch. Invalid branches
 are reported on the issue without starting an Actions run.
 
 Before dispatch or bootstrap, the router checks that the installation token grants
-Actions, Contents, Issues, Pull requests, and Workflows write access. If any are
+Actions, Contents, Issues, and Workflows write access. If any are
 missing, it posts the missing permissions to the triggering issue and does not
 start an Actions run. When Site issue creation cannot apply its required labels,
 it leaves the issue with the same actionable warning instead of starting work.
