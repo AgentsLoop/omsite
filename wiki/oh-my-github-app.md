@@ -17,13 +17,13 @@ requested permissions before those capabilities become active.
 ## Request routing
 
 The webhook service verifies `X-Hub-Signature-256`, ignores bot-authored and
-non-`/omg` events, and mints an installation-scoped token. It checks
+non-`OpenCode`-labeled issue events, and mints an installation-scoped token. It checks
 `.github/workflows/opencode.yml` on the target repository's default branch:
 
 - When the file exists, the App dispatches that repository-local wrapper.
 - When the lookup returns 404, the App creates a thin repository-local wrapper
   that calls the centralized reusable workflow, then dispatches that wrapper.
-  This keeps the Actions run and logs in the repository containing the `/omg`
+  This keeps the Actions run and logs in the repository containing the `OpenCode`
   issue without copying the pipeline implementation.
 
 Both routes call `.github/workflows/opencode-reusable.yml`. That reusable
