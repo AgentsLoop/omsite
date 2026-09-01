@@ -111,7 +111,9 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
 
 export function omgRequest(event, payload) {
   if (event !== 'issues') return null
-  if (payload.sender?.type === 'Bot' || payload.issue?.pull_request) return null
+  if (payload.issue?.pull_request) return null
+  const automatedOpenCodeLabel = payload.sender?.type === 'Bot' && payload.action === 'labeled' && payload.label?.name === 'OpenCode'
+  if (payload.sender?.type === 'Bot' && !automatedOpenCodeLabel) return null
   const labels = (payload.issue?.labels || []).map(label => typeof label === 'string' ? label : label.name).filter(Boolean)
   const openedWithOpenCode = payload.action === 'opened' && labels.includes('OpenCode')
   const openedWithoutOpenCode = payload.action === 'opened' && !labels.includes('OpenCode')
@@ -134,7 +136,7 @@ export function omgRequest(event, payload) {
     branchError: parsed.branchError,
     deliveryEvent: event,
     deliveryAction: payload.action,
-    sender: payload.sender?.login || '',
+    sender: automatedOpenCodeLabel ? payload.issue?.user?.login || '' : payload.sender?.login || '',
     labels,
     missingOpenCodeLabel: openedWithoutOpenCode
   }

@@ -17,17 +17,18 @@ become active.
 
 ## Request routing
 
-The webhook service verifies `X-Hub-Signature-256`, ignores bot-authored and
-non-`OpenCode`-labeled issue events, and mints an installation-scoped token. It
+The webhook service verifies `X-Hub-Signature-256`, ignores unrelated
+bot-authored and non-`OpenCode`-labeled issue events, and mints an
+installation-scoped token. It
 accepts only issue creation with `OpenCode` already present or addition of that
 exact label; comments and edits never execute work. It checks
 `.github/workflows/opencode.yml` on the selected branch:
 
 When a human opens an issue without the `OpenCode` label, the App adds that
 label to the issue and posts `Please add the OpenCode label to this issue to
-execute it.` It does not dispatch or bootstrap a workflow for that event; the
-resulting bot-authored label event is ignored. A human adding that exact label
-later is the supported execution trigger.
+execute it.` The resulting bot-authored `OpenCode` label event is accepted as
+the execution trigger, using the issue author for authorization. A human adding
+that exact label later follows the same path.
 
 An optional issue-title suffix `branch: <existing-branch>` selects the target
 checkout and pull-request base. The App removes that metadata suffix from the

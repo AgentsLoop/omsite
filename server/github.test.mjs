@@ -19,7 +19,7 @@ test('extracts a title-suffix branch directive without changing the request body
 const webhook = {
   action: 'opened', installation: { id: 42 }, sender: { login: 'octocat', type: 'User' },
   repository: { full_name: 'octo/example', default_branch: 'trunk' },
-  issue: { number: 7, title: 'Build it', body: 'Build a tiny game', labels: [{ name: 'Goal' }, { name: 'OpenCode' }] }
+  issue: { number: 7, title: 'Build it', body: 'Build a tiny game', user: { login: 'octocat' }, labels: [{ name: 'Goal' }, { name: 'OpenCode' }] }
 }
 
 test('normalizes an eligible OMG webhook request', () => {
@@ -29,6 +29,7 @@ test('normalizes an eligible OMG webhook request', () => {
     deliveryAction: 'opened', sender: 'octocat', labels: ['Goal', 'OpenCode'], missingOpenCodeLabel: false
   })
   assert.equal(omgRequest('issues', { ...webhook, sender: { type: 'Bot' } }), null)
+  assert.equal(omgRequest('issues', { ...webhook, action: 'labeled', label: { name: 'OpenCode' }, sender: { login: 'oh-my-github-app[bot]', type: 'Bot' } }).sender, 'octocat')
   assert.equal(omgRequest('issue_comment', { ...webhook, action: 'created', comment: { body: 'Build it' } }), null)
   assert.equal(omgRequest('issues', { ...webhook, action: 'edited' }), null)
   const missingLabelRequest = omgRequest('issues', { ...webhook, issue: { ...webhook.issue, labels: [{ name: 'Goal' }] } })
@@ -105,6 +106,27 @@ test('bootstraps and dispatches a local wrapper when the target has no workflow'
   assert.match(dispatch.url, /octo\/example\/actions\/workflows\/opencode\.yml\/dispatches$/)
   assert.equal(dispatch.options.headers.authorization, 'Bearer installation-token')
   assert.equal(JSON.parse(dispatch.options.body).ref, 'trunk')
+})
+
+test('bootstraps and dispatches when the App adds the OpenCode label', async () => {
+  const calls = []
+  const appLabeledWebhook = {
+    ...webhook,
+    action: 'labeled',
+    label: { name: 'OpenCode' },
+    sender: { login: 'oh-my-github-app[bot]', type: 'Bot' }
+  }
+  const result = await dispatchOmgRequest(omgRequest('issues', appLabeledWebhook), dispatchConfig(), async (url, options = {}) => {
+    calls.push({ url, options })
+    if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
+    if (url.includes('/collaborators/octocat/permission')) return response(200, { permission: 'write' })
+    if (url.includes('/contents/') && options.method !== 'PUT') return response(404)
+    if (url.includes('/contents/') && options.method === 'PUT') return response(201)
+    return response(204)
+  })
+  assert.equal(result.route, 'bootstrapped')
+  assert.equal(calls.some(call => call.url.endsWith('/issues/7/labels')), false)
+  assert.match(calls.at(-1).url, /octo\/example\/actions\/workflows\/opencode\.yml\/dispatches$/)
 })
 
 test('validates and forwards a custom issue branch without including metadata in the prompt', async () => {
