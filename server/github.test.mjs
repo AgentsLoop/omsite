@@ -202,4 +202,5 @@ test('repository wrapper uses the workflow dispatch branch', () => {
   const workflow = repositoryWorkflow()
   assert.doesNotMatch(workflow, /target_ref/)
   assert.doesNotMatch(workflow, /target_repository|use_app_token|installation_id/)
+  assert.doesNotMatch(workflow, /OMGHITHUB_PUBLISH_TOKEN|PUBLISH_TOKEN/)
 })

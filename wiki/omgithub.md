@@ -8,11 +8,12 @@ published project ownership in Firebase.
 The OpenCode workflow can upload `project/dist` to `POST
 https://omgithub.com/api/publish` after creating the PR. Publishing is disabled
 by default; enable it with the repository variable
-`OMGHITHUB_PUBLISH_ENABLED=true` and provide the `OMGHITHUB_PUBLISH_TOKEN`
-Actions secret. A publishing failure is non-blocking and the workflow continues
-with the temporary verified app URL. When publishing succeeds, the service
-reuses a slug when the same issue/PR is republished; a collision from another
-project gets `-2`, `-3`, and so on. Published games use
+`OMGHITHUB_PUBLISH_ENABLED=true`. The workflow authenticates with GitHub's
+automatically generated, repository-scoped `GITHUB_TOKEN`; no publishing
+secret is required. A publishing failure is non-blocking and the workflow
+continues with the temporary verified app URL. When publishing succeeds, the
+service reuses a slug when the same issue/PR is republished; a collision from
+another project gets `-2`, `-3`, and so on. Published games use
 `https://<slug>.omgithub.com/`, with the install page at `/install`.
 
 The server also accepts `PUBLIC_ALIASES` (default `lolgames.net`) for the same

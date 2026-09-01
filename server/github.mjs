@@ -105,7 +105,6 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}',
     '      OPENCODE_AUTH_JSON: ${{ secrets.OPENCODE_AUTH_JSON }}',
     '      AGENTSWEB_SSH_PUBLIC_KEY: ${{ secrets.AGENTSWEB_SSH_PUBLIC_KEY }}',
-    '      OMGHITHUB_PUBLISH_TOKEN: ${{ secrets.OMGHITHUB_PUBLISH_TOKEN }}',
     ''
   ].join('\n')
 }

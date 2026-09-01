@@ -20,7 +20,6 @@ const gamesDir = join(dataDir, 'games')
 const owner = process.env.GITHUB_OWNER || 'AgentsLoop'
 const repo = process.env.GITHUB_REPO || 'OhMyGithub'
 const githubToken = process.env.GITHUB_TOKEN || ''
-const publishToken = process.env.PUBLISH_TOKEN || ''
 const ZIP_MAX_ENTRIES = 5000
 const ZIP_MAX_ENTRY_BYTES = 25 * 1024 * 1024
 const ZIP_MAX_TOTAL_BYTES = 100 * 1024 * 1024
@@ -187,8 +186,8 @@ app.post('/api/publish', express.raw({ type: ['application/zip', 'application/oc
     const repoOwner = String(req.headers['x-omgithub-owner'] || owner), repoName = String(req.headers['x-omgithub-repo'] || repo)
     const authorization = String(req.headers.authorization || '')
     const sourceToken = String(req.headers['x-omgithub-github-token'] || '')
-    let authorized = Boolean(publishToken && authorization === `Bearer ${publishToken}`)
-    if (!authorized && sourceToken && authorization === `Bearer ${sourceToken}`) {
+    let authorized = false
+    if (sourceToken && authorization === `Bearer ${sourceToken}`) {
       try {
         const source = await github(`/repos/${encodeURIComponent(repoOwner)}/${encodeURIComponent(repoName)}`, sourceToken)
         authorized = source.full_name?.toLowerCase() === `${repoOwner}/${repoName}`.toLowerCase()

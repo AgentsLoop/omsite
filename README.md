@@ -25,9 +25,10 @@ production-mode local check.
   the centralized reusable workflow used by bootstrapped repository wrappers.
 - `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`: optional GitHub login.
 - `FIREBASE_SERVICE_ACCOUNT_BASE64`: Firebase service-account JSON, base64 encoded.
-- `PUBLISH_TOKEN`: bearer token shared with the Actions secret
-  `OMGHITHUB_PUBLISH_TOKEN`.
 - `PUBLIC_ORIGIN=https://omgithub.com`.
+
+Publishing authenticates with the workflow's automatically generated
+repository-scoped `GITHUB_TOKEN`; no publishing secret is required.
 
 The webhook router validates `X-Hub-Signature-256` and accepts only non-bot
 `issues.opened` events that already contain the exact `OpenCode` label, or
