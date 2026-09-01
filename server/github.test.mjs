@@ -21,13 +21,10 @@ const webhook = {
   repository: { full_name: 'octo/example', default_branch: 'trunk' },
   issue: { number: 7, title: 'Build it', body: 'Build a tiny game', user: { login: 'octocat' }, labels: [{ name: 'Goal' }, { name: 'OpenCode' }] }
 }
+const labeledWebhook = { ...webhook, action: 'labeled', label: { name: 'OpenCode' } }
 
-test('normalizes an eligible OMG webhook request', () => {
-  assert.deepEqual(omgRequest('issues', webhook), {
-    owner: 'octo', repo: 'example', repository: 'octo/example', defaultBranch: 'trunk', installationId: 42,
-    issueNumber: 7, issueTitle: 'Build it', request: 'Build a tiny game', targetRef: 'trunk', branchSpecified: false, branchError: '', deliveryEvent: 'issues',
-    deliveryAction: 'opened', sender: 'octocat', labels: ['Goal', 'OpenCode'], missingOpenCodeLabel: false
-  })
+test('accepts only OpenCode label additions for dispatch', () => {
+  assert.equal(omgRequest('issues', webhook), null)
   assert.equal(omgRequest('issues', { ...webhook, sender: { type: 'Bot' } }), null)
   assert.equal(omgRequest('issues', { ...webhook, action: 'labeled', label: { name: 'OpenCode' }, sender: { login: 'oh-my-github-app[bot]', type: 'Bot' } }).sender, 'octocat')
   assert.equal(omgRequest('issue_comment', { ...webhook, action: 'created', comment: { body: 'Build it' } }), null)
@@ -74,7 +71,7 @@ function dispatchConfig() {
 
 test('dispatches the repository-local workflow when it exists', async () => {
   const calls = []
-  const result = await dispatchOmgRequest(omgRequest('issues', webhook), dispatchConfig(), async (url, options = {}) => {
+  const result = await dispatchOmgRequest(omgRequest('issues', labeledWebhook), dispatchConfig(), async (url, options = {}) => {
     calls.push({ url, options })
     if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
     if (url.includes('/collaborators/octocat/permission')) return response(200, { permission: 'write' })
@@ -90,7 +87,7 @@ test('dispatches the repository-local workflow when it exists', async () => {
 
 test('bootstraps and dispatches a local wrapper when the target has no workflow', async () => {
   const calls = []
-  const result = await dispatchOmgRequest(omgRequest('issues', webhook), dispatchConfig(), async (url, options = {}) => {
+  const result = await dispatchOmgRequest(omgRequest('issues', labeledWebhook), dispatchConfig(), async (url, options = {}) => {
     calls.push({ url, options })
     if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
     if (url.includes('/collaborators/octocat/permission')) return response(200, { permission: 'write' })
@@ -111,7 +108,7 @@ test('bootstraps and dispatches a local wrapper when the target has no workflow'
 test('bootstraps and dispatches when the App adds the OpenCode label', async () => {
   const calls = []
   const appLabeledWebhook = {
-    ...webhook,
+    ...labeledWebhook,
     action: 'labeled',
     label: { name: 'OpenCode' },
     sender: { login: 'oh-my-github-app[bot]', type: 'Bot' }
@@ -132,7 +129,7 @@ test('bootstraps and dispatches when the App adds the OpenCode label', async () 
 test('validates and forwards a custom issue branch without including metadata in the prompt', async () => {
   const calls = []
   const branchWebhook = {
-    ...webhook,
+    ...labeledWebhook,
     issue: { ...webhook.issue, title: 'Custom branch smoke test branch: codex/omgithub-site', body: 'Build a tiny browser page.' }
   }
   const result = await dispatchOmgRequest(omgRequest('issues', branchWebhook), dispatchConfig(), async (url, options = {}) => {
@@ -156,7 +153,7 @@ test('validates and forwards a custom issue branch without including metadata in
 test('comments and skips dispatch when a requested branch does not exist', async () => {
   const calls = []
   const branchWebhook = {
-    ...webhook,
+    ...labeledWebhook,
     issue: { ...webhook.issue, title: 'Build it branch: missing/ref' }
   }
   const result = await dispatchOmgRequest(omgRequest('issues', branchWebhook), dispatchConfig(), async (url, options = {}) => {
@@ -174,7 +171,7 @@ test('comments and skips dispatch when a requested branch does not exist', async
 
 test('comments on the issue and skips dispatch when installation permissions are missing', async () => {
   const calls = []
-  const result = await dispatchOmgRequest(omgRequest('issues', webhook), dispatchConfig(), async (url, options = {}) => {
+  const result = await dispatchOmgRequest(omgRequest('issues', labeledWebhook), dispatchConfig(), async (url, options = {}) => {
     calls.push({ url, options })
     if (url.includes('/access_tokens')) {
       return response(201, { token: 'installation-token', permissions: { ...requiredPermissions, workflows: 'read' } })
@@ -195,7 +192,7 @@ test('comments on the issue and skips dispatch when installation permissions are
 test('uses the notification token when the installation cannot comment', async () => {
   const calls = []
   const config = { ...dispatchConfig(), notificationToken: 'service-token' }
-  const result = await dispatchOmgRequest(omgRequest('issues', webhook), config, async (url, options = {}) => {
+  const result = await dispatchOmgRequest(omgRequest('issues', labeledWebhook), config, async (url, options = {}) => {
     calls.push({ url, options })
     if (url.includes('/access_tokens')) {
       return response(201, { token: 'installation-token', permissions: { ...requiredPermissions, issues: 'read' } })
@@ -213,7 +210,7 @@ test('uses the notification token when the installation cannot comment', async (
 
 test('comments and skips dispatch for actors without write access', async () => {
   const calls = []
-  const result = await dispatchOmgRequest(omgRequest('issues', webhook), dispatchConfig(), async (url, options = {}) => {
+  const result = await dispatchOmgRequest(omgRequest('issues', labeledWebhook), dispatchConfig(), async (url, options = {}) => {
     calls.push({ url, options })
     if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
     if (url.includes('/collaborators/octocat/permission')) return response(200, { permission: 'triage' })

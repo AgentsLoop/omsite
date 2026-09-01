@@ -115,10 +115,9 @@ export function omgRequest(event, payload) {
   const automatedOpenCodeLabel = payload.sender?.type === 'Bot' && payload.action === 'labeled' && payload.label?.name === 'OpenCode'
   if (payload.sender?.type === 'Bot' && !automatedOpenCodeLabel) return null
   const labels = (payload.issue?.labels || []).map(label => typeof label === 'string' ? label : label.name).filter(Boolean)
-  const openedWithOpenCode = payload.action === 'opened' && labels.includes('OpenCode')
   const openedWithoutOpenCode = payload.action === 'opened' && !labels.includes('OpenCode')
   const openCodeAdded = payload.action === 'labeled' && payload.label?.name === 'OpenCode' && labels.includes('OpenCode')
-  if (!openedWithOpenCode && !openedWithoutOpenCode && !openCodeAdded) return null
+  if (!openedWithoutOpenCode && !openCodeAdded) return null
   if (!payload.installation?.id || !payload.repository?.full_name || !payload.issue?.number) return null
   const [owner, repo] = payload.repository.full_name.split('/')
   const parsed = parseIssueRequest(payload.issue, payload.repository.default_branch || 'main')
@@ -142,7 +141,23 @@ export function omgRequest(event, payload) {
   }
 }
 
-export async function dispatchOmgRequest(request, config, requestFetch = fetch) {
+async function activeWorkflowRun(request, config, requestFetch) {
+  const path = `/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/actions/runs?event=workflow_dispatch&status=in_progress&per_page=100`
+  const response = await requestFetch(`${config.api || API}${path}`, {
+    headers: {
+      accept: 'application/vnd.github+json',
+      'user-agent': 'OmGithub',
+      'x-github-api-version': '2022-11-28',
+      authorization: `Bearer ${config.installationToken}`
+    }
+  })
+  if (!response.ok) throw new Error(`Active workflow lookup returned ${response.status}`)
+  const data = await response.json()
+  const prefix = `OpenCode #${request.issueNumber} —`
+  return (data.workflow_runs || []).find(run => String(run.name || run.display_title || '').startsWith(prefix)) || null
+}
+
+async function dispatchOmgRequestOnce(request, config, requestFetch) {
   const api = config.api || API
   const commonHeaders = {
     accept: 'application/vnd.github+json',
@@ -157,6 +172,7 @@ export async function dispatchOmgRequest(request, config, requestFetch = fetch) 
   if (!tokenResponse.ok) throw new Error(`Installation token request returned ${tokenResponse.status}`)
   const tokenData = await tokenResponse.json()
   const installationToken = tokenData.token
+  config = { ...config, installationToken }
   const commentUrl = `${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/issues/${request.issueNumber}/comments`
   const labelsUrl = `${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/issues/${request.issueNumber}/labels`
   const commentTokens = [...new Set([installationToken, config.notificationToken].filter(Boolean))]
@@ -222,6 +238,8 @@ export async function dispatchOmgRequest(request, config, requestFetch = fetch) 
     }
     if (!branchResponse.ok) throw new Error(`Target branch lookup returned ${branchResponse.status}`)
   }
+  const existingRun = await activeWorkflowRun(request, config, requestFetch)
+  if (existingRun) return { route: 'duplicate-active-run', repository: request.repository, runId: existingRun.id }
   const inputs = {
     issue_number: String(request.issueNumber),
     request: request.request,
@@ -257,3 +275,5 @@ export async function dispatchOmgRequest(request, config, requestFetch = fetch) 
   if (!dispatch.ok) throw new Error(`Bootstrapped workflow dispatch returned ${dispatch.status}`)
   return { route: 'bootstrapped', repository: request.repository }
 }
+
+export const dispatchOmgRequest = dispatchOmgRequestOnce
