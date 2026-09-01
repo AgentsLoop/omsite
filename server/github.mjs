@@ -276,4 +276,6 @@ async function dispatchOmgRequestOnce(request, config, requestFetch) {
   return { route: 'bootstrapped', repository: request.repository }
 }
 
-export const dispatchOmgRequest = dispatchOmgRequestOnce
+export async function dispatchOmgRequest(request, config, requestFetch = fetch) {
+  return dispatchOmgRequestOnce(request, config, requestFetch)
+}
