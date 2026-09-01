@@ -38,17 +38,21 @@ test('normalizes an eligible OMG webhook request', () => {
   assert.equal(omgRequest('issues', { ...webhook, action: 'labeled', label: { name: 'Goal' } }), null)
 })
 
-test('comments on newly opened issues missing the OpenCode label without dispatching', async () => {
+test('adds the OpenCode label and comments on newly opened issues missing it', async () => {
   const calls = []
   const request = omgRequest('issues', { ...webhook, issue: { ...webhook.issue, labels: [{ name: 'Goal' }] } })
   const result = await dispatchOmgRequest(request, dispatchConfig(), async (url, options = {}) => {
     calls.push({ url, options })
     if (url.includes('/access_tokens')) return response(201, { token: 'installation-token', permissions: requiredPermissions })
+    if (url.endsWith('/issues/7/labels')) return response(200, [{ name: 'OpenCode' }])
     if (url.endsWith('/issues/7/comments')) return response(201)
     return response(500)
   })
-  assert.deepEqual(result, { route: 'missing-opencode-label', repository: 'octo/example', commented: true })
+  assert.deepEqual(result, { route: 'missing-opencode-label', repository: 'octo/example', labeled: true, commented: true })
   assert.equal(calls.some(call => call.url.includes('/actions/workflows/')), false)
+  const label = calls.find(call => call.url.endsWith('/issues/7/labels'))
+  assert.equal(label.options.method, 'POST')
+  assert.deepEqual(JSON.parse(label.options.body), { labels: ['OpenCode'] })
   const comment = calls.find(call => call.url.endsWith('/issues/7/comments'))
   assert.match(JSON.parse(comment.options.body).body, /Please add the `OpenCode` label/)
 })
