@@ -27,9 +27,14 @@ export function extractUrls(issue, comments = []) {
   const trycf = urls.filter(url => /\.trycloudflare\.com/i.test(url))
   const opencode = trycf.find(url => /\/session\/ses_/i.test(url)) || ''
   const preview = [...trycf].reverse().find(url => !/\/session\/ses_/i.test(url)) || ''
-  const screenshots = [...new Set(urls.filter(url => /raw\.githubusercontent\.com\/.+\/(?:screenshots|project%2Fscreenshots|project\/screenshots)\/.+\.(png|jpe?g|webp)/i.test(url)))]
+  const published = [...urls].reverse().find(url => /https:\/\/[^/]+\.github\.io(?:\/[^\s)<\"]*)?/i.test(url)) || ''
+  const screenshots = [...new Set(urls.filter(url =>
+    /raw\.githubusercontent\.com\/.+\/(?:screenshots|project%2Fscreenshots|project\/screenshots)\/.+\.(png|jpe?g|webp)/i.test(url) ||
+    /github\.com\/user-attachments\/assets\//i.test(url) ||
+    /user-images\.githubusercontent\.com\/.+\.(png|jpe?g|webp)/i.test(url)
+  ))]
   const pr = [...urls].reverse().find(url => /github\.com\/[^/]+\/[^/]+\/pull\/\d+/i.test(url)) || ''
-  return { opencode, preview, screenshots, pr }
+  return { opencode, preview, published, screenshots, pr }
 }
 export function slugify(value) { return String(value || 'game').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 46) || 'game' }
 
@@ -90,6 +95,7 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '  contents: write',
     '  issues: write',
     '  pull-requests: write',
+    '  pages: write',
     '  id-token: write',
     '',
     'jobs:',

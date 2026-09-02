@@ -5,16 +5,19 @@ The Vue/Node application lives in `site/`. It mirrors GitHub routes at
 issue comments for OpenCode/trycloudflare/screenshot progress, and stores
 published project ownership in Firebase.
 
-The OpenCode workflow can upload `project/dist` to `POST
-https://omgithub.com/api/publish` after creating the PR. Publishing is disabled
-by default; enable it with the repository variable
-`OMGHITHUB_PUBLISH_ENABLED=true`. The workflow authenticates with GitHub's
-automatically generated, repository-scoped `GITHUB_TOKEN`; no publishing
-secret is required. A publishing failure is non-blocking and the workflow
-continues with the temporary verified app URL. When publishing succeeds, the
-service reuses a slug when the same issue/PR is republished; a collision from
-another project gets `-2`, `-3`, and so on. Published games use
-`https://<slug>.omgithub.com/`, with the install page at `/install`.
+The OpenCode workflow now publishes `project/dist` to the target repository's
+`gh-pages` branch instead of uploading the build to `POST /api/publish`. Results
+coexist below `branches/<sanitized-opencode-branch>/<commit-prefix>/`. The
+workflow uses `peaceiris/actions-gh-pages` with `keep_files: true`, and defaults
+to publishing unless `PAGES_PUBLISH_ENABLED=false`. Configure the target
+repository's Pages source as the root of `gh-pages` before the first run. The
+legacy `/api/publish` endpoint and existing OmGithub-hosted records remain
+available for compatibility, but new OpenCode workflow results do not use them.
+
+Issue pages use the GitHub comments as their live data source. OpenCode chat is
+embedded on the left; progress/final screenshots and the temporary or permanent
+game preview occupy the right. The final report's `github.io` URL is detected as
+the permanent published result.
 
 The server also accepts `PUBLIC_ALIASES` (default `lolgames.net`) for the same
 wildcard game handler; route that alias only after confirming its DNS ownership.

@@ -162,7 +162,7 @@ app.get('/api/github/:owner/:repo/issues/:number', async (req, res, next) => {
     const urls = extractUrls(issue, comments), rows = await projects()
     const published = rows.find(row => row.repo_owner === req.params.owner && row.repo === req.params.repo && String(row.issue) === String(req.params.number))
     const prMatch = urls.pr.match(/\/pull\/(\d+)/)
-    res.json({ number: issue.number, title: issue.title, body: issue.body, status: issue.labels.some(l => l.name === 'complete') ? 'complete' : issue.labels.some(l => l.name === 'failed') ? 'failed' : 'in progress', github_url: issue.html_url, opencode_url: urls.opencode, preview_url: urls.preview, published_url: published?.url || '', install_url: published?.install_url || '', screenshots: [...new Set([...(published?.screenshots || []), ...urls.screenshots])], pr_path: published?.pr ? `/${req.params.owner}/${req.params.repo}/pull/${published.pr}` : prMatch ? `/${req.params.owner}/${req.params.repo}/pull/${prMatch[1]}` : '' })
+    res.json({ number: issue.number, title: issue.title, body: issue.body, status: issue.labels.some(l => l.name === 'complete') ? 'complete' : issue.labels.some(l => l.name === 'failed') ? 'failed' : 'in progress', github_url: issue.html_url, opencode_url: urls.opencode, preview_url: urls.preview, published_url: urls.published || published?.url || '', install_url: published?.install_url || '', screenshots: [...new Set([...(published?.screenshots || []), ...urls.screenshots])], pr_path: published?.pr ? `/${req.params.owner}/${req.params.repo}/pull/${published.pr}` : prMatch ? `/${req.params.owner}/${req.params.repo}/pull/${prMatch[1]}` : '' })
   } catch (e) { next(e) }
 })
 

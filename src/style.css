@@ -391,25 +391,35 @@ h3 {
 }
 .studio-grid {
   display: grid;
-  grid-template-columns: minmax(300px, 31%) 1fr;
+  grid-template-columns: minmax(340px, 30%) 1fr;
   min-height: 0;
   flex: 1;
 }
-.progress-panel {
-  overflow-y: auto;
-  border-right: 1px solid var(--line);
-  background: #19191a;
-  padding: 24px;
-}
-.timeline {
+.studio-timeline {
+  min-height: 68px;
   display: grid;
-  gap: 19px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid #303032;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  padding: 13px 22px;
+  border-bottom: 1px solid var(--line);
+  background: #19191a;
+}
+.chat-panel {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--line);
+  background: #08090a;
+}
+.chat-panel iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #0c0c0d;
 }
 .timeline-step {
   display: flex;
-  gap: 12px;
+  gap: 9px;
   opacity: 0.38;
 }
 .timeline-step > span {
@@ -447,50 +457,6 @@ h3 {
   color: var(--orange);
   box-shadow: 0 0 0 4px #ff671918;
 }
-.shots-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin: 25px 0 14px;
-}
-.shots-heading h2 {
-  font-size: 16px;
-}
-.shots-heading span {
-  color: #777;
-  font-size: 12px;
-}
-.shots-list {
-  display: grid;
-  gap: 12px;
-}
-.shots-list button {
-  border: 1px solid #363638;
-  border-radius: 10px;
-  padding: 0;
-  background: #111;
-  overflow: hidden;
-  cursor: pointer;
-}
-.shots-list img {
-  width: 100%;
-  display: block;
-}
-.shots-empty {
-  height: 240px;
-  display: grid;
-  place-content: center;
-  text-align: center;
-  color: #777;
-}
-.shots-empty span {
-  font-size: 38px;
-}
-.shots-empty p {
-  font-size: 12px;
-  max-width: 210px;
-  line-height: 1.5;
-}
 .preview-panel {
   min-width: 0;
   display: flex;
@@ -511,6 +477,27 @@ h3 {
   margin-left: auto;
   color: #aaa;
 }
+.shot-tabs {
+  display: flex;
+  gap: 5px;
+  margin-left: auto;
+}
+.shot-tabs button {
+  border: 1px solid #3b3b3d;
+  border-radius: 6px;
+  background: #242426;
+  color: #aaa;
+  min-width: 25px;
+  height: 25px;
+  cursor: pointer;
+}
+.shot-tabs button.selected {
+  border-color: var(--orange);
+  color: white;
+}
+.shot-tabs + a {
+  margin-left: 6px;
+}
 .live-dot {
   width: 8px;
   height: 8px;
@@ -523,6 +510,13 @@ h3 {
   width: 100%;
   height: 100%;
   background: white;
+}
+.progress-shot {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #08090a;
+  cursor: zoom-in;
 }
 .preview-wait {
   height: 100%;
@@ -726,8 +720,12 @@ h3 {
   .studio-grid {
     grid-template-columns: 1fr;
   }
-  .progress-panel {
+  .studio-timeline {
+    grid-template-columns: 1fr 1fr;
+  }
+  .chat-panel {
     border-right: 0;
+    height: 55vh;
   }
   .preview-panel {
     height: 70vh;
