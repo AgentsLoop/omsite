@@ -364,23 +364,31 @@ h3 {
   text-align: center;
 }
 .studio-bar {
-  height: 76px;
-  flex: 0 0 76px;
-  display: flex;
+  min-height: 82px;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(360px, 2fr) minmax(180px, 1fr);
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 22px;
+  gap: 24px;
+  padding: 12px 22px;
   border-bottom: 1px solid var(--line);
   background: #171718;
 }
+.studio-title {
+  min-width: 0;
+}
 .studio-bar h1 {
   font-size: 19px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .studio-bar .eyebrow {
   margin: 0 0 4px;
 }
 .studio-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 9px;
 }
 .studio-actions a {
@@ -395,14 +403,57 @@ h3 {
   min-height: 0;
   flex: 1;
 }
-.studio-timeline {
-  min-height: 68px;
+.studio-progress {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+.progress-numbers {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.progress-numbers span {
+  width: 28px;
+  height: 28px;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 18px;
-  padding: 13px 22px;
-  border-bottom: 1px solid var(--line);
-  background: #19191a;
+  place-items: center;
+  border: 1px solid #555;
+  border-radius: 50%;
+  color: #777;
+  font-size: 11px;
+  font-weight: 700;
+}
+.progress-numbers span.done {
+  border-color: #1c8b59;
+  background: #1c8b59;
+  color: white;
+}
+.progress-numbers span.active {
+  border-color: var(--orange);
+  color: var(--orange);
+  box-shadow: 0 0 0 4px #ff671918;
+}
+.current-progress {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.current-progress strong {
+  font-size: 13px;
+}
+.current-progress small {
+  margin-top: 2px;
+  color: #8c8c8f;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-pane-tabs {
+  display: none;
 }
 .chat-panel {
   min-width: 0;
@@ -416,46 +467,6 @@ h3 {
   height: 100%;
   border: 0;
   background: #0c0c0d;
-}
-.timeline-step {
-  display: flex;
-  gap: 9px;
-  opacity: 0.38;
-}
-.timeline-step > span {
-  width: 27px;
-  height: 27px;
-  display: grid;
-  place-items: center;
-  border: 1px solid #555;
-  border-radius: 50%;
-  font-size: 11px;
-  flex: 0 0 auto;
-}
-.timeline-step div {
-  display: flex;
-  flex-direction: column;
-}
-.timeline-step strong {
-  font-size: 13px;
-}
-.timeline-step small {
-  font-size: 11px;
-  color: #888;
-  margin-top: 3px;
-}
-.timeline-step.done,
-.timeline-step.active {
-  opacity: 1;
-}
-.timeline-step.done > span {
-  background: #1c8b59;
-  border-color: #1c8b59;
-}
-.timeline-step.active > span {
-  border-color: var(--orange);
-  color: var(--orange);
-  box-shadow: 0 0 0 4px #ff671918;
 }
 .preview-panel {
   min-width: 0;
@@ -718,17 +729,48 @@ h3 {
     min-height: calc(100vh - 68px);
   }
   .studio-grid {
-    grid-template-columns: 1fr;
+    display: block;
+    flex: none;
   }
-  .studio-timeline {
+  .studio-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+  }
+  .studio-progress {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-start;
+  }
+  .mobile-pane-tabs {
+    height: 46px;
+    display: grid;
     grid-template-columns: 1fr 1fr;
+    padding: 5px;
+    border-bottom: 1px solid var(--line);
+    background: #171718;
+  }
+  .mobile-pane-tabs button {
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #858588;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .mobile-pane-tabs button.active {
+    background: #2a2a2c;
+    color: white;
   }
   .chat-panel {
     border-right: 0;
-    height: 55vh;
+    height: calc(100vh - 264px);
   }
   .preview-panel {
-    height: 70vh;
+    height: calc(100vh - 264px);
+  }
+  .chat-panel.mobile-hidden,
+  .preview-panel.mobile-hidden {
+    display: none;
   }
   .store-hero {
     grid-template-columns: 1fr;
@@ -779,21 +821,25 @@ h3 {
   }
   .studio-bar {
     height: auto;
-    min-height: 84px;
+    min-height: 116px;
+    padding: 10px 15px;
   }
   .studio-actions a:first-child {
     display: none;
   }
-  .studio-grid {
-    display: flex;
-    flex-direction: column;
+  .progress-numbers {
+    gap: 5px;
   }
-  .progress-panel {
-    max-height: 430px;
+  .progress-numbers span {
+    width: 25px;
+    height: 25px;
   }
+  .current-progress {
+    max-width: calc(100vw - 150px);
+  }
+  .chat-panel,
   .preview-panel {
-    height: 65vh;
-    flex: none;
+    height: calc(100vh - 230px);
   }
   .store-page {
     padding: 35px 18px;
