@@ -4,37 +4,38 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REMOTE="${OMGHITHUB_DEPLOY_HOST:-ubuntu@100.127.77.25}"
 DEST="${OMGHITHUB_DEPLOY_DIR:-/home/ubuntu/projects/omgithub}"
-ARCHIVE="$(mktemp -t omgithub-site-XXXXXX.tar.gz)"
-trap 'rm -f "$ARCHIVE"' EXIT
 
 run_timed() {
   local label="$1"
   shift
   printf '\n[%s] start\n' "$label"
-  /usr/bin/time -p "$@"
+  if declare -F "$1" >/dev/null 2>&1; then
+    # The external time command cannot invoke a shell function.
+    time -p "$@"
+  else
+    /usr/bin/time -p "$@"
+  fi
   printf '[%s] complete\n' "$label"
 }
 
-run_timed "create deployment archive" env COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata -C "$ROOT/site" -czf "$ARCHIVE" \
-  --exclude=node_modules --exclude=dist --exclude=data --exclude=.env .
-run_timed "create remote directory" ssh "$REMOTE" "mkdir -p '$DEST'"
-run_timed "upload deployment archive" scp -q "$ARCHIVE" "$REMOTE:/tmp/omgithub-site.tar.gz"
+# shellcheck disable=SC2029 # The command is intentionally parsed on A1.
+stream_and_deploy() {
+  local remote_dest remote_command
 
-run_timed "deploy remotely" ssh "$REMOTE" bash -s -- "$DEST" <<'REMOTE_SCRIPT'
-set -euo pipefail
-DEST="$1"
+  # %q keeps custom deploy paths safe when the command is parsed by A1's shell.
+  printf -v remote_dest '%q' "$DEST"
+  remote_command="set -e
+DEST=$remote_dest
+mkdir -p -- \"\$DEST\"
+tar -xzf - -C \"\$DEST\"
+cd \"\$DEST\"
+export DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain
+docker compose up -d --build --wait
+docker compose ps"
 
-run_remote_timed() {
-  local label="$1"
-  shift
-  printf '\n[remote:%s] start\n' "$label"
-  /usr/bin/time -p "$@"
-  printf '[remote:%s] complete\n' "$label"
+  env COPYFILE_DISABLE=1 LC_ALL=C tar --no-xattrs --no-mac-metadata -C "$ROOT/site" -czf - \
+    --exclude=node_modules --exclude=dist --exclude=data --exclude=.env . |
+    ssh "$REMOTE" "$remote_command"
 }
 
-run_remote_timed "extract archive" tar -xzf /tmp/omgithub-site.tar.gz -C "$DEST"
-run_remote_timed "remove uploaded archive" rm -f /tmp/omgithub-site.tar.gz
-cd "$DEST"
-run_remote_timed "build and restart container" docker compose up -d --build
-run_remote_timed "show container status" docker compose ps
-REMOTE_SCRIPT
+run_timed "stream archive and deploy" stream_and_deploy
