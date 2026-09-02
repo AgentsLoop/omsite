@@ -9,9 +9,10 @@ The OpenCode workflow now publishes `project/dist` to the target repository's
 `gh-pages` branch instead of uploading the build to `POST /api/publish`. Results
 coexist below `branches/<sanitized-opencode-branch>/<commit-prefix>/`. The
 workflow uses `peaceiris/actions-gh-pages` with `keep_files: true`, and defaults
-to publishing unless `PAGES_PUBLISH_ENABLED=false`. Configure the target
-repository's Pages source as the root of `gh-pages` before the first run. The
-legacy `/api/publish` endpoint and existing OmGithub-hosted records remain
+to publishing unless `PAGES_PUBLISH_ENABLED=false`. After pushing the first
+result, it automatically creates or updates the repository Pages source to the
+root of `gh-pages`; if GitHub denies that API operation, the final issue
+comment contains direct Settings → Pages instructions. The legacy `/api/publish` endpoint and existing OmGithub-hosted records remain
 available for compatibility, but new OpenCode workflow results do not use them.
 
 Issue pages use the GitHub comments as their live data source. OpenCode chat is
