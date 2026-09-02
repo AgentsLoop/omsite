@@ -10,9 +10,11 @@ The OpenCode workflow now publishes `project/dist` to the target repository's
 coexist below `branches/<sanitized-opencode-branch>/<commit-prefix>/`. The
 workflow uses `peaceiris/actions-gh-pages` with `keep_files: true`, and defaults
 to publishing unless `PAGES_PUBLISH_ENABLED=false`. After pushing the first
-result, it automatically creates or updates the repository Pages source to the
-root of `gh-pages`; if GitHub denies that API operation, the final issue
-comment contains direct Settings → Pages instructions. The legacy `/api/publish` endpoint and existing OmGithub-hosted records remain
+result, it assembles the complete `gh-pages` site and deploys it with GitHub's
+Pages artifact/deployment actions, automatically provisioning the deployment.
+Both built `dist/index.html` and static root `index.html` projects are
+supported. If GitHub denies deployment, the final issue comment contains
+direct Settings → Pages instructions. The legacy `/api/publish` endpoint and existing OmGithub-hosted records remain
 available for compatibility, but new OpenCode workflow results do not use them.
 
 Issue pages use the GitHub comments as their live data source. OpenCode chat is
