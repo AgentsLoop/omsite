@@ -31,6 +31,11 @@ Production runs as the `omgithub` Docker Compose service on A1. Deploy with:
 bash scripts/deploy-omgithub-a1.sh
 ```
 
+The deployment streams the site archive through one SSH connection, uses the
+existing A1 Docker layer cache through BuildKit, and waits for the Compose
+healthcheck before reporting success. It does not leave a temporary archive on
+A1.
+
 The A1 Caddyfile must route both `omgithub.com` and `*.omgithub.com` to
 `127.0.0.1:8794`. Keep the wildcard DNS record proxied to A1.
 
@@ -57,6 +62,10 @@ The issue title may end with `branch: <existing-branch>`. The App strips the
 suffix from the implementation request, validates the branch, and dispatches
 the workflow from that branch. Repository-local workflows should remain
 dispatch-only so one App event creates exactly one run.
+
+The `test-gh` label is also an execution marker for the Pages-only smoke test.
+It can be used without `OpenCode`; the reusable workflow skips OpenCode and
+publishes a static Hello World fixture from a unique source branch.
 
 The two workflow files have distinct roles: `opencode.yml` is a thin
 dispatch-to-`uses:` wrapper, while `opencode-reusable.yml` owns the shared build,
