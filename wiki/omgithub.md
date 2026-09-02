@@ -50,9 +50,10 @@ dispatches dispatch-only wrappers and, on a confirmed 404, creates and dispatche
 a thin local wrapper that calls the centralized
 `AgentsLoop/OhMyGithub` reusable workflow.
 
-For a newly opened human issue without `OpenCode`, the service posts an
-actionable reminder to add the label and stops before workflow lookup or
-dispatch. Adding `OpenCode` later is the supported retry.
+For a newly opened human issue without `OpenCode`, the service ensures the
+repository label catalog contains `OpenCode`, posts an actionable reminder to
+add the label, and stops before workflow lookup or dispatch. Adding `OpenCode`
+later is the supported retry.
 
 Before dispatching or bootstrapping, it checks the installation's required write
 permissions and comments on the triggering issue without starting an Actions run

@@ -163,6 +163,30 @@ async function activeWorkflowRun(request, config, requestFetch) {
   return (data.workflow_runs || []).find(run => String(run.name || run.display_title || '').startsWith(prefix)) || null
 }
 
+async function ensureRepositoryLabel(owner, repo, token, api, commonHeaders, requestFetch) {
+  const labelsUrl = `${api}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/labels`
+  const labelUrl = `${labelsUrl}/${encodeURIComponent('OpenCode')}`
+  const existing = await requestFetch(labelUrl, {
+    headers: { ...commonHeaders, authorization: `Bearer ${token}` }
+  })
+  if (existing.ok) return false
+  if (existing.status !== 404) throw new Error(`OpenCode repository label lookup returned ${existing.status}`)
+
+  const created = await requestFetch(labelsUrl, {
+    method: 'POST',
+    headers: { ...commonHeaders, authorization: `Bearer ${token}` },
+    body: JSON.stringify({ name: 'OpenCode', color: '1f6feb', description: 'Issues that can be executed by OpenCode' })
+  })
+  if (created.ok) return true
+  if (created.status !== 422) throw new Error(`OpenCode repository label creation returned ${created.status}`)
+
+  const raced = await requestFetch(labelUrl, {
+    headers: { ...commonHeaders, authorization: `Bearer ${token}` }
+  })
+  if (raced.ok) return false
+  throw new Error(`OpenCode repository label creation returned ${created.status}`)
+}
+
 async function dispatchOmgRequestOnce(request, config, requestFetch) {
   const api = config.api || API
   const commonHeaders = {
@@ -180,7 +204,6 @@ async function dispatchOmgRequestOnce(request, config, requestFetch) {
   const installationToken = tokenData.token
   config = { ...config, installationToken }
   const commentUrl = `${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/issues/${request.issueNumber}/comments`
-  const labelsUrl = `${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/issues/${request.issueNumber}/labels`
   const commentTokens = [...new Set([installationToken, config.notificationToken].filter(Boolean))]
   const commentOnIssue = async body => {
     for (const token of commentTokens) {
@@ -194,14 +217,9 @@ async function dispatchOmgRequestOnce(request, config, requestFetch) {
     return false
   }
   if (request.missingOpenCodeLabel) {
-    const labelResponse = await requestFetch(labelsUrl, {
-      method: 'POST',
-      headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` },
-      body: JSON.stringify({ labels: ['OpenCode'] })
-    })
-    if (!labelResponse.ok) throw new Error(`OpenCode label request returned ${labelResponse.status}`)
+    const labelCreated = await ensureRepositoryLabel(request.owner, request.repo, installationToken, api, commonHeaders, requestFetch)
     const commented = await commentOnIssue('Please add the `OpenCode` label to this issue to execute it.')
-    return { route: 'missing-opencode-label', repository: request.repository, labeled: true, commented }
+    return { route: 'missing-opencode-label', repository: request.repository, labelCreated, commented }
   }
   const permissionResponse = await requestFetch(`${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/collaborators/${encodeURIComponent(request.sender)}/permission`, {
     headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` }

@@ -32,10 +32,11 @@ repository-scoped `GITHUB_TOKEN`; no publishing secret is required.
 
 The webhook router validates `X-Hub-Signature-256` and accepts only non-bot
 `issues.opened` events that already contain the exact `OpenCode` label, or
-`issues.labeled` events that add that label, including the App's own label event.
+`issues.labeled` events that add that label.
 Comments, edits, and other labels do not execute the workflow. A newly opened
-human issue without `OpenCode` receives a reminder, the App adds the label, and
-the resulting label event starts the workflow. The repository-local workflow is dispatch-only
+human issue without `OpenCode` receives a reminder, and the App ensures the
+label exists in the repository label catalog without applying it to the issue.
+Adding `OpenCode` later starts the workflow. The repository-local workflow is dispatch-only
 and is dispatched with the installation token. A 404 creates a thin local
 wrapper and dispatches it in the target repository; both dispatch routes call
 the same central `opencode-reusable.yml` pipeline.

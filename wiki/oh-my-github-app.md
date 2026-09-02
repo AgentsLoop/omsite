@@ -24,11 +24,12 @@ accepts only issue creation with `OpenCode` already present or addition of that
 exact label; comments and edits never execute work. It checks
 `.github/workflows/opencode.yml` on the selected branch:
 
-When a human opens an issue without the `OpenCode` label, the App adds that
-label to the issue and posts `Please add the OpenCode label to this issue to
-execute it.` The resulting bot-authored `OpenCode` label event is accepted as
-the execution trigger, using the issue author for authorization. A human adding
-that exact label later follows the same path.
+When a human opens an issue without the `OpenCode` label, the App ensures that
+label exists in the repository's label catalog, leaves the issue unlabeled, and
+posts `Please add the OpenCode label to this issue to execute it.` A human
+adding that exact label later follows the execution path using the issue author
+for authorization. The App does not create an execution-triggering label event
+for the reminder.
 
 An optional issue-title suffix `branch: <existing-branch>` selects the target
 checkout and pull-request base. The App removes that metadata suffix from the
