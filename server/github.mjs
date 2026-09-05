@@ -201,7 +201,10 @@ export async function ensurePagesEnvironment(owner, repo, defaultBranch, token, 
       }
     })
   })
-  if (!environment.ok) throw Object.assign(new Error(`GitHub Pages environment setup returned ${environment.status}`), { status: environment.status })
+  if (!environment.ok) {
+    if (environment.status === 403) return false
+    throw Object.assign(new Error(`GitHub Pages environment setup returned ${environment.status}`), { status: environment.status })
+  }
 
   const policiesUrl = `${environmentUrl}/deployment-branch-policies`
   const policies = await requestFetch(policiesUrl, {
@@ -216,7 +219,10 @@ export async function ensurePagesEnvironment(owner, repo, defaultBranch, token, 
     headers: { ...commonHeaders, authorization: `Bearer ${token}` },
     body: JSON.stringify({ name: defaultBranch, type: 'branch' })
   })
-  if (!policy.ok) throw Object.assign(new Error(`GitHub Pages deployment policy setup returned ${policy.status}`), { status: policy.status })
+  if (!policy.ok) {
+    if (policy.status === 403) return false
+    throw Object.assign(new Error(`GitHub Pages deployment policy setup returned ${policy.status}`), { status: policy.status })
+  }
   return true
 }
 
@@ -319,11 +325,10 @@ async function dispatchOmgRequestOnce(request, config, requestFetch) {
     sender: request.sender,
     pages_publish_enabled: 'true'
   }
-  try {
-    await ensurePagesEnvironment(request.owner, request.repo, request.defaultBranch || request.targetRef || 'main', installationToken, api, commonHeaders, requestFetch)
-  } catch (error) {
-    if (error.status !== 403) throw error
+  const pagesConfigured = await ensurePagesEnvironment(request.owner, request.repo, request.defaultBranch || request.targetRef || 'main', installationToken, api, commonHeaders, requestFetch)
+  if (!pagesConfigured) {
     inputs.pages_publish_enabled = 'false'
+    await commentOnIssue('⚠️ **GitHub Pages setup skipped.**\n\nThe Oh My GitHub App does not have permission to configure the `github-pages` environment. OpenCode will continue without Pages publishing; configure the environment and allow the workflow branch manually if Pages is required.')
   }
   try {
     await ensureWorkflowPullRequests(request.owner, request.repo, installationToken, api, commonHeaders, requestFetch)

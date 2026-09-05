@@ -54,6 +54,25 @@ test('ensurePagesEnvironment is idempotent when the default branch is already al
   assert.deepEqual(methods, ['PUT', 'GET'])
 })
 
+test('ensurePagesEnvironment supports a custom default branch', async () => {
+  let policyBody
+  const requestFetch = async (url, options = {}) => {
+    if (options.method === 'POST') policyBody = JSON.parse(options.body)
+    if (options.method === 'PUT') return { ok: true, status: 200 }
+    if (options.method === 'POST') return { ok: true, status: 201 }
+    return { ok: true, status: 200, json: async () => ({ branch_policies: [] }) }
+  }
+
+  assert.equal(await ensurePagesEnvironment('agents-dev', 'custom-game', 'trunk', 'token', 'https://api.example.test', {}, requestFetch), true)
+  assert.deepEqual(policyBody, { name: 'trunk', type: 'branch' })
+})
+
+test('ensurePagesEnvironment returns disabled when administration permission is missing', async () => {
+  const requestFetch = async () => ({ ok: false, status: 403 })
+
+  assert.equal(await ensurePagesEnvironment('agents-dev', 'restricted-game', 'main', 'token', 'https://api.example.test', {}, requestFetch), false)
+})
+
 test('repositoryWorkflow passes the Pages publishing switch to the reusable workflow', () => {
   const workflow = repositoryWorkflow()
 
