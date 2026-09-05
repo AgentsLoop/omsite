@@ -67,6 +67,9 @@ deployment before the reusable workflow can start.
 If the App installation does not have repository environment-administration
 permission, bootstrap treats Pages setup as optional: it dispatches the run with
 Pages publishing disabled, so OpenCode execution and delivery can still finish.
+When that administration permission is available, bootstrap also enables the
+repository Actions policy that permits workflow-created pull requests. A denied
+policy update is optional and does not block the run.
 
 The issue title may end with `branch: <existing-branch>`. The App strips the
 suffix from the implementation request, validates the branch, and dispatches

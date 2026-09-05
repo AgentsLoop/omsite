@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { ensurePagesEnvironment, extractUrls, repositoryWorkflow } from './github.mjs'
+import { ensurePagesEnvironment, ensureWorkflowPullRequests, extractUrls, repositoryWorkflow } from './github.mjs'
 
 test('extractUrls separates OpenCode, screenshots, preview, and Pages result', () => {
   const result = extractUrls(
@@ -58,4 +58,19 @@ test('repositoryWorkflow passes the Pages publishing switch to the reusable work
   const workflow = repositoryWorkflow()
 
   assert.match(workflow, /pages_publish_enabled: \$\{\{ inputs\.pages_publish_enabled \}\}/)
+})
+
+test('ensureWorkflowPullRequests enables write permissions for Actions PR delivery', async () => {
+  let call
+  const enabled = await ensureWorkflowPullRequests('agents-dev', 'new-game', 'token', 'https://api.example.test', {}, async (url, options) => {
+    call = { url, options }
+    return { ok: true, status: 204 }
+  })
+
+  assert.equal(enabled, true)
+  assert.match(call.url, /\/actions\/permissions\/workflow$/)
+  assert.deepEqual(JSON.parse(call.options.body), {
+    default_workflow_permissions: 'write',
+    can_approve_pull_request_reviews: true
+  })
 })

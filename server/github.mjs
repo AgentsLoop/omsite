@@ -220,6 +220,20 @@ export async function ensurePagesEnvironment(owner, repo, defaultBranch, token, 
   return true
 }
 
+export async function ensureWorkflowPullRequests(owner, repo, token, api, commonHeaders, requestFetch) {
+  const url = `${api}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/permissions/workflow`
+  const response = await requestFetch(url, {
+    method: 'PUT',
+    headers: { ...commonHeaders, authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      default_workflow_permissions: 'write',
+      can_approve_pull_request_reviews: true
+    })
+  })
+  if (!response.ok) throw Object.assign(new Error(`GitHub Actions pull request permissions setup returned ${response.status}`), { status: response.status })
+  return true
+}
+
 async function dispatchOmgRequestOnce(request, config, requestFetch) {
   const api = config.api || API
   const commonHeaders = {
@@ -310,6 +324,11 @@ async function dispatchOmgRequestOnce(request, config, requestFetch) {
   } catch (error) {
     if (error.status !== 403) throw error
     inputs.pages_publish_enabled = 'false'
+  }
+  try {
+    await ensureWorkflowPullRequests(request.owner, request.repo, installationToken, api, commonHeaders, requestFetch)
+  } catch (error) {
+    if (error.status !== 403) throw error
   }
   if (workflowResponse.ok) {
     const dispatch = await requestFetch(`${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/actions/workflows/opencode.yml/dispatches`, {
