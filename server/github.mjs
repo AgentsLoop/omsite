@@ -2,7 +2,6 @@ import { createHmac, createSign, timingSafeEqual } from 'node:crypto'
 
 const API = 'https://api.github.com'
 const REQUIRED_INSTALLATION_PERMISSIONS = {
-  administration: 'write',
   actions: 'write',
   contents: 'write',
   issues: 'write',
@@ -91,6 +90,7 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '      issue_title: { required: true }',
     "      labels_json: { required: false, default: '[]' }",
     '      sender: { required: true }',
+    "      pages_publish_enabled: { required: false, default: 'true', type: boolean }",
     '',
     'permissions:',
     '  contents: write',
@@ -108,6 +108,7 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '      issue_title: ${{ inputs.issue_title }}',
     '      labels_json: ${{ inputs.labels_json }}',
     '      sender: ${{ inputs.sender }}',
+    '      pages_publish_enabled: ${{ inputs.pages_publish_enabled }}',
     '    secrets:',
     '      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}',
     '      OPENCODE_AUTH_JSON: ${{ secrets.OPENCODE_AUTH_JSON }}',
@@ -200,13 +201,13 @@ export async function ensurePagesEnvironment(owner, repo, defaultBranch, token, 
       }
     })
   })
-  if (!environment.ok) throw new Error(`GitHub Pages environment setup returned ${environment.status}`)
+  if (!environment.ok) throw Object.assign(new Error(`GitHub Pages environment setup returned ${environment.status}`), { status: environment.status })
 
   const policiesUrl = `${environmentUrl}/deployment-branch-policies`
   const policies = await requestFetch(policiesUrl, {
     headers: { ...commonHeaders, authorization: `Bearer ${token}` }
   })
-  if (!policies.ok) throw new Error(`GitHub Pages deployment policy lookup returned ${policies.status}`)
+  if (!policies.ok) throw Object.assign(new Error(`GitHub Pages deployment policy lookup returned ${policies.status}`), { status: policies.status })
   const existing = await policies.json()
   if ((existing.branch_policies || []).some(policy => policy.type === 'branch' && policy.name === defaultBranch)) return false
 
@@ -215,7 +216,7 @@ export async function ensurePagesEnvironment(owner, repo, defaultBranch, token, 
     headers: { ...commonHeaders, authorization: `Bearer ${token}` },
     body: JSON.stringify({ name: defaultBranch, type: 'branch' })
   })
-  if (!policy.ok) throw new Error(`GitHub Pages deployment policy setup returned ${policy.status}`)
+  if (!policy.ok) throw Object.assign(new Error(`GitHub Pages deployment policy setup returned ${policy.status}`), { status: policy.status })
   return true
 }
 
@@ -301,9 +302,15 @@ async function dispatchOmgRequestOnce(request, config, requestFetch) {
     request: request.request,
     issue_title: request.issueTitle,
     labels_json: JSON.stringify(request.labels),
-    sender: request.sender
+    sender: request.sender,
+    pages_publish_enabled: 'true'
   }
-  await ensurePagesEnvironment(request.owner, request.repo, request.defaultBranch || request.targetRef || 'main', installationToken, api, commonHeaders, requestFetch)
+  try {
+    await ensurePagesEnvironment(request.owner, request.repo, request.defaultBranch || request.targetRef || 'main', installationToken, api, commonHeaders, requestFetch)
+  } catch (error) {
+    if (error.status !== 403) throw error
+    inputs.pages_publish_enabled = 'false'
+  }
   if (workflowResponse.ok) {
     const dispatch = await requestFetch(`${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/actions/workflows/opencode.yml/dispatches`, {
       method: 'POST', headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` },

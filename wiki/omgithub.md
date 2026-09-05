@@ -64,6 +64,10 @@ allows the repository's actual default branch (`master`, `main`, or another
 configured default) to deploy to it. This avoids GitHub rejecting the Pages
 deployment before the reusable workflow can start.
 
+If the App installation does not have repository environment-administration
+permission, bootstrap treats Pages setup as optional: it dispatches the run with
+Pages publishing disabled, so OpenCode execution and delivery can still finish.
+
 The issue title may end with `branch: <existing-branch>`. The App strips the
 suffix from the implementation request, validates the branch, and dispatches
 the workflow from that branch. Repository-local workflows should remain

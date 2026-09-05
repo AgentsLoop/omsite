@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { ensurePagesEnvironment, extractUrls } from './github.mjs'
+import { ensurePagesEnvironment, extractUrls, repositoryWorkflow } from './github.mjs'
 
 test('extractUrls separates OpenCode, screenshots, preview, and Pages result', () => {
   const result = extractUrls(
@@ -52,4 +52,10 @@ test('ensurePagesEnvironment is idempotent when the default branch is already al
 
   assert.equal(created, false)
   assert.deepEqual(methods, ['PUT', 'GET'])
+})
+
+test('repositoryWorkflow passes the Pages publishing switch to the reusable workflow', () => {
+  const workflow = repositoryWorkflow()
+
+  assert.match(workflow, /pages_publish_enabled: \$\{\{ inputs\.pages_publish_enabled \}\}/)
 })
