@@ -59,6 +59,11 @@ Before dispatching or bootstrapping, it checks the installation's required write
 permissions and comments on the triggering issue without starting an Actions run
 when any are missing.
 
+Before dispatch, the App creates or updates the `github-pages` environment and
+allows the repository's actual default branch (`master`, `main`, or another
+configured default) to deploy to it. This avoids GitHub rejecting the Pages
+deployment before the reusable workflow can start.
+
 The issue title may end with `branch: <existing-branch>`. The App strips the
 suffix from the implementation request, validates the branch, and dispatches
 the workflow from that branch. Repository-local workflows should remain

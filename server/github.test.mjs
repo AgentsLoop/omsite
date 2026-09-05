@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { extractUrls } from './github.mjs'
+import { ensurePagesEnvironment, extractUrls } from './github.mjs'
 
 test('extractUrls separates OpenCode, screenshots, preview, and Pages result', () => {
   const result = extractUrls(
@@ -17,4 +17,39 @@ test('extractUrls separates OpenCode, screenshots, preview, and Pages result', (
   assert.equal(result.preview, 'https://game.trycloudflare.com')
   assert.equal(result.published, 'https://agentsloop.github.io/example/branches/opencode-1/abc123/')
   assert.deepEqual(result.screenshots, ['https://github.com/user-attachments/assets/abc-123'])
+})
+
+test('ensurePagesEnvironment creates github-pages and allows the default branch', async () => {
+  const calls = []
+  const requestFetch = async (url, options = {}) => {
+    calls.push({ url, options })
+    if (options.method === 'PUT') return { ok: true, status: 200 }
+    if (options.method === 'POST') return { ok: true, status: 201 }
+    return { ok: true, status: 200, json: async () => ({ branch_policies: [{ name: 'gh-pages', type: 'branch' }] }) }
+  }
+
+  const created = await ensurePagesEnvironment('agents-dev', 'new-game', 'master', 'token', 'https://api.example.test', {}, requestFetch)
+
+  assert.equal(created, true)
+  assert.equal(calls.length, 3)
+  assert.match(calls[0].url, /\/environments\/github-pages$/)
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    deployment_branch_policy: { protected_branches: false, custom_branch_policies: true }
+  })
+  assert.match(calls[1].url, /\/deployment-branch-policies$/)
+  assert.deepEqual(JSON.parse(calls[2].options.body), { name: 'master', type: 'branch' })
+})
+
+test('ensurePagesEnvironment is idempotent when the default branch is already allowed', async () => {
+  const methods = []
+  const requestFetch = async (url, options = {}) => {
+    methods.push(options.method || 'GET')
+    if (options.method === 'PUT') return { ok: true, status: 200 }
+    return { ok: true, status: 200, json: async () => ({ branch_policies: [{ name: 'main', type: 'branch' }] }) }
+  }
+
+  const created = await ensurePagesEnvironment('agents-dev', 'existing-game', 'main', 'token', 'https://api.example.test', {}, requestFetch)
+
+  assert.equal(created, false)
+  assert.deepEqual(methods, ['PUT', 'GET'])
 })

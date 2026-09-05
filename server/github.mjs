@@ -2,6 +2,7 @@ import { createHmac, createSign, timingSafeEqual } from 'node:crypto'
 
 const API = 'https://api.github.com'
 const REQUIRED_INSTALLATION_PERMISSIONS = {
+  administration: 'write',
   actions: 'write',
   contents: 'write',
   issues: 'write',
@@ -187,6 +188,37 @@ async function ensureRepositoryLabel(owner, repo, token, api, commonHeaders, req
   throw new Error(`OpenCode repository label creation returned ${created.status}`)
 }
 
+export async function ensurePagesEnvironment(owner, repo, defaultBranch, token, api, commonHeaders, requestFetch) {
+  const environmentUrl = `${api}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/environments/${encodeURIComponent('github-pages')}`
+  const environment = await requestFetch(environmentUrl, {
+    method: 'PUT',
+    headers: { ...commonHeaders, authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      deployment_branch_policy: {
+        protected_branches: false,
+        custom_branch_policies: true
+      }
+    })
+  })
+  if (!environment.ok) throw new Error(`GitHub Pages environment setup returned ${environment.status}`)
+
+  const policiesUrl = `${environmentUrl}/deployment-branch-policies`
+  const policies = await requestFetch(policiesUrl, {
+    headers: { ...commonHeaders, authorization: `Bearer ${token}` }
+  })
+  if (!policies.ok) throw new Error(`GitHub Pages deployment policy lookup returned ${policies.status}`)
+  const existing = await policies.json()
+  if ((existing.branch_policies || []).some(policy => policy.type === 'branch' && policy.name === defaultBranch)) return false
+
+  const policy = await requestFetch(policiesUrl, {
+    method: 'POST',
+    headers: { ...commonHeaders, authorization: `Bearer ${token}` },
+    body: JSON.stringify({ name: defaultBranch, type: 'branch' })
+  })
+  if (!policy.ok) throw new Error(`GitHub Pages deployment policy setup returned ${policy.status}`)
+  return true
+}
+
 async function dispatchOmgRequestOnce(request, config, requestFetch) {
   const api = config.api || API
   const commonHeaders = {
@@ -271,6 +303,7 @@ async function dispatchOmgRequestOnce(request, config, requestFetch) {
     labels_json: JSON.stringify(request.labels),
     sender: request.sender
   }
+  await ensurePagesEnvironment(request.owner, request.repo, request.defaultBranch || request.targetRef || 'main', installationToken, api, commonHeaders, requestFetch)
   if (workflowResponse.ok) {
     const dispatch = await requestFetch(`${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/actions/workflows/opencode.yml/dispatches`, {
       method: 'POST', headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` },
