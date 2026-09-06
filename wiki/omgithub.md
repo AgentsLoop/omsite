@@ -5,7 +5,7 @@ The Vue/Node application lives in `site/`. It mirrors GitHub routes at
 issue comments for OpenCode/trycloudflare/screenshot progress, and stores
 published project ownership in Firebase.
 
-The OpenCode workflow now publishes `project/dist` to the target repository's
+The OpenCode workflow now publishes the built output to the target repository's
 `gh-pages` branch instead of uploading the build to `POST /api/publish`. Results
 coexist below `branches/<sanitized-opencode-branch>/<commit-prefix>/`. The
 workflow uses `peaceiris/actions-gh-pages` with `keep_files: true`, and defaults
