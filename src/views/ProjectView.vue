@@ -36,7 +36,7 @@ import { useRoute } from 'vue-router'
 const route = useRoute(), project = ref(null), loading = ref(true), error = ref(''), selectedShot = ref(''), displayedShot = ref(''), mobilePane = ref('chat')
 const cleanTitle = computed(() => (project.value?.title || '').replace(/^\/goal\s*/i, ''))
 const previewUrl = computed(() => project.value?.published_url || project.value?.preview_url || '')
-const previewLabel = computed(() => displayedShot.value ? 'Build screenshot' : project.value?.published_url ? 'Published on GitHub Pages' : project.value?.preview_url ? 'Playable preview' : project.value?.screenshots?.length ? 'Build screenshot' : 'Waiting for preview')
+const previewLabel = computed(() => displayedShot.value ? 'Build screenshot' : project.value?.published_url ? 'Published on Vercel' : project.value?.preview_url ? 'Playable preview' : project.value?.screenshots?.length ? 'Build screenshot' : 'Waiting for preview')
 const steps = computed(() => {
   const p = project.value || {}; const complete = p.status === 'complete'
   return [

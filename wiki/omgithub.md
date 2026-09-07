@@ -5,22 +5,17 @@ The Vue/Node application lives in `site/`. It mirrors GitHub routes at
 issue comments for OpenCode/trycloudflare/screenshot progress, and stores
 published project ownership in Firebase.
 
-The OpenCode workflow now publishes the built output to the target repository's
-`gh-pages` branch instead of uploading the build to `POST /api/publish`. Results
-coexist below `branches/<sanitized-opencode-branch>/<commit-prefix>/`. The
-workflow uses `peaceiris/actions-gh-pages` with `keep_files: true`, and defaults
-to publishing unless `PAGES_PUBLISH_ENABLED=false`. After pushing the first
-result, it assembles the complete `gh-pages` site and deploys it with GitHub's
-Pages artifact/deployment actions, automatically provisioning the deployment.
-Both built `dist/index.html` and static root `index.html` projects are
-supported. If GitHub denies deployment, the final issue comment contains
-direct Settings → Pages instructions. The legacy `/api/publish` endpoint and existing OmGithub-hosted records remain
-available for compatibility, but new OpenCode workflow results do not use them.
+The OpenCode workflow builds the verified output and deploys it directly to
+Vercel instead of uploading the build to `POST /api/publish`. Each result gets
+an immutable Vercel deployment URL. Both built `dist/index.html` and static root
+`index.html` projects are supported. The legacy `/api/publish` endpoint and
+existing OmGithub-hosted records remain available for compatibility, but new
+OpenCode workflow results do not use them.
 
 Issue pages use the GitHub comments as their live data source. OpenCode chat is
 embedded on the left; progress/final screenshots and the temporary or permanent
-game preview occupy the right. The final report's `github.io` URL is detected as
-the permanent published result.
+game preview occupy the right. The final report's Vercel URL is detected as the
+permanent published result.
 
 The server also accepts `PUBLIC_ALIASES` (default `lolgames.net`) for the same
 wildcard game handler; route that alias only after confirming its DNS ownership.
@@ -59,26 +54,17 @@ Before dispatching or bootstrapping, it checks the installation's required write
 permissions and comments on the triggering issue without starting an Actions run
 when any are missing.
 
-Before dispatch, the App creates or updates the `github-pages` environment and
-allows the repository's actual default branch (`master`, `main`, or another
-configured default) to deploy to it. This avoids GitHub rejecting the Pages
-deployment before the reusable workflow can start.
-
-If the App installation does not have repository environment-administration
-permission, bootstrap treats Pages setup as optional: it dispatches the run with
-Pages publishing disabled, so OpenCode execution and delivery can still finish.
-When that administration permission is available, bootstrap also enables the
-repository Actions policy that permits workflow-created pull requests. A denied
-policy update is optional and does not block the run.
+Bootstrap enables the repository Actions policy that permits workflow-created
+pull requests. A denied policy update is optional and does not block the run.
 
 The issue title may end with `branch: <existing-branch>`. The App strips the
 suffix from the implementation request, validates the branch, and dispatches
 the workflow from that branch. Repository-local workflows should remain
 dispatch-only so one App event creates exactly one run.
 
-The `test-gh` label is also an execution marker for the Pages-only smoke test.
-It can be used without `OpenCode`; the reusable workflow skips OpenCode and
-publishes a static Hello World fixture from a unique source branch.
+The `test-vercel` label is also an execution marker for the Vercel-only smoke
+test. It can be used without `OpenCode`; the reusable workflow skips OpenCode
+and publishes a static Hello World fixture.
 
 The two workflow files have distinct roles: `opencode.yml` is a thin
 dispatch-to-`uses:` wrapper, while `opencode-reusable.yml` owns the shared build,

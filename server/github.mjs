@@ -25,6 +25,7 @@ export function extractUrls(issue, comments = []) {
   const text = [issue.body || '', ...comments.map(c => c.body || '')].join('\n')
   const urls = [...text.matchAll(/https:\/\/[^\s)<\"]+/g)].map(match => match[0].replace(/[.,]+$/, ''))
   const trycf = urls.filter(url => /\.trycloudflare\.com/i.test(url))
+  const publishedVercel = [...urls].reverse().find(url => /\.vercel\.app(?:\/[^\s)<"]*)?/i.test(url)) || ''
   const opencode = trycf.find(url => /\/session\/ses_/i.test(url)) || ''
   const preview = [...trycf].reverse().find(url => !/\/session\/ses_/i.test(url)) || ''
   const published = [...urls].reverse().find(url => /https:\/\/[^/]+\.github\.io(?:\/[^\s)<\"]*)?/i.test(url)) || ''
@@ -34,7 +35,7 @@ export function extractUrls(issue, comments = []) {
     /user-images\.githubusercontent\.com\/.+\.(png|jpe?g|webp)/i.test(url)
   ))]
   const pr = [...urls].reverse().find(url => /github\.com\/[^/]+\/[^/]+\/pull\/\d+/i.test(url)) || ''
-  return { opencode, preview, published, screenshots, pr }
+  return { opencode, preview, published: published || publishedVercel, screenshots, pr }
 }
 export function slugify(value) { return String(value || 'game').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 46) || 'game' }
 
@@ -90,14 +91,12 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '      issue_title: { required: true }',
     "      labels_json: { required: false, default: '[]' }",
     '      sender: { required: true }',
-    "      pages_publish_enabled: { required: false, default: 'true', type: boolean }",
+    "      vercel_publish_enabled: { required: false, default: 'true', type: boolean }",
     '',
     'permissions:',
     '  contents: write',
     '  issues: write',
     '  pull-requests: write',
-    '  pages: write',
-    '  id-token: write',
     '',
     'jobs:',
     '  opencode:',
@@ -108,11 +107,12 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '      issue_title: ${{ inputs.issue_title }}',
     '      labels_json: ${{ inputs.labels_json }}',
     '      sender: ${{ inputs.sender }}',
-    '      pages_publish_enabled: ${{ inputs.pages_publish_enabled }}',
+    '      vercel_publish_enabled: ${{ inputs.vercel_publish_enabled }}',
     '    secrets:',
     '      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}',
     '      OPENCODE_AUTH_JSON: ${{ secrets.OPENCODE_AUTH_JSON }}',
     '      AGENTSWEB_SSH_PUBLIC_KEY: ${{ secrets.AGENTSWEB_SSH_PUBLIC_KEY }}',
+    '      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}',
     ''
   ].join('\n')
 }
@@ -187,43 +187,6 @@ async function ensureRepositoryLabel(owner, repo, token, api, commonHeaders, req
   })
   if (raced.ok) return false
   throw new Error(`OpenCode repository label creation returned ${created.status}`)
-}
-
-export async function ensurePagesEnvironment(owner, repo, defaultBranch, token, api, commonHeaders, requestFetch) {
-  const environmentUrl = `${api}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/environments/${encodeURIComponent('github-pages')}`
-  const environment = await requestFetch(environmentUrl, {
-    method: 'PUT',
-    headers: { ...commonHeaders, authorization: `Bearer ${token}` },
-    body: JSON.stringify({
-      deployment_branch_policy: {
-        protected_branches: false,
-        custom_branch_policies: true
-      }
-    })
-  })
-  if (!environment.ok) {
-    if (environment.status === 403) return false
-    throw Object.assign(new Error(`GitHub Pages environment setup returned ${environment.status}`), { status: environment.status })
-  }
-
-  const policiesUrl = `${environmentUrl}/deployment-branch-policies`
-  const policies = await requestFetch(policiesUrl, {
-    headers: { ...commonHeaders, authorization: `Bearer ${token}` }
-  })
-  if (!policies.ok) throw Object.assign(new Error(`GitHub Pages deployment policy lookup returned ${policies.status}`), { status: policies.status })
-  const existing = await policies.json()
-  if ((existing.branch_policies || []).some(policy => policy.type === 'branch' && policy.name === defaultBranch)) return false
-
-  const policy = await requestFetch(policiesUrl, {
-    method: 'POST',
-    headers: { ...commonHeaders, authorization: `Bearer ${token}` },
-    body: JSON.stringify({ name: defaultBranch, type: 'branch' })
-  })
-  if (!policy.ok) {
-    if (policy.status === 403) return false
-    throw Object.assign(new Error(`GitHub Pages deployment policy setup returned ${policy.status}`), { status: policy.status })
-  }
-  return true
 }
 
 export async function ensureWorkflowPullRequests(owner, repo, token, api, commonHeaders, requestFetch) {
@@ -323,12 +286,7 @@ async function dispatchOmgRequestOnce(request, config, requestFetch) {
     issue_title: request.issueTitle,
     labels_json: JSON.stringify(request.labels),
     sender: request.sender,
-    pages_publish_enabled: 'true'
-  }
-  const pagesConfigured = await ensurePagesEnvironment(request.owner, request.repo, request.defaultBranch || request.targetRef || 'main', installationToken, api, commonHeaders, requestFetch)
-  if (!pagesConfigured) {
-    inputs.pages_publish_enabled = 'false'
-    await commentOnIssue('⚠️ **GitHub Pages setup skipped.**\n\nThe Oh My GitHub App does not have permission to configure the `github-pages` environment. OpenCode will continue without Pages publishing; configure the environment and allow the workflow branch manually if Pages is required.')
+    vercel_publish_enabled: 'true'
   }
   try {
     await ensureWorkflowPullRequests(request.owner, request.repo, installationToken, api, commonHeaders, requestFetch)
