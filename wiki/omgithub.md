@@ -65,7 +65,8 @@ dispatch-only so one App event creates exactly one run.
 The `test` label selects the full mock workflow when paired with `OpenCode`.
 The App still dispatches only for exact `OpenCode` events. The reusable workflow
 uses a fixture instead of OpenCode generation, then exercises normal validation,
-delivery, Vercel publication, reporting, and completion behavior.
+delivery, Vercel publication when enabled by repository defaults, reporting, and
+completion behavior.
 
 The two workflow files have distinct roles: `opencode.yml` is a thin
 dispatch-to-`uses:` wrapper, while `opencode-reusable.yml` owns the shared build,
