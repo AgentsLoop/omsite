@@ -50,29 +50,39 @@ function deploymentRoot(entries) {
   throw Object.assign(new Error('Public commit must contain dist/index.html or index.html'), { status: 422 })
 }
 
+function deploymentOutputName(entry, root) {
+  if (entry.isDirectory) return ''
+  const relative = relativeZipName(entry.entryName)
+  if (!relative.startsWith(root)) return ''
+  const outputName = relative.slice(root.length)
+  if (!outputName) return ''
+  const first = outputName.split('/')[0]
+  if (!root && (first.startsWith('.') || first === 'node_modules' || first === 'screenshots')) return ''
+  if (first === 'screenshots') return ''
+  return outputName
+}
+
 function extractDeployment(zip, destination) {
   const entries = zip.getEntries()
   if (entries.length > MAX_ENTRIES) throw new Error('Repository archive contains too many entries')
+  const root = deploymentRoot(entries)
   let total = 0
   for (const entry of entries) {
     relativeZipName(entry.entryName)
+    if (!deploymentOutputName(entry, root)) continue
     const size = Number(entry.header.size)
     if (!Number.isSafeInteger(size) || size < 0 || size > MAX_ENTRY_BYTES) throw new Error(`Repository file exceeds the ${MAX_ENTRY_BYTES} byte limit`)
     total += size
     if (total > MAX_TOTAL_BYTES) throw new Error('Repository content exceeds the total size limit')
   }
 
-  const root = deploymentRoot(entries)
   const staging = `${destination}.staging-${process.pid}-${Date.now()}`
   rmSync(staging, { recursive: true, force: true })
-  mkdirSync(staging, { recursive: true })
+    mkdirSync(staging, { recursive: true })
   try {
     for (const entry of entries) {
-      if (entry.isDirectory) continue
-      const relative = relativeZipName(entry.entryName)
-      if (!relative.startsWith(root)) continue
-      const outputName = relative.slice(root.length)
-      if (!outputName || outputName === 'screenshots' || outputName.startsWith('screenshots/')) continue
+      const outputName = deploymentOutputName(entry, root)
+      if (!outputName) continue
       const output = resolve(staging, outputName)
       if (!output.startsWith(`${resolve(staging)}${sep}`)) throw new Error(`Unsafe deployment path: ${outputName}`)
       mkdirSync(dirname(output), { recursive: true })
