@@ -67,6 +67,9 @@ The App still dispatches only for exact `OpenCode` events. The reusable workflow
 uses a fixture instead of OpenCode generation, then exercises normal validation,
 delivery, Vercel publication when enabled by repository defaults, reporting, and
 completion behavior.
+Synthetic OpenCode session files supply the normal progress comment and logs
+release while the real delivery, deployment, final report, and lifecycle-label
+steps remain active.
 
 The two workflow files have distinct roles: `opencode.yml` is a thin
 dispatch-to-`uses:` wrapper, while `opencode-reusable.yml` owns the shared build,
