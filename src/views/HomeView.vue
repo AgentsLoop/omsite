@@ -15,7 +15,7 @@
           <div><b>◎</b><span><strong>Publish</strong><small>Permanent web link</small></span></div>
           <div><b>◈</b><span><strong>Live build</strong><small>Watch OpenCode work</small></span></div>
           <div><b>▣</b><span><strong>Install</strong><small>Ready as a web app</small></span></div>
-          <div><b>&lt;/&gt;</b><span><strong>GitHub native</strong><small>Issues and pull requests</small></span></div>
+          <div><b>&lt;/&gt;</b><span><strong>GitHub native</strong><small>Issues and immutable commits</small></span></div>
         </div>
       </div>
     </section>

@@ -1,13 +1,13 @@
 import express from 'express'
-import AdmZip from 'adm-zip'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
-import { createHash, randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cookies, nonce, sign, verify } from './auth.mjs'
-import { dispatchOmgRequest, extractUrls, github, omgRequest, slugify, verifyWebhookSignature } from './github.mjs'
+import { dispatchOmgRequest, extractUrls, github, omgRequest, verifyWebhookSignature } from './github.mjs'
+import { materializePublicProject } from './public-project.mjs'
 import { createStore } from './store.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -20,9 +20,6 @@ const gamesDir = join(dataDir, 'games')
 const owner = process.env.GITHUB_OWNER || 'AgentsLoop'
 const repo = process.env.GITHUB_REPO || 'OhMyGithub'
 const githubToken = process.env.GITHUB_TOKEN || ''
-const ZIP_MAX_ENTRIES = 5000
-const ZIP_MAX_ENTRY_BYTES = 25 * 1024 * 1024
-const ZIP_MAX_TOTAL_BYTES = 100 * 1024 * 1024
 const githubApp = {
   appId: process.env.GITHUB_APP_ID || '',
   privateKey: String(process.env.GITHUB_APP_PRIVATE_KEY || '').replaceAll('\\n', '\n'),
@@ -74,7 +71,7 @@ function hostSlug(req) {
 }
 function safeGamePath(slug) { const path = resolve(gamesDir, slug); if (!path.startsWith(`${resolve(gamesDir)}${sep}`)) throw new Error('Unsafe game path'); return path }
 function publicProject(project) { const { local_dir, ...safe } = project; return safe }
-function card(project) { return { ...publicProject(project), issue_path: project.issue ? `/${project.repo_owner}/${project.repo}/issues/${project.issue}` : '', store_path: project.pr ? `/${project.repo_owner}/${project.repo}/pull/${project.pr}` : '', screenshot: project.screenshots?.[0] || '', status: project.status || 'published' } }
+function card(project) { return { ...publicProject(project), issue_path: project.issue ? `/${project.repo_owner}/${project.repo}/issues/${project.issue}` : '', store_path: project.commit ? `/${project.repo_owner}/${project.repo}/tree/${project.commit}` : '', screenshot: project.screenshots?.[0] || '', status: project.status || 'published' } }
 async function projects() { return await store.all() }
 
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'omgithub' }))
@@ -159,66 +156,16 @@ app.get('/api/github/:owner/:repo/issues/:number', async (req, res, next) => {
   try {
     const path = `/repos/${encodeURIComponent(req.params.owner)}/${encodeURIComponent(req.params.repo)}`
     const [issue, comments] = await Promise.all([github(`${path}/issues/${req.params.number}`, githubToken), github(`${path}/issues/${req.params.number}/comments?per_page=100`, githubToken)])
-    const urls = extractUrls(issue, comments), rows = await projects()
-    const published = rows.find(row => row.repo_owner === req.params.owner && row.repo === req.params.repo && String(row.issue) === String(req.params.number))
-    const prMatch = urls.pr.match(/\/pull\/(\d+)/)
-    res.json({ number: issue.number, title: issue.title, body: issue.body, status: issue.labels.some(l => l.name === 'complete') ? 'complete' : issue.labels.some(l => l.name === 'failed') ? 'failed' : 'in progress', github_url: issue.html_url, opencode_url: urls.opencode, preview_url: urls.preview, published_url: urls.published || published?.url || '', install_url: published?.install_url || '', screenshots: [...new Set([...(published?.screenshots || []), ...urls.screenshots])], pr_path: published?.pr ? `/${req.params.owner}/${req.params.repo}/pull/${published.pr}` : prMatch ? `/${req.params.owner}/${req.params.repo}/pull/${prMatch[1]}` : '' })
+    const urls = extractUrls(issue, comments)
+    const projectPath = urls.project ? new URL(urls.project).pathname : ''
+    res.json({ number: issue.number, title: issue.title, body: issue.body, status: issue.labels.some(l => l.name === 'complete') ? 'complete' : issue.labels.some(l => l.name === 'failed') ? 'failed' : 'in progress', github_url: issue.html_url, opencode_url: urls.opencode, preview_url: urls.preview, project_path: projectPath, screenshots: urls.screenshots })
   } catch (e) { next(e) }
 })
 
-app.get('/api/github/:owner/:repo/pull/:number', async (req, res, next) => {
+app.get('/api/github/:owner/:repo/tree/:sha', async (req, res, next) => {
   try {
-    const base = `/repos/${encodeURIComponent(req.params.owner)}/${encodeURIComponent(req.params.repo)}`
-    const [pr, files, issueComments] = await Promise.all([github(`${base}/pulls/${req.params.number}`, githubToken), github(`${base}/pulls/${req.params.number}/files?per_page=100`, githubToken), github(`${base}/issues/${req.params.number}/comments?per_page=100`, githubToken)])
-    const rows = await projects(), published = rows.find(row => row.repo_owner === req.params.owner && row.repo === req.params.repo && String(row.pr) === String(req.params.number))
-    const fromFiles = files.filter(file => /project\/screenshots\/final-.+\.(png|jpe?g|webp)$/i.test(file.filename)).map(file => `https://raw.githubusercontent.com/${req.params.owner}/${req.params.repo}/${pr.head.sha}/${file.filename.split('/').map(encodeURIComponent).join('/')}`)
-    const urls = extractUrls(pr, issueComments), description = String(pr.body || '').split('\n').filter(Boolean).find(line => !/^automated/i.test(line)) || 'A browser game created with OpenCode and published by OmGithub.'
-    const creator = published?.owner_login || (pr.user.type === 'Bot' || /\[bot\]$/i.test(pr.user.login) ? req.params.owner : pr.user.login)
-    let creatorAvatar = published?.owner_avatar || ''
-    if (!creatorAvatar) { try { creatorAvatar = (await github(`/users/${encodeURIComponent(creator)}`, githubToken)).avatar_url } catch { creatorAvatar = `https://github.com/${creator}.png` } }
-    res.json({ number: pr.number, title: published?.title || pr.title.replace(/^OpenCode:\s*/i, ''), description: published?.description || description.slice(0, 500), status: pr.merged ? 'merged' : pr.state, github_url: pr.html_url, owner: creator, owner_avatar: creatorAvatar, screenshots: [...new Set([...(published?.screenshots || []), ...fromFiles, ...urls.screenshots])], play_url: published?.url || urls.preview, install_url: published?.install_url || '' })
-  } catch (e) { next(e) }
-})
-
-app.post('/api/publish', express.raw({ type: ['application/zip', 'application/octet-stream'], limit: '80mb' }), async (req, res, next) => {
-  try {
-    if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'ZIP body required' })
-    const repoOwner = String(req.headers['x-omgithub-owner'] || owner), repoName = String(req.headers['x-omgithub-repo'] || repo)
-    const authorization = String(req.headers.authorization || '')
-    const sourceToken = String(req.headers['x-omgithub-github-token'] || '')
-    let authorized = false
-    if (sourceToken && authorization === `Bearer ${sourceToken}`) {
-      try {
-        const source = await github(`/repos/${encodeURIComponent(repoOwner)}/${encodeURIComponent(repoName)}`, sourceToken)
-        authorized = source.full_name?.toLowerCase() === `${repoOwner}/${repoName}`.toLowerCase()
-      } catch {}
-    }
-    if (!authorized) return res.status(401).json({ error: 'Invalid publish token' })
-    const issue = String(req.headers['x-omgithub-issue'] || ''), pr = String(req.headers['x-omgithub-pr'] || ''), sourceKey = `${repoOwner}/${repoName}#${pr || issue}`
-    const rows = await projects(), existing = await store.bySourceKey(sourceKey)
-    const normalizedName = slugify(req.headers['x-omgithub-name'] || `${repoName}-${pr || issue}`)
-    const requested = normalizedName.length < 3 ? `game-${normalizedName}` : normalizedName
-    let slug = existing?.slug || requested, suffix = 1
-    while (!existing && rows.some(row => row.slug === slug)) { suffix += 1; slug = `${requested.slice(0, 48 - String(suffix).length)}-${suffix}` }
-    const destination = safeGamePath(slug), staging = `${destination}.staging-${process.pid}`
-    rmSync(staging, { recursive: true, force: true }); mkdirSync(staging, { recursive: true })
-    const zip = new AdmZip(req.body), entries = zip.getEntries()
-    if (entries.length > ZIP_MAX_ENTRIES) throw new Error('ZIP contains too many entries')
-    let extractedBytes = 0
-    for (const entry of entries) {
-      const normalized = entry.entryName.replaceAll('\\', '/')
-      const size = Number(entry.header.size)
-      if (normalized.startsWith('/') || normalized.split('/').includes('..')) throw new Error(`Unsafe ZIP entry: ${entry.entryName}`)
-      if (!Number.isSafeInteger(size) || size < 0 || size > ZIP_MAX_ENTRY_BYTES) throw new Error(`ZIP entry exceeds the ${ZIP_MAX_ENTRY_BYTES} byte limit`)
-      extractedBytes += size
-      if (extractedBytes > ZIP_MAX_TOTAL_BYTES) throw new Error('ZIP uncompressed content exceeds the total size limit')
-    }
-    zip.extractAllTo(staging, true); rmSync(destination, { recursive: true, force: true }); mkdirSync(dirname(destination), { recursive: true }); await import('node:fs/promises').then(fs => fs.rename(staging, destination))
-    const screenshots = JSON.parse(String(req.headers['x-omgithub-screenshots'] || '[]'))
-    const ownerLogin = String(req.headers['x-omgithub-actor'] || repoOwner)
-    let ownerAvatar = `https://github.com/${ownerLogin}.png`; try { ownerAvatar = (await github(`/users/${ownerLogin}`, githubToken)).avatar_url } catch {}
-    const project = { id: createHash('sha256').update(sourceKey).digest('hex').slice(0, 20), source_key: sourceKey, slug, title: String(req.headers['x-omgithub-title'] || requested).slice(0, 160), description: String(req.headers['x-omgithub-description'] || 'Created with OpenCode and OmGithub.').slice(0, 500), repo_owner: repoOwner, repo: repoName, issue, pr, commit: String(req.headers['x-omgithub-commit'] || ''), owner_login: ownerLogin, owner_avatar: ownerAvatar, screenshots, status: 'published', url: `https://${slug}.${baseHost}`, install_url: `https://${slug}.${baseHost}/install`, published_at: new Date().toISOString(), local_dir: destination }
-    await store.put(project); res.json({ ok: true, project: publicProject(project) })
+    const project = await materializePublicProject({ owner: req.params.owner, repo: req.params.repo, sha: req.params.sha, baseHost, gamesDir, store })
+    res.json({ title: project.title, description: project.description, commit: project.commit, status: project.status, github_url: project.github_url, owner: project.owner_login, owner_avatar: project.owner_avatar, screenshots: project.screenshots, play_url: project.url, install_url: project.install_url })
   } catch (e) { next(e) }
 })
 
@@ -230,7 +177,7 @@ app.use(async (req, res, next) => {
   if (req.path === '/omgithub-sw.js') return res.type('application/javascript').send(`self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));self.addEventListener('fetch',()=>{});`)
   if (req.path === '/install' || req.path === '/install/') {
     const shots = (project.screenshots || []).map(src => `<img src="${escapeHtml(src)}" alt="${escapeHtml(project.title)} screenshot">`).join('')
-    return res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="theme-color" content="#ff6719"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/omgithub-icon.svg"><title>Install ${escapeHtml(project.title)}</title><style>${installCss}</style></head><body><main><section><i>O</i><small>OMGHITHUB APP</small><h1>Installing ${escapeHtml(project.title)}</h1><p id="status">Preparing native install support...</p><button id="install" disabled>Install</button><a href="/">Open app</a><a href="${origin}/${project.repo_owner}/${project.repo}/pull/${project.pr}">View store page</a></section></main><script>let event;const button=document.querySelector('#install');navigator.serviceWorker?.register('/omgithub-sw.js');addEventListener('beforeinstallprompt',e=>{e.preventDefault();event=e;button.disabled=false;document.querySelector('#status').textContent='Ready to install.'});button.onclick=async()=>{if(!event)return;event.prompt();const result=await event.userChoice;document.querySelector('#status').textContent=result.outcome==='accepted'?'Installed. You can open the game from your apps.':'Install cancelled.';event=null;button.disabled=true}</script></body></html>`)
+    return res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="theme-color" content="#ff6719"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/omgithub-icon.svg"><title>Install ${escapeHtml(project.title)}</title><style>${installCss}</style></head><body><main><section><i>O</i><small>OMGHITHUB APP</small><h1>Installing ${escapeHtml(project.title)}</h1><p id="status">Preparing native install support...</p><button id="install" disabled>Install</button><a href="/">Open app</a><a href="${origin}${project.store_path}">View store page</a></section></main><script>let event;const button=document.querySelector('#install');navigator.serviceWorker?.register('/omgithub-sw.js');addEventListener('beforeinstallprompt',e=>{e.preventDefault();event=e;button.disabled=false;document.querySelector('#status').textContent='Ready to install.'});button.onclick=async()=>{if(!event)return;event.prompt();const result=await event.userChoice;document.querySelector('#status').textContent=result.outcome==='accepted'?'Installed. You can open the game from your apps.':'Install cancelled.';event=null;button.disabled=true}</script></body></html>`)
   }
   return express.static(safeGamePath(slug), { fallthrough: true })(req, res, () => res.sendFile(join(safeGamePath(slug), 'index.html')))
 })

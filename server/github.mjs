@@ -25,20 +25,16 @@ export function extractUrls(issue, comments = []) {
   const text = [issue.body || '', ...comments.map(c => c.body || '')].join('\n')
   const urls = [...text.matchAll(/https:\/\/[^\s)<\"]+/g)].map(match => match[0].replace(/[.,]+$/, ''))
   const trycf = urls.filter(url => /\.trycloudflare\.com/i.test(url))
-  const publishedVercel = [...urls].reverse().find(url => /\.vercel\.app(?:\/[^\s)<"]*)?/i.test(url)) || ''
   const opencode = trycf.find(url => /\/session\/ses_/i.test(url)) || ''
   const preview = [...trycf].reverse().find(url => !/\/session\/ses_/i.test(url)) || ''
-  const published = [...urls].reverse().find(url => /https:\/\/[^/]+\.github\.io(?:\/[^\s)<\"]*)?/i.test(url)) || ''
   const screenshots = [...new Set(urls.filter(url =>
     /raw\.githubusercontent\.com\/.+\/(?:screenshots|project%2Fscreenshots|project\/screenshots)\/.+\.(png|jpe?g|webp)/i.test(url) ||
     /github\.com\/user-attachments\/assets\//i.test(url) ||
     /user-images\.githubusercontent\.com\/.+\.(png|jpe?g|webp)/i.test(url)
   ))]
-  const pr = [...urls].reverse().find(url => /github\.com\/[^/]+\/[^/]+\/pull\/\d+/i.test(url)) || ''
-  return { opencode, preview, published: published || publishedVercel, screenshots, pr }
+  const project = [...urls].reverse().find(url => /omgithub\.com\/[^/]+\/[^/]+\/tree\/[0-9a-f]{40}/i.test(url)) || ''
+  return { opencode, preview, screenshots, project }
 }
-export function slugify(value) { return String(value || 'game').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 46) || 'game' }
-
 export function parseIssueRequest(issue, defaultBranch = 'main') {
   const body = String(issue?.body || '')
   const title = String(issue?.title || '').trim()
@@ -91,12 +87,10 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '      issue_title: { required: true }',
     "      labels_json: { required: false, default: '[]' }",
     '      sender: { required: true }',
-    "      vercel_publish_enabled: { required: false, default: 'true', type: boolean }",
     '',
     'permissions:',
     '  contents: write',
     '  issues: write',
-    '  pull-requests: write',
     '',
     'jobs:',
     '  opencode:',
@@ -107,12 +101,10 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '      issue_title: ${{ inputs.issue_title }}',
     '      labels_json: ${{ inputs.labels_json }}',
     '      sender: ${{ inputs.sender }}',
-    '      vercel_publish_enabled: ${{ inputs.vercel_publish_enabled }}',
     '    secrets:',
     '      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}',
     '      OPENCODE_AUTH_JSON: ${{ secrets.OPENCODE_AUTH_JSON }}',
     '      AGENTSWEB_SSH_PUBLIC_KEY: ${{ secrets.AGENTSWEB_SSH_PUBLIC_KEY }}',
-    '      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}',
     ''
   ].join('\n')
 }
@@ -187,20 +179,6 @@ async function ensureRepositoryLabel(owner, repo, token, api, commonHeaders, req
   })
   if (raced.ok) return false
   throw new Error(`OpenCode repository label creation returned ${created.status}`)
-}
-
-export async function ensureWorkflowPullRequests(owner, repo, token, api, commonHeaders, requestFetch) {
-  const url = `${api}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/permissions/workflow`
-  const response = await requestFetch(url, {
-    method: 'PUT',
-    headers: { ...commonHeaders, authorization: `Bearer ${token}` },
-    body: JSON.stringify({
-      default_workflow_permissions: 'write',
-      can_approve_pull_request_reviews: true
-    })
-  })
-  if (!response.ok) throw Object.assign(new Error(`GitHub Actions pull request permissions setup returned ${response.status}`), { status: response.status })
-  return true
 }
 
 async function dispatchOmgRequestOnce(request, config, requestFetch) {
@@ -285,13 +263,7 @@ async function dispatchOmgRequestOnce(request, config, requestFetch) {
     request: request.request,
     issue_title: request.issueTitle,
     labels_json: JSON.stringify(request.labels),
-    sender: request.sender,
-    vercel_publish_enabled: 'true'
-  }
-  try {
-    await ensureWorkflowPullRequests(request.owner, request.repo, installationToken, api, commonHeaders, requestFetch)
-  } catch (error) {
-    if (error.status !== 403) throw error
+    sender: request.sender
   }
   if (workflowResponse.ok) {
     const dispatch = await requestFetch(`${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/actions/workflows/opencode.yml/dispatches`, {

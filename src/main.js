@@ -10,7 +10,7 @@ import './style.css'
 const routes = [
   { path: '/', component: HomeView },
   { path: '/:owner/:repo/issues/:number', component: ProjectView },
-  { path: '/:owner/:repo/pull/:number', component: StoreView },
+  { path: '/:owner/:repo/tree/:sha', component: StoreView },
   { path: '/:login', component: ProfileView }
 ]
 

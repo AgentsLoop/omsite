@@ -11,7 +11,7 @@ subscribes only to the `Issues` event. Its configured webhook endpoint is
 
 The App also has Actions and Contents read/write access so it can dispatch or
 bootstrap the repository-local workflow. The dispatched workflow uses the
-repository's own `GITHUB_TOKEN` for branches and pull requests. Existing
+repository's own `GITHUB_TOKEN` to push its immutable result branch. Existing
 installations must approve newly requested permissions before those capabilities
 become active.
 
@@ -32,7 +32,7 @@ for authorization. The App does not create an execution-triggering label event
 for the reminder.
 
 An optional issue-title suffix `branch: <existing-branch>` selects the target
-checkout and pull-request base. The App removes that metadata suffix from the
+checkout. The App removes that metadata suffix from the
 OpenCode prompt and validates the branch before routing. Invalid or nonexistent
 branches receive an issue comment and stop before dispatch. The App dispatches
 the workflow from the selected branch. A repository-owned wrapper therefore

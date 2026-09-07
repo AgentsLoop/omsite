@@ -1,8 +1,9 @@
 # OmGithub site
 
 Vue creator/store frontend plus a Node service that mirrors GitHub issue and
-pull-request routes, tracks OpenCode workflow progress, stores project metadata
-in Firebase, and hosts published game ZIPs on wildcard subdomains.
+immutable commit routes, tracks OpenCode workflow progress, stores generated
+project metadata in Firebase, and hosts public-commit projects on wildcard
+subdomains.
 
 ## Local development
 
@@ -27,8 +28,11 @@ production-mode local check.
 - `FIREBASE_SERVICE_ACCOUNT_BASE64`: Firebase service-account JSON, base64 encoded.
 - `PUBLIC_ORIGIN=https://omgithub.com`.
 
-Publishing authenticates with the workflow's automatically generated
-repository-scoped `GITHUB_TOKEN`; no publishing secret is required.
+Publishing is triggered by opening
+`/<owner>/<repo>/tree/<40-character-commit-sha>`. The server anonymously reads
+the public GitHub commit, materializes root `index.html` or `dist/index.html`,
+and discovers committed `screenshots/final-*` images. The visitor supplies no
+token or credentials.
 
 The webhook router validates `X-Hub-Signature-256` and accepts only non-bot
 `issues.opened` events that already contain the exact `OpenCode` label, or
@@ -42,7 +46,7 @@ wrapper and dispatches it in the target repository; both dispatch routes call
 the same central `opencode-reusable.yml` pipeline.
 
 An optional issue-title suffix `branch: <existing-branch>` selects the target
-checkout and pull-request base. The router removes the suffix from the request,
+checkout. The router removes the suffix from the request,
 verifies that the branch exists, and dispatches the workflow from that branch.
 Invalid branches are reported on the issue without starting an Actions run.
 

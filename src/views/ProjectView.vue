@@ -8,7 +8,7 @@
           <div class="progress-numbers"><span v-for="(step, index) in steps" :key="step.label" :class="step.done ? 'done' : step.active ? 'active' : ''">{{ index + 1 }}</span></div>
           <div class="current-progress"><strong>{{ currentStep.label }}</strong><small>{{ currentStep.copy }}</small></div>
         </div>
-        <div class="studio-actions"><a :href="project.github_url" target="_blank">View issue ↗</a><RouterLink v-if="project.pr_path" :to="project.pr_path">Store page</RouterLink></div>
+        <div class="studio-actions"><a :href="project.github_url" target="_blank">View issue ↗</a><RouterLink v-if="project.project_path" :to="project.project_path">Open Project</RouterLink></div>
       </header>
       <nav class="mobile-pane-tabs" aria-label="Workspace panes"><button :class="mobilePane === 'chat' ? 'active' : ''" @click="mobilePane = 'chat'">Chat</button><button :class="mobilePane === 'preview' ? 'active' : ''" @click="mobilePane = 'preview'">Preview</button></nav>
       <div class="studio-grid">
@@ -35,15 +35,15 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 const route = useRoute(), project = ref(null), loading = ref(true), error = ref(''), selectedShot = ref(''), displayedShot = ref(''), mobilePane = ref('chat')
 const cleanTitle = computed(() => (project.value?.title || '').replace(/^\/goal\s*/i, ''))
-const previewUrl = computed(() => project.value?.published_url || project.value?.preview_url || '')
-const previewLabel = computed(() => displayedShot.value ? 'Build screenshot' : project.value?.published_url ? 'Published on Vercel' : project.value?.preview_url ? 'Playable preview' : project.value?.screenshots?.length ? 'Build screenshot' : 'Waiting for preview')
+const previewUrl = computed(() => project.value?.preview_url || '')
+const previewLabel = computed(() => displayedShot.value ? 'Build screenshot' : project.value?.preview_url ? 'Playable preview' : project.value?.screenshots?.length ? 'Build screenshot' : 'Waiting for preview')
 const steps = computed(() => {
   const p = project.value || {}; const complete = p.status === 'complete'
   return [
     { label: 'Issue created', copy: `#${route.params.number} on GitHub`, done: true },
     { label: 'OpenCode building', copy: p.opencode_url ? 'Live session available' : 'Runner is starting', done: Boolean(p.opencode_url), active: !p.opencode_url },
     { label: 'Browser verification', copy: p.preview_url ? 'Public preview verified' : 'Waiting for preview', done: Boolean(p.preview_url), active: Boolean(p.opencode_url && !p.preview_url) },
-    { label: 'Published', copy: p.published_url || 'Permanent URL pending', done: Boolean(p.published_url), active: complete && !p.published_url }
+    { label: 'Published', copy: p.project_path || 'Immutable project link pending', done: Boolean(p.project_path), active: complete && !p.project_path }
   ]
 })
 const currentStep = computed(() => steps.value.find(step => step.active) || [...steps.value].reverse().find(step => step.done) || steps.value[0])
