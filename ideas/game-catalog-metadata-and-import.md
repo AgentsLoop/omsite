@@ -10,15 +10,22 @@ Preserve the existing immutable publication model. Keep repository paths and gam
 
 Add these fields to every published game record:
 
+- `description`: a concise game description from source metadata or OpenCode.
+- `description_source`: `github`, `html`, `opencode`, or `manual`.
 - `prompt`: the prompt that created the game, when it is known.
 - `prompt_source`: `github-file`, `github-list`, `issue`, `workflow`, or `manual`.
 - `prompt_source_url`: the source URL for the prompt.
 - `tags`: one normalized tag array. Combine existing GitHub repository topics with extracted gameplay, product, engine, and model tags. Examples include `fps`, `roguelike`, `platformer`, `game`, `app`, `website`, `three.js`, `godot`, `playcanvas`, `astra`, `opus`, and `fable`.
 - `complexity_score`: an integer from 1 to 10.
+- `rating`: the public average rating from 1 to 10.
+- `rating_count`: the number of user ratings.
+- `rating_sum`: the internal sum of user ratings.
 - `metadata_source`: `opencode`, `github-list`, `manual`, or `import`.
 - `metadata_updated_at`: an ISO timestamp.
 
 Use one tag array only. Read GitHub repository topics, append validated extracted tags, lowercase, trim, deduplicate, and map aliases to canonical values. Keep the original extracted text in a private audit field when needed for review, but expose only the merged validated `tags` array in the public API.
+
+Keep `complexity_score` private. Do not return it from the public project API or display it on cards or store pages. Use it only to seed the initial public rating. Set `rating` to the generated complexity score while `rating_count` is zero. After a user rates the game, calculate the public rating as `(complexity_score + rating_sum) / (1 + rating_count)`. This gives the generated score one initial vote, then gives real user ratings increasing control as the rating count grows.
 
 ## Extract metadata during the GitHub Action
 
@@ -31,8 +38,9 @@ Update the reusable OmGithub build workflow to perform metadata extraction after
 5. Ask OpenCode to identify the model names only when the repository gives evidence. Do not infer a model from the visual style alone.
 6. Ask OpenCode to assign tags and a complexity score from 1 to 10.
 7. Read the GitHub repository topics. Concatenate them with the OpenCode tags, then validate, normalize, and deduplicate the one `tags` array.
-8. Upload the validated metadata with the deployable ZIP to the OmGithub endpoint.
-9. Store the metadata with the published project record.
+8. Use the committed HTML metadata and repository description when available. If the public description is missing, ask OpenCode to generate one concise, factual description from the checked source. Mark it as `opencode`.
+9. Upload the validated metadata with the deployable ZIP to the OmGithub endpoint.
+10. Store the metadata with the published project record.
 
 Define the complexity score consistently:
 
@@ -42,7 +50,7 @@ Define the complexity score consistently:
 - 7–8: substantial simulation, 3D systems, procedural content, or many assets.
 - 9–10: large multi-system project, advanced rendering, networking, or a broad application surface.
 
-Require OpenCode to cite the files and lines that support the score and tags. Store those evidence references for admin review. Do not let a missing prompt prevent publication; publish with an empty prompt and mark metadata as incomplete.
+Require OpenCode to cite the files and lines that support the score, tags, and generated description. Store those evidence references for admin review. Do not leave a public description empty: generate a factual fallback when the repository, HTML, and imported data provide none. Do not let a missing prompt prevent publication; publish with an empty prompt and mark metadata as incomplete.
 
 ## Prompt extraction and direct database import
 
@@ -63,9 +71,9 @@ Use an idempotent upsert. Never create duplicate records for the same canonical 
 
 Add a metadata panel to each store page.
 
-Display the prompt in a readable, collapsed section with a copy button. Show the merged tags and complexity score. Link each prompt source and evidence source when available.
+Display the prompt in a readable, collapsed section with a copy button. Show the merged tags and public rating. Do not display the complexity score. Link each prompt source and evidence source when available.
 
-Add the same tags and complexity score to the project card when space permits. Add filters for tag and complexity range after the metadata is available.
+Add the same tags and public rating to the project card when space permits. Let signed-in users rate a game from 1 to 10. Store one updatable rating per GitHub user and project. Recalculate the rating immediately after each vote. Add filters for tag and rating range after the metadata is available.
 
 Keep Discovery sorting by cached GitHub stars and latest publication. Add metadata filtering without calling GitHub when the user changes a filter.
 
@@ -145,14 +153,17 @@ Treat a game folder in a monorepo as distinct from the repository root. Treat re
 6. Import the direct repositories and selected folders.
 7. Scan catalog repositories for additional unique games and prompts.
 8. Backfill metadata for existing published games.
-9. Verify every imported game has a working play URL, valid `index.html`, screenshot status, source path, prompt status, and evidence-backed metadata.
+9. Add private complexity storage, seeded public ratings, and one-user-per-game rating updates.
+10. Verify every imported game has a working play URL, valid `index.html`, screenshot status, source path, prompt status, non-empty description, public rating, and evidence-backed metadata.
 
 ## Acceptance criteria
 
-- A published game displays its prompt, merged tags, and complexity score when evidence exists.
+- A published game displays its prompt, merged tags, and public rating when evidence exists.
+- A missing source description is replaced with an evidence-backed OpenCode description.
 - The GitHub Action extracts metadata through OpenCode and uploads validated JSON with the build.
 - Prompt-list imports write directly to the database through an idempotent operation.
 - Re-running imports creates no duplicate games or prompts.
 - Discovery filters and sorting use cached server data and do not call GitHub on interaction.
 - All supplied direct repositories and selected game folders are checked, with unsupported or non-playable sources recorded in the import report.
-- Every complexity score has file evidence and remains an integer from 1 to 10.
+- Every complexity score has file evidence, remains an integer from 1 to 10, and is not exposed in the public API or UI.
+- A new game rating starts from its complexity score, and user ratings move the public rating over time.
