@@ -32,6 +32,7 @@ export async function dispatchPublicBuild({
   sourceOwner,
   sourceRepo,
   sourceSha,
+  sourcePath = '',
   workflowOwner,
   workflowRepo,
   workflowFile = 'omgithub-build.yml',
@@ -53,7 +54,7 @@ export async function dispatchPublicBuild({
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       ref: workflowRef,
-      inputs: { source_owner: sourceOwner, source_repo: sourceRepo, source_sha: sourceSha, request_id: requestId, upload_url: uploadUrl, upload_token: uploadToken }
+      inputs: { source_owner: sourceOwner, source_repo: sourceRepo, source_sha: sourceSha, source_path: sourcePath, request_id: requestId, upload_url: uploadUrl, upload_token: uploadToken }
     })
   })
   onStatus({ phase: 'queued' })

@@ -144,3 +144,26 @@ test('materializes a root-level GitHub Actions build ZIP', async () => {
   assert.equal(project.build_run_id, '42')
   assert.deepEqual(project.screenshots, [`https://owner-repo-${'e'.repeat(12)}.omgithub.com/screenshots/final-build.png`])
 })
+
+test('materializes a selected game directory from a repository ZIP', async () => {
+  const sha = 'f'.repeat(40)
+  const zip = new AdmZip()
+  zip.addFile('owner-repo-f/games/balance-astronaut/index.html', Buffer.from('<title>Balance Astronaut</title>'))
+  zip.addFile('owner-repo-f/games/balance-astronaut/assets/game.js', Buffer.from('console.log("astronaut")'))
+  const rows = []
+  const store = { bySourceKey: async key => rows.find(row => row.source_key === key) || null, put: async project => { rows.push(project); return project } }
+  const requestFetch = async url => {
+    if (url.endsWith('/repos/owner/repo')) return response({ name: 'repo', private: false, owner: { login: 'owner' } })
+    if (url.endsWith(`/commits/${sha}`)) return response({ sha, commit: { message: 'Selected game' } })
+    if (url.endsWith(`/zipball/${sha}`)) return response(zip.toBuffer())
+    return response({ message: 'not found' }, { status: 404 })
+  }
+  const gamesDir = join(mkdtempSync(join(tmpdir(), 'omgithub-subdirectory-')), 'games')
+
+  const project = await materializePublicProject({ owner: 'owner', repo: 'repo', sha, projectPath: 'games/balance-astronaut', baseHost: 'omgithub.com', gamesDir, store, requestFetch, buildRunId: '43' })
+
+  assert.equal(readFileSync(join(project.local_dir, 'index.html'), 'utf8'), '<title>Balance Astronaut</title>')
+  assert.equal(readFileSync(join(project.local_dir, 'assets/game.js'), 'utf8'), 'console.log("astronaut")')
+  assert.equal(project.store_path, `/owner/repo/tree/${sha}/games/balance-astronaut`)
+  assert.match(project.slug, /-games-balance-astronaut|-[0-9a-f]{8}$/)
+})

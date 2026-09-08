@@ -43,5 +43,10 @@ Use [the publishing guide](../wiki/omgithub.md) for immutable routes, build
 uploads, deployment limits, and hosting. Use [the GitHub App guide](../wiki/oh-my-github-app.md)
 for event routing, required permissions, and branch selection.
 
+Open `/owner/repo/tree/ref/path` to publish a game from a repository
+subdirectory. OmGithub resolves the branch or tag, builds that directory, and
+publishes its `dist/`, `build/`, or static root. For example, open
+`/asmoyou/toy2game/tree/main/games/balance-astronaut`.
+
 Deploy to A1 with `../scripts/deploy-omgithub-a1.sh`. Bind the container to
 `127.0.0.1:8794` and terminate TLS through host Caddy.

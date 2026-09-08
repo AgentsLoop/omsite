@@ -17,6 +17,11 @@ on:
         description: Exact source commit to build
         required: true
         type: string
+      source_path:
+        description: Optional repository subdirectory containing the game
+        required: false
+        default: ''
+        type: string
       request_id:
         description: Unique OmGithub build request identifier
         required: true
@@ -53,8 +58,15 @@ jobs:
       - name: Install dependencies
         working-directory: source
         shell: bash
+        env:
+          OMGHITHUB_SOURCE_PATH: ${{ inputs.source_path }}
         run: |
           set -euo pipefail
+          project_dir="${OMGHITHUB_SOURCE_PATH:-}"
+          if [[ -z "$project_dir" ]]; then project_dir='.'; fi
+          [[ "$project_dir" != /* && "$project_dir" != *'..'* ]] || { echo 'Invalid source path.' >&2; exit 1; }
+          [[ -d "$project_dir" ]] || { echo "Source path does not exist: $project_dir" >&2; exit 1; }
+          cd "$project_dir"
           if [[ ! -f package.json ]]; then
             echo 'No package.json found; treating the repository as a static site.'
           elif [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then
@@ -66,8 +78,13 @@ jobs:
       - name: Build the repository
         working-directory: source
         shell: bash
+        env:
+          OMGHITHUB_SOURCE_PATH: ${{ inputs.source_path }}
         run: |
           set -euo pipefail
+          project_dir="${OMGHITHUB_SOURCE_PATH:-}"
+          if [[ -z "$project_dir" ]]; then project_dir='.'; fi
+          cd "$project_dir"
           if [[ -f package.json ]] && node -e "const p=require('./package.json'); process.exit(p.scripts?.build ? 0 : 1)"; then
             if ! npm run build; then
               if node -e "const p=require('./package.json'); process.exit(String(p.scripts?.build || '').includes('vite') ? 0 : 1)"; then
@@ -85,35 +102,42 @@ jobs:
       - name: Prepare deployable files
         working-directory: source
         shell: bash
+        env:
+          OMGHITHUB_SOURCE_PATH: ${{ inputs.source_path }}
         run: |
           set -euo pipefail
-          rm -rf omgithub-build
-          mkdir -p omgithub-build
+          project_dir="${OMGHITHUB_SOURCE_PATH:-}"
+          if [[ -z "$project_dir" ]]; then project_dir='.'; fi
+          cd "$project_dir"
+          build_root="$GITHUB_WORKSPACE/source/omgithub-build"
+          rm -rf "$build_root"
+          mkdir -p "$build_root"
           if [[ -d dist ]]; then
-            cp -a dist/. omgithub-build/
+            cp -a dist/. "$build_root/"
           elif [[ -d build ]]; then
-            cp -a build/. omgithub-build/
+            cp -a build/. "$build_root/"
           elif [[ -f index.html ]]; then
-            rsync -a --exclude='.git' --exclude='node_modules' --exclude='omgithub-build' ./ omgithub-build/
+            rsync -a --exclude='.git' --exclude='node_modules' --exclude='omgithub-build' ./ "$build_root/"
           else
             echo 'The build did not produce dist/index.html, build/index.html, or root index.html.' >&2
             exit 1
           fi
           if [[ -d screenshots ]]; then
-            cp -a screenshots omgithub-build/
+            cp -a screenshots "$build_root/"
           fi
-          test -f omgithub-build/index.html
+          test -f "$build_root/index.html"
 
       - name: Capture a screenshot when none was committed
         working-directory: source
         shell: bash
         run: |
           set -euo pipefail
-          if compgen -G 'omgithub-build/screenshots/final-*' > /dev/null; then
+          build_root="$GITHUB_WORKSPACE/source/omgithub-build"
+          if compgen -G "$build_root/screenshots/final-*" > /dev/null; then
             echo 'Using committed final screenshot(s).'
           else
-            mkdir -p omgithub-build/screenshots
-            python3 -m http.server 4173 --directory omgithub-build > /tmp/omgithub-preview.log 2>&1 &
+            mkdir -p "$build_root/screenshots"
+            python3 -m http.server 4173 --directory "$build_root" > /tmp/omgithub-preview.log 2>&1 &
             server_pid=$!
             trap 'kill "$server_pid" 2>/dev/null || true' EXIT
             for _ in {1..30}; do
@@ -122,8 +146,8 @@ jobs:
             done
             curl --fail --silent http://127.0.0.1:4173/ > /dev/null
             npx --yes playwright@1.55.0 install --with-deps chromium
-            npx --yes playwright@1.55.0 screenshot --wait-for-timeout 3000 --viewport-size '1440,900' http://127.0.0.1:4173/ omgithub-build/screenshots/final-build.png
-            test -s omgithub-build/screenshots/final-build.png
+            npx --yes playwright@1.55.0 screenshot --wait-for-timeout 3000 --viewport-size '1440,900' http://127.0.0.1:4173/ "$build_root/screenshots/final-build.png"
+            test -s "$build_root/screenshots/final-build.png"
           fi
 
       - name: Mask the one-time upload token
@@ -139,6 +163,7 @@ jobs:
           OMGHITHUB_SOURCE_OWNER: ${{ inputs.source_owner }}
           OMGHITHUB_SOURCE_REPO: ${{ inputs.source_repo }}
           OMGHITHUB_SOURCE_SHA: ${{ inputs.source_sha }}
+          OMGHITHUB_SOURCE_PATH: ${{ inputs.source_path }}
         run: |
           set -euo pipefail
           (cd omgithub-build && zip -qr ../omgithub-build.zip .)
@@ -150,6 +175,7 @@ jobs:
             -H "x-omgithub-source-owner: $OMGHITHUB_SOURCE_OWNER" \
             -H "x-omgithub-source-repo: $OMGHITHUB_SOURCE_REPO" \
             -H "x-omgithub-source-sha: $OMGHITHUB_SOURCE_SHA" \
+            -H "x-omgithub-source-path: $OMGHITHUB_SOURCE_PATH" \
             -H "x-omgithub-build-run: $GITHUB_RUN_ID" \
             --data-binary @omgithub-build.zip \
             "$OMGHITHUB_UPLOAD_URL"

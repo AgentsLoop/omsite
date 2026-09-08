@@ -36,6 +36,23 @@ export function validateSource(owner, repo, sha) {
   if (!/^[0-9a-f]{40}$/i.test(sha)) throw Object.assign(new Error('A full 40-character commit SHA is required'), { status: 400 })
 }
 
+export function validateProjectPath(projectPath = '') {
+  const value = String(projectPath || '').replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')
+  if (!value) return ''
+  if (value.split('/').some(part => !part || part === '.' || part === '..')) throw Object.assign(new Error('Invalid project directory'), { status: 400 })
+  return value
+}
+
+export async function resolvePublicCommit({ owner, repo, ref, requestFetch = fetch }) {
+  validateRepository(owner, repo)
+  if (!String(ref || '').trim() || String(ref).includes('..') || String(ref).includes('/')) throw Object.assign(new Error('Invalid Git ref'), { status: 400 })
+  const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
+  const repository = await githubPublic(base, requestFetch)
+  if (repository.private) throw Object.assign(new Error('Only public repositories are supported'), { status: 404 })
+  const commit = await githubPublic(`${base}/commits/${encodeURIComponent(ref)}`, requestFetch)
+  return { sha: commit.sha, repository, commit }
+}
+
 export async function resolveLatestPublicCommit({ owner, repo, requestFetch = fetch }) {
   validateRepository(owner, repo)
   const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
@@ -46,9 +63,10 @@ export async function resolveLatestPublicCommit({ owner, repo, requestFetch = fe
   return { sha: commit.sha, repository, commit }
 }
 
-function projectSlug(owner, repo, sha) {
+function projectSlug(owner, repo, sha, projectPath = '') {
   const prefix = `${owner}-${repo}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32)
-  return `${prefix || 'project'}-${sha.slice(0, 12).toLowerCase()}`
+  const pathHash = projectPath ? `-${createHash('sha256').update(projectPath).digest('hex').slice(0, 8)}` : ''
+  return `${prefix || 'project'}-${sha.slice(0, 12).toLowerCase()}${pathHash}`
 }
 
 function normalizedEntryName(entryName) {
@@ -72,10 +90,11 @@ function relativeZipName(entryName, root = '') {
   return normalized.startsWith(root) ? normalized.slice(root.length) : ''
 }
 
-function deploymentRoot(entries, root) {
+function deploymentRoot(entries, root, projectPath = '') {
   const files = new Set(entries.filter(entry => !entry.isDirectory).map(entry => relativeZipName(entry.entryName, root)))
-  if (files.has('dist/index.html')) return 'dist/'
-  if (files.has('index.html')) return ''
+  const prefix = projectPath ? `${projectPath}/` : ''
+  if (files.has(`${prefix}dist/index.html`)) return `${prefix}dist/`
+  if (files.has(`${prefix}index.html`)) return prefix
   throw Object.assign(new Error('Public commit must contain dist/index.html or index.html'), { status: 422 })
 }
 
@@ -91,11 +110,11 @@ function deploymentOutputName(entry, root, archiveRootPath, includeScreenshots =
   return outputName
 }
 
-function extractDeployment(zip, destination, includeScreenshots = false) {
+function extractDeployment(zip, destination, includeScreenshots = false, projectPath = '') {
   const entries = zip.getEntries()
   if (entries.length > MAX_ENTRIES) throw new Error('Repository archive contains too many entries')
   const archiveRootPath = archiveRoot(entries)
-  const root = deploymentRoot(entries, archiveRootPath)
+  const root = deploymentRoot(entries, archiveRootPath, projectPath)
   let total = 0
   for (const entry of entries) {
     normalizedEntryName(entry.entryName)
@@ -150,9 +169,10 @@ function pageMetadata(indexPath) {
   return { title, description }
 }
 
-export async function materializePublicProject({ owner, repo, sha, baseHost, gamesDir, store, requestFetch = fetch, archiveBuffer = null, buildRunId = '' }) {
+export async function materializePublicProject({ owner, repo, sha, baseHost, gamesDir, store, requestFetch = fetch, archiveBuffer = null, buildRunId = '', projectPath = '' }) {
   validateSource(owner, repo, sha)
-  const sourceKey = `${owner.toLowerCase()}/${repo.toLowerCase()}@${sha.toLowerCase()}`
+  projectPath = validateProjectPath(projectPath)
+  const sourceKey = `${owner.toLowerCase()}/${repo.toLowerCase()}@${sha.toLowerCase()}${projectPath ? `:${projectPath}` : ''}`
   const existing = await store.bySourceKey(sourceKey)
   if (existing && !archiveBuffer) return existing
 
@@ -177,10 +197,10 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
 
   const zip = new AdmZip(archive)
   const entries = zip.getEntries()
-  const slug = projectSlug(owner, repo, sha)
+  const slug = projectSlug(owner, repo, sha, projectPath)
   const destination = resolve(gamesDir, slug)
   if (!destination.startsWith(`${resolve(gamesDir)}${sep}`)) throw new Error('Unsafe project destination')
-  const extracted = extractDeployment(zip, destination, Boolean(archiveBuffer))
+  const extracted = extractDeployment(zip, destination, Boolean(archiveBuffer), archiveBuffer ? '' : projectPath)
   try {
     const metadata = pageMetadata(resolve(extracted.staging, 'index.html'))
     const project = {
@@ -201,8 +221,8 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
       build_run_id: buildRunId,
       url: `https://${slug}.${baseHost}`,
       install_url: `https://${slug}.${baseHost}/install`,
-      store_path: `/${owner}/${repo}/tree/${sha.toLowerCase()}`,
-      github_url: `https://github.com/${owner}/${repo}/tree/${sha}`,
+      store_path: `/${owner}/${repo}/tree/${sha.toLowerCase()}${projectPath ? `/${projectPath}` : ''}`,
+      github_url: `https://github.com/${owner}/${repo}/tree/${sha}${projectPath ? `/${projectPath}` : ''}`,
       published_at: new Date().toISOString(),
       local_dir: destination
     }

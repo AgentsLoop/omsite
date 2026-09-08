@@ -21,6 +21,7 @@ test('dispatches a repository build for direct ZIP upload', async () => {
     if (url.endsWith('/dispatches')) {
       const inputs = JSON.parse(options.body).inputs
       requestId = inputs.request_id
+      assert.equal(inputs.source_path, '')
       assert.equal(inputs.upload_url, 'https://omgithub.com/api/builds')
       assert.equal(inputs.upload_token, 'upload-secret')
       return response('', { status: 204 })
@@ -34,4 +35,22 @@ test('dispatches a repository build for direct ZIP upload', async () => {
   assert.equal(result.run.id, 42)
   assert.equal(calls[0].options.headers.authorization, 'Bearer secret')
   assert.deepEqual(statuses, [{ phase: 'queued' }, { phase: 'publishing', runId: '42' }])
+})
+
+test('dispatches a selected repository subdirectory to the build workflow', async () => {
+  let requestId = ''
+  const requestFetch = async (url, options = {}) => {
+    if (url.endsWith('/dispatches')) {
+      const inputs = JSON.parse(options.body).inputs
+      requestId = inputs.request_id
+      assert.equal(inputs.source_path, 'games/balance-astronaut')
+      return response('', { status: 204 })
+    }
+    if (url.includes('/runs?')) return response({ workflow_runs: [{ id: 43, status: 'completed', conclusion: 'success', display_title: `OmGithub build ${requestId}` }] })
+    return response({ message: 'not found' }, { status: 404 })
+  }
+
+  const result = await dispatchPublicBuild({ sourceOwner: 'owner', sourceRepo: 'repo', sourceSha: 'b'.repeat(40), sourcePath: 'games/balance-astronaut', workflowOwner: 'AgentsLoop', workflowRepo: 'OhMyGithub', token: 'secret', uploadUrl: 'https://omgithub.com/api/builds', uploadToken: 'upload-secret', requestFetch, pollMs: 0 })
+
+  assert.equal(result.run.id, 43)
 })

@@ -6,6 +6,11 @@ Open `https://omgithub.com/<owner>/<repo>/tree/<40-character-commit-sha>` to
 publish an exact public commit. Open `https://omgithub.com/<owner>/<repo>` to
 resolve the current default-branch commit first.
 
+Open `https://omgithub.com/<owner>/<repo>/tree/<ref>/<path>` to publish a game
+inside a repository. Resolve `<ref>` as a branch, tag, or commit SHA. Build
+only `<path>`. For example, use
+`https://omgithub.com/asmoyou/toy2game/tree/main/games/balance-astronaut`.
+
 Use a full commit SHA. Keep the source repository public. Supply no visitor
 credentials. Configure the server's `GITHUB_TOKEN` to dispatch
 [the build workflow](../.github/workflows/omgithub-build.yml).
