@@ -126,6 +126,10 @@ jobs:
             test -s omgithub-build/screenshots/final-build.png
           fi
 
+      - name: Mask the one-time upload token
+        shell: bash
+        run: echo "::add-mask::${{ inputs.upload_token }}"
+
       - name: Upload deployable ZIP to OmGithub
         working-directory: source
         shell: bash
