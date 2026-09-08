@@ -88,7 +88,7 @@ function hostSlug(req) {
   const matchedHost = publicHosts.find(value => host.endsWith(`.${value}`))
   if (!matchedHost) return ''
   const slug = host.slice(0, -(matchedHost.length + 1))
-  return /^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(slug) ? slug : ''
+  return /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(slug) ? slug : ''
 }
 function safeGamePath(slug) { const path = resolve(gamesDir, slug); if (!path.startsWith(`${resolve(gamesDir)}${sep}`)) throw new Error('Unsafe game path'); return path }
 function publicProject(project) { const { local_dir, ...safe } = project; return safe }
