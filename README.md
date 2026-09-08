@@ -18,6 +18,11 @@ npm run dev
 Build the frontend with `npm run build` before using `npm start` to serve the
 production frontend.
 
+The Discover section supports `Latest` and `GitHub stars` sorting. Read both
+values from the server-side project catalog. Backfill existing rows with
+`npm run backfill:github-stars` inside the production container after setting
+the authenticated `GITHUB_TOKEN`.
+
 ## Configuration
 
 - Set `GITHUB_TOKEN` to apply `Goal` and `OpenCode` labels and dispatch public

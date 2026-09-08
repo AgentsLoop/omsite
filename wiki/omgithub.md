@@ -28,6 +28,11 @@ for every repeat visit and progress poll. Resolve a branch or tag only on the
 first uncached visit. Keep the full commit-SHA route available only as a
 backwards-compatible route.
 
+Store `stargazers_count` as `github_stars` when publishing a project. Backfill
+older catalog rows once with the authenticated migration command. Sort the
+Discover cards from cached `github_stars` or `published_at` values. Do not call
+GitHub when the user changes the sort control.
+
 Let the workflow install dependencies, build the source, select `dist/`,
 `build/`, the static root, or a selected HTML entry file, and capture a
 screenshot when needed. Upload the

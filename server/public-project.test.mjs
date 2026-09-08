@@ -33,7 +33,7 @@ test('materializes an immutable public commit without credentials', async () => 
   const requestFetch = async (url, options) => {
     calls.push({ url, options })
     if (url.endsWith(`/commits/${sha}`)) return response({ sha, commit: { message: 'Ship game' } })
-    if (url.endsWith('/repos/owner/repo')) return response({ name: 'repo', private: false, description: 'Playable project', owner: { login: 'owner', avatar_url: 'avatar' } })
+    if (url.endsWith('/repos/owner/repo')) return response({ name: 'repo', private: false, description: 'Playable project', stargazers_count: 12, owner: { login: 'owner', avatar_url: 'avatar' } })
     if (url.endsWith(`/zipball/${sha}`)) return response(zip.toBuffer())
     return response({ message: 'not found' }, { status: 404 })
   }
@@ -46,6 +46,7 @@ test('materializes an immutable public commit without credentials', async () => 
   assert.equal(existsSync(join(project.local_dir, '.opencode-web')), false)
   assert.equal(project.title, 'Actual Project')
   assert.equal(project.description, 'Actual project description')
+  assert.equal(project.github_stars, 12)
   assert.equal(project.store_path, `/owner/repo/tree/${sha}`)
   assert.equal(project.github_url, `https://github.com/owner/repo/tree/${sha}`)
   assert.deepEqual(project.screenshots, [`https://raw.githubusercontent.com/owner/repo/${sha}/screenshots/final-play.png`])

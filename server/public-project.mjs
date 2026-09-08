@@ -230,6 +230,8 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
       repo_owner: repository.owner?.login || owner,
       repo: repository.name || repo,
       commit: sha.toLowerCase(),
+      github_stars: Number.isFinite(Number(repository.stargazers_count)) ? Number(repository.stargazers_count) : null,
+      github_stars_updated_at: new Date().toISOString(),
       owner_login: repository.owner?.login || owner,
       owner_avatar: repository.owner?.avatar_url || `https://github.com/${owner}.png`,
       screenshots: screenshotUrls(entries, owner, repo, sha, { baseHost, slug, built: Boolean(archiveBuffer), deploymentRoot: extracted.root }),

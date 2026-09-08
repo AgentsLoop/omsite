@@ -20,7 +20,7 @@
       </div>
     </section>
     <section id="discover" class="library">
-      <div class="section-heading"><div><p class="eyebrow orange">BUILT IN PUBLIC</p><h2>{{ me ? `${me.login}'s games` : 'Games created with OmGithub' }}</h2></div></div>
+      <div class="section-heading"><div><p class="eyebrow orange">BUILT IN PUBLIC</p><h2>{{ me ? `${me.login}'s games` : 'Games created with OmGithub' }}</h2></div><label class="library-sort" for="discover-sort"><span>Sort by</span><select id="discover-sort" v-model="sortMode"><option value="latest">Latest</option><option value="stars">GitHub stars</option></select></label></div>
       <div v-if="loadingProjects" class="cards-grid"><div v-for="n in 3" :key="n" class="game-card skeleton"></div></div>
       <div v-else-if="projects.length" class="cards-grid"><GameCard v-for="project in projects" :key="project.id || project.issue_path" :project="project" /></div>
       <div v-else class="empty-library">Your published games will appear here.</div>
@@ -34,9 +34,17 @@ import { useRouter } from 'vue-router'
 import GameCard from '../components/GameCard.vue'
 import { useJsonResource } from '../composables/useJsonResource'
 const props = defineProps({ me: Object })
-const router = useRouter(), prompt = ref(''), loading = ref(false), error = ref('')
+const router = useRouter(), prompt = ref(''), loading = ref(false), error = ref(''), sortMode = ref('latest')
 const { data, loading: loadingProjects } = useJsonResource(() => props.me ? '/api/projects?mine=1' : '/api/projects')
-const projects = computed(() => data.value?.projects || [])
+const projects = computed(() => {
+  const rows = [...(data.value?.projects || [])]
+  const latestFirst = (left, right) => String(right.published_at || '').localeCompare(String(left.published_at || ''))
+  if (sortMode.value !== 'stars') return rows.sort(latestFirst)
+  return rows.sort((left, right) => {
+    const stars = Number(right.github_stars || 0) - Number(left.github_stars || 0)
+    return stars || latestFirst(left, right)
+  })
+})
 async function create() {
   if (!prompt.value.trim() || loading.value) return
   loading.value = true; error.value = ''
