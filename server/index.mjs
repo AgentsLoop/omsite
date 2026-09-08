@@ -38,6 +38,12 @@ const githubApp = {
 const sessionSecret = process.env.SESSION_SECRET || randomBytes(32).toString('hex')
 mkdirSync(gamesDir, { recursive: true })
 
+function publicGithubFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}) }
+  if (githubToken) headers.authorization = `Bearer ${githubToken}`
+  return fetch(url, { ...options, headers })
+}
+
 let firestore = null
 const firebaseCredential = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 ? Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8') : '')
 if (firebaseCredential) {
@@ -149,8 +155,8 @@ async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref
   const publication = { publicPath, state: 'checking', project: null, error: '', runId: '' }
   publication.promise = (async () => {
     const resolved = latest
-      ? await resolveLatestPublicCommit({ owner: sourceOwner, repo: sourceRepo })
-      : await resolvePublicCommit({ owner: sourceOwner, repo: sourceRepo, ref })
+      ? await resolveLatestPublicCommit({ owner: sourceOwner, repo: sourceRepo, requestFetch: publicGithubFetch })
+      : await resolvePublicCommit({ owner: sourceOwner, repo: sourceRepo, ref, requestFetch: publicGithubFetch })
     publication.sha = resolved.sha.toLowerCase()
     publication.sourcePublication = await startPublication({ owner: sourceOwner, repo: sourceRepo, sha: resolved.sha, projectPath, publicPath })
     const project = await publication.sourcePublication.promise
@@ -181,7 +187,7 @@ async function publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectP
     if (publicPath && (existing.public_path !== publicPath || existing.store_path !== publicPath)) return store.put({ ...existing, public_path: publicPath, store_path: publicPath })
     return existing
   }
-  if (!buildEnabled) return materializePublicProject({ owner: sourceOwner, repo: sourceRepo, sha, projectPath, publicPath, baseHost, gamesDir, store })
+  if (!buildEnabled) return materializePublicProject({ owner: sourceOwner, repo: sourceRepo, sha, projectPath, publicPath, baseHost, gamesDir, store, requestFetch: publicGithubFetch })
 
   for (const [token, pending] of pendingBuilds) if (pending.expiresAt < Date.now()) pendingBuilds.delete(token)
   const uploadToken = randomBytes(32).toString('hex')
@@ -295,7 +301,7 @@ app.post('/api/builds', express.raw({ type: ['application/zip', 'application/oct
     if (!Buffer.isBuffer(req.body) || req.body.length === 0 || req.body.length > buildUploadMaxBytes) return res.status(413).json({ error: 'Build ZIP is empty or too large' })
     pending.processing = true
     pending.publication.state = 'publishing'
-    const project = await materializePublicProject({ owner: pending.owner, repo: pending.repo, sha: pending.sha, projectPath: pending.projectPath, publicPath: pending.publicPath, baseHost, gamesDir, store, archiveBuffer: req.body, buildRunId: String(req.headers['x-omgithub-build-run'] || '') })
+    const project = await materializePublicProject({ owner: pending.owner, repo: pending.repo, sha: pending.sha, projectPath: pending.projectPath, publicPath: pending.publicPath, baseHost, gamesDir, store, requestFetch: publicGithubFetch, archiveBuffer: req.body, buildRunId: String(req.headers['x-omgithub-build-run'] || '') })
     pendingBuilds.delete(token)
     res.status(201).json({ ok: true, commit: project.commit, screenshots: project.screenshots })
   } catch (e) {
