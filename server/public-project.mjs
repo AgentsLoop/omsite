@@ -26,8 +26,12 @@ async function githubPublic(path, requestFetch) {
   return data
 }
 
-function validateSource(owner, repo, sha) {
+function validateRepository(owner, repo) {
   if (!/^[a-z0-9_.-]+$/i.test(owner) || !/^[a-z0-9_.-]+$/i.test(repo)) throw Object.assign(new Error('Invalid public repository path'), { status: 400 })
+}
+
+function validateSource(owner, repo, sha) {
+  validateRepository(owner, repo)
   if (!/^[0-9a-f]{40}$/i.test(sha)) throw Object.assign(new Error('A full 40-character commit SHA is required'), { status: 400 })
 }
 
@@ -177,4 +181,14 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
     rmSync(extracted.staging, { recursive: true, force: true })
     throw error
   }
+}
+
+export async function materializeLatestPublicProject({ owner, repo, baseHost, gamesDir, store, requestFetch = fetch }) {
+  validateRepository(owner, repo)
+  const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
+  const repository = await githubPublic(base, requestFetch)
+  if (repository.private) throw Object.assign(new Error('Only public repositories are supported'), { status: 404 })
+  const branch = repository.default_branch || 'main'
+  const commit = await githubPublic(`${base}/commits/${encodeURIComponent(branch)}`, requestFetch)
+  return materializePublicProject({ owner, repo, sha: commit.sha, baseHost, gamesDir, store, requestFetch })
 }

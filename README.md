@@ -28,11 +28,11 @@ production-mode local check.
 - `FIREBASE_SERVICE_ACCOUNT_BASE64`: Firebase service-account JSON, base64 encoded.
 - `PUBLIC_ORIGIN=https://omgithub.com`.
 
-Publishing is triggered by opening
-`/<owner>/<repo>/tree/<40-character-commit-sha>`. The server anonymously reads
-the public GitHub commit, materializes root `index.html` or `dist/index.html`,
-and discovers committed `screenshots/final-*` images. The visitor supplies no
-token or credentials.
+Publish a commit by opening `/<owner>/<repo>/tree/<40-character-commit-sha>`.
+Open `/<owner>/<repo>` to resolve and publish the repository's current default
+branch commit. The server anonymously reads the public GitHub commit,
+materializes root `index.html` or `dist/index.html`, and discovers committed
+`screenshots/final-*` images. The visitor supplies no token or credentials.
 
 The webhook router validates `X-Hub-Signature-256` and accepts only non-bot
 `issues.opened` events that already contain the exact `OpenCode` label, or

@@ -11,6 +11,7 @@ const routes = [
   { path: '/', component: HomeView },
   { path: '/:owner/:repo/issues/:number', component: ProjectView },
   { path: '/:owner/:repo/tree/:sha', component: StoreView },
+  { path: '/:owner/:repo', component: StoreView },
   { path: '/:login', component: ProfileView }
 ]
 

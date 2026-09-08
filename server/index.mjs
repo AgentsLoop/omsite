@@ -7,7 +7,7 @@ import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cookies, nonce, sign, verify } from './auth.mjs'
 import { dispatchOmgRequest, extractUrls, github, omgRequest, verifyWebhookSignature } from './github.mjs'
-import { materializePublicProject } from './public-project.mjs'
+import { materializeLatestPublicProject, materializePublicProject } from './public-project.mjs'
 import { createStore } from './store.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -72,6 +72,7 @@ function hostSlug(req) {
 function safeGamePath(slug) { const path = resolve(gamesDir, slug); if (!path.startsWith(`${resolve(gamesDir)}${sep}`)) throw new Error('Unsafe game path'); return path }
 function publicProject(project) { const { local_dir, ...safe } = project; return safe }
 function card(project) { return { ...publicProject(project), issue_path: project.issue ? `/${project.repo_owner}/${project.repo}/issues/${project.issue}` : '', store_path: project.commit ? `/${project.repo_owner}/${project.repo}/tree/${project.commit}` : '', screenshot: project.screenshots?.[0] || '', status: project.status || 'published' } }
+function storePayload(project) { return { title: project.title, description: project.description, commit: project.commit, status: project.status, github_url: project.github_url, owner: project.owner_login, owner_avatar: project.owner_avatar, screenshots: project.screenshots, play_url: project.url, install_url: project.install_url, store_path: project.store_path } }
 async function projects() { return await store.all() }
 
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'omgithub' }))
@@ -165,7 +166,14 @@ app.get('/api/github/:owner/:repo/issues/:number', async (req, res, next) => {
 app.get('/api/github/:owner/:repo/tree/:sha', async (req, res, next) => {
   try {
     const project = await materializePublicProject({ owner: req.params.owner, repo: req.params.repo, sha: req.params.sha, baseHost, gamesDir, store })
-    res.json({ title: project.title, description: project.description, commit: project.commit, status: project.status, github_url: project.github_url, owner: project.owner_login, owner_avatar: project.owner_avatar, screenshots: project.screenshots, play_url: project.url, install_url: project.install_url })
+    res.json(storePayload(project))
+  } catch (e) { next(e) }
+})
+
+app.get('/api/github/:owner/:repo', async (req, res, next) => {
+  try {
+    const project = await materializeLatestPublicProject({ owner: req.params.owner, repo: req.params.repo, baseHost, gamesDir, store })
+    res.json(storePayload(project))
   } catch (e) { next(e) }
 })
 

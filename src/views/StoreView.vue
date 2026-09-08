@@ -14,6 +14,10 @@ const route = useRoute(), project = ref(null), selected = ref(''), loading = ref
 async function share() { await navigator.clipboard?.writeText(location.href) }
 watch(() => [route.params.owner, route.params.repo, route.params.sha], async ([owner, repo, sha]) => {
   loading.value = true; project.value = null
-  try { const r = await fetch(`/api/github/${owner}/${repo}/tree/${sha}`); if (r.ok) project.value = await r.json() } finally { loading.value = false }
+  try {
+    const endpoint = sha ? `/api/github/${owner}/${repo}/tree/${sha}` : `/api/github/${owner}/${repo}`
+    const r = await fetch(endpoint)
+    if (r.ok) project.value = await r.json()
+  } finally { loading.value = false }
 }, { immediate: true })
 </script>

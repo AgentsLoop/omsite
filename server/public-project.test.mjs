@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import AdmZip from 'adm-zip'
-import { materializePublicProject } from './public-project.mjs'
+import { materializeLatestPublicProject, materializePublicProject } from './public-project.mjs'
 
 function response(data, { status = 200, headers = {} } = {}) {
   const body = typeof data === 'string' || Buffer.isBuffer(data) ? data : JSON.stringify(data)
@@ -95,4 +95,26 @@ test('root projects exclude repository tooling and screenshots from deployment',
   assert.equal(existsSync(join(project.local_dir, '.opencode-web')), false)
   assert.equal(existsSync(join(project.local_dir, 'screenshots')), false)
   assert.equal(project.screenshots.length, 1)
+})
+
+test('resolves a repository shorthand to the latest default-branch commit', async () => {
+  const sha = 'd'.repeat(40)
+  const zip = new AdmZip()
+  zip.addFile('owner-repo-d/index.html', Buffer.from('<title>Latest App</title>'))
+  const rows = []
+  const store = { bySourceKey: async key => rows.find(row => row.source_key === key) || null, put: async project => { rows.push(project); return project } }
+  const requestFetch = async url => {
+    if (url.endsWith('/repos/owner/repo')) return response({ name: 'repo', private: false, default_branch: 'main', owner: { login: 'owner' } })
+    if (url.endsWith('/repos/owner/repo/commits/main')) return response({ sha })
+    if (url.endsWith(`/commits/${sha}`)) return response({ sha, commit: { message: 'Latest app' } })
+    if (url.endsWith(`/zipball/${sha}`)) return response(zip.toBuffer())
+    return response({ message: 'not found' }, { status: 404 })
+  }
+  const gamesDir = join(mkdtempSync(join(tmpdir(), 'omgithub-latest-')), 'games')
+
+  const project = await materializeLatestPublicProject({ owner: 'owner', repo: 'repo', baseHost: 'omgithub.com', gamesDir, store, requestFetch })
+
+  assert.equal(project.commit, sha)
+  assert.equal(project.store_path, `/owner/repo/tree/${sha}`)
+  assert.equal(project.title, 'Latest App')
 })
