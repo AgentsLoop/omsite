@@ -13,15 +13,12 @@ Add these fields to every published game record:
 - `prompt`: the prompt that created the game, when it is known.
 - `prompt_source`: `github-file`, `github-list`, `issue`, `workflow`, or `manual`.
 - `prompt_source_url`: the source URL for the prompt.
-- `category`: one primary value such as `game`, `app`, or `website`.
-- `tags`: normalized gameplay and product tags such as `fps`, `roguelike`, `platformer`, `game`, `app`, and `website`.
-- `engine_tags`: normalized engine tags such as `three.js`, `godot`, and `playcanvas`.
-- `model_tags`: normalized model tags such as `astra`, `opus`, and `fable`.
+- `tags`: one normalized tag array. Combine existing GitHub repository topics with extracted gameplay, product, engine, and model tags. Examples include `fps`, `roguelike`, `platformer`, `game`, `app`, `website`, `three.js`, `godot`, `playcanvas`, `astra`, `opus`, and `fable`.
 - `complexity_score`: an integer from 1 to 10.
 - `metadata_source`: `opencode`, `github-list`, `manual`, or `import`.
 - `metadata_updated_at`: an ISO timestamp.
 
-Use arrays for all tag fields. Lowercase, trim, deduplicate, and map aliases to canonical values. Keep the original extracted text in a private audit field when needed for review, but expose only validated metadata in the public API.
+Use one tag array only. Read GitHub repository topics, append validated extracted tags, lowercase, trim, deduplicate, and map aliases to canonical values. Keep the original extracted text in a private audit field when needed for review, but expose only the merged validated `tags` array in the public API.
 
 ## Extract metadata during the GitHub Action
 
@@ -32,8 +29,8 @@ Update the reusable OmGithub build workflow to perform metadata extraction after
 3. Ask OpenCode to classify the project and return strict JSON.
 4. Ask OpenCode to identify the engine from dependencies, imports, configuration, and source usage.
 5. Ask OpenCode to identify the model names only when the repository gives evidence. Do not infer a model from the visual style alone.
-6. Ask OpenCode to assign gameplay tags, product category, and a complexity score from 1 to 10.
-7. Validate the JSON against a schema. Reject malformed values and normalize aliases.
+6. Ask OpenCode to assign tags and a complexity score from 1 to 10.
+7. Read the GitHub repository topics. Concatenate them with the OpenCode tags, then validate, normalize, and deduplicate the one `tags` array.
 8. Upload the validated metadata with the deployable ZIP to the OmGithub endpoint.
 9. Store the metadata with the published project record.
 
@@ -66,9 +63,9 @@ Use an idempotent upsert. Never create duplicate records for the same canonical 
 
 Add a metadata panel to each store page.
 
-Display the prompt in a readable, collapsed section with a copy button. Show category, gameplay tags, engine tags, model tags, and complexity score. Link each prompt source and evidence source when available.
+Display the prompt in a readable, collapsed section with a copy button. Show the merged tags and complexity score. Link each prompt source and evidence source when available.
 
-Add the same tags and complexity score to the project card when space permits. Add filters for category, gameplay tag, engine, model, and complexity range after the metadata is available.
+Add the same tags and complexity score to the project card when space permits. Add filters for tag and complexity range after the metadata is available.
 
 Keep Discovery sorting by cached GitHub stars and latest publication. Add metadata filtering without calling GitHub when the user changes a filter.
 
@@ -152,7 +149,7 @@ Treat a game folder in a monorepo as distinct from the repository root. Treat re
 
 ## Acceptance criteria
 
-- A published game displays its prompt, category, tags, engine, model, and complexity score when evidence exists.
+- A published game displays its prompt, merged tags, and complexity score when evidence exists.
 - The GitHub Action extracts metadata through OpenCode and uploads validated JSON with the build.
 - Prompt-list imports write directly to the database through an idempotent operation.
 - Re-running imports creates no duplicate games or prompts.
