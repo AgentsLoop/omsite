@@ -112,14 +112,16 @@ jobs:
           build_root="$GITHUB_WORKSPACE/source/omgithub-build"
           rm -rf "$build_root"
           mkdir -p "$build_root"
-          if [[ -d dist ]]; then
+          if [[ -f dist/index.html ]]; then
             cp -a dist/. "$build_root/"
-          elif [[ -d build ]]; then
+          elif [[ -f build/index.html ]]; then
             cp -a build/. "$build_root/"
+          elif [[ -f .output/public/index.html ]]; then
+            cp -a .output/public/. "$build_root/"
           elif [[ -f index.html ]]; then
             rsync -a --exclude='.git' --exclude='node_modules' --exclude='omgithub-build' ./ "$build_root/"
           else
-            echo 'The build did not produce dist/index.html, build/index.html, or root index.html.' >&2
+            echo 'The build did not produce dist/index.html, build/index.html, .output/public/index.html, or root index.html.' >&2
             exit 1
           fi
           if [[ -d screenshots ]]; then
