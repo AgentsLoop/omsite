@@ -39,6 +39,7 @@ export async function dispatchPublicBuild({
   token,
   uploadUrl,
   uploadToken,
+  onStatus = () => {},
   requestFetch = fetch,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   pollMs = DEFAULT_POLL_MS
@@ -55,6 +56,7 @@ export async function dispatchPublicBuild({
       inputs: { source_owner: sourceOwner, source_repo: sourceRepo, source_sha: sourceSha, request_id: requestId, upload_url: uploadUrl, upload_token: uploadToken }
     })
   })
+  onStatus({ phase: 'queued' })
 
   const deadline = startedAt + timeoutMs
   let run = null
@@ -62,8 +64,9 @@ export async function dispatchPublicBuild({
     if (run) {
       run = await githubJson(`/repos/${encodeURIComponent(workflowOwner)}/${encodeURIComponent(workflowRepo)}/actions/runs/${run.id}`, token, requestFetch)
     } else {
-      const data = await githubJson(`${workflow}/runs?event=workflow_dispatch&branch=${encodeURIComponent(workflowRef)}&per_page=50`, token, requestFetch)
-      run = (data.workflow_runs || []).find(candidate => String(candidate.display_title || '').includes(requestId))
+    const data = await githubJson(`${workflow}/runs?event=workflow_dispatch&branch=${encodeURIComponent(workflowRef)}&per_page=50`, token, requestFetch)
+    run = (data.workflow_runs || []).find(candidate => String(candidate.display_title || '').includes(requestId))
+    if (run) onStatus({ phase: run.status === 'completed' ? 'publishing' : 'building', runId: String(run.id) })
     }
     if (run?.status === 'completed') break
     await wait(Math.min(pollMs, Math.max(0, deadline - Date.now())))

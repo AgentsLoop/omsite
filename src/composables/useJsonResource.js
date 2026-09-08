@@ -1,6 +1,6 @@
 import { ref, watch } from 'vue'
 
-export function useJsonResource(source, { pollMs = 0 } = {}) {
+export function useJsonResource(source, { pollMs = 0, acceptStatuses = [], shouldPoll = () => true } = {}) {
   const data = ref(null), error = ref(''), loading = ref(true)
   watch(source, (url, _previous, onCleanup) => {
     const controller = new AbortController()
@@ -11,14 +11,14 @@ export function useJsonResource(source, { pollMs = 0 } = {}) {
       try {
         const response = await fetch(url, { signal: controller.signal })
         const result = await response.json()
-        if (!response.ok) throw new Error(result.error || `Request failed (${response.status})`)
+        if (!response.ok && !acceptStatuses.includes(response.status)) throw new Error(result.error || `Request failed (${response.status})`)
         if (active) { data.value = result; error.value = '' }
       } catch (failure) {
         if (active) error.value = failure.message
       } finally {
         if (active) {
           loading.value = false
-          if (pollMs) timer = setTimeout(load, pollMs)
+          if (pollMs && shouldPoll(data.value)) timer = setTimeout(load, pollMs)
         }
       }
     }

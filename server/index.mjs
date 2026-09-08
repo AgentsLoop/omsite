@@ -87,25 +87,60 @@ function safeGamePath(slug) { const path = resolve(gamesDir, slug); if (!path.st
 function publicProject(project) { const { local_dir, ...safe } = project; return safe }
 function card(project) { return { ...publicProject(project), issue_path: project.issue ? `/${project.repo_owner}/${project.repo}/issues/${project.issue}` : '', store_path: project.commit ? `/${project.repo_owner}/${project.repo}/tree/${project.commit}` : '', screenshot: project.screenshots?.[0] || '', status: project.status || 'published' } }
 function storePayload(project) { return { title: project.title, description: project.description, commit: project.commit, status: project.status, github_url: project.github_url, owner: project.owner_login, owner_avatar: project.owner_avatar, screenshots: project.screenshots, play_url: project.url, install_url: project.install_url, store_path: project.store_path } }
-async function materializeForPublication({ owner: sourceOwner, repo: sourceRepo, sha }) {
+const publicationCopy = {
+  checking: 'Checking the immutable source commit.',
+  queued: 'GitHub Actions has queued the repository build.',
+  building: 'The Action is installing dependencies, building, and capturing a screenshot if needed.',
+  publishing: 'OmGithub is validating, extracting, and publishing the deployment ZIP.',
+  published: 'The immutable game is live.',
+  failed: 'Publication failed.'
+}
+function publicationPayload(publication) {
+  return {
+    state: publication.state,
+    message: publication.error || publicationCopy[publication.state] || publicationCopy.checking,
+    run_id: publication.runId || null,
+    project: publication.project ? storePayload(publication.project) : null
+  }
+}
+async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha }) {
   validateSource(sourceOwner, sourceRepo, sha)
   const sourceKey = `${sourceOwner.toLowerCase()}/${sourceRepo.toLowerCase()}@${sha.toLowerCase()}`
-  if (publications.has(sourceKey)) return publications.get(sourceKey)
-  const publication = publishCommit({ sourceOwner, sourceRepo, sha, sourceKey })
+  const existingPublication = publications.get(sourceKey)
+  if (existingPublication) return existingPublication
+  const publication = { sourceKey, state: 'checking', project: null, error: '', runId: '' }
+  publication.promise = publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, publication })
+    .then(project => {
+      publication.project = project
+      publication.state = 'published'
+      return project
+    })
+    .catch(error => {
+      publication.error = error.message || 'Publication failed.'
+      publication.state = 'failed'
+      throw error
+    })
+    .finally(() => setTimeout(() => {
+      if (publications.get(sourceKey) === publication) publications.delete(sourceKey)
+    }, 60 * 1000))
+  publication.promise.catch(() => {})
   publications.set(sourceKey, publication)
-  try { return await publication } finally { publications.delete(sourceKey) }
+  return publication
+}
+async function materializeForPublication({ owner: sourceOwner, repo: sourceRepo, sha }) {
+  return (await startPublication({ owner: sourceOwner, repo: sourceRepo, sha })).promise
 }
 
-async function publishCommit({ sourceOwner, sourceRepo, sha, sourceKey }) {
+async function publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, publication }) {
   const existing = await store.bySourceKey(sourceKey)
   if (existing?.build_method === 'github-actions' && existing.build_transport === 'omgithub-zip' && existing.screenshots?.length) return existing
   if (!buildEnabled) return materializePublicProject({ owner: sourceOwner, repo: sourceRepo, sha, baseHost, gamesDir, store })
 
   for (const [token, pending] of pendingBuilds) if (pending.expiresAt < Date.now()) pendingBuilds.delete(token)
   const uploadToken = randomBytes(32).toString('hex')
-  pendingBuilds.set(uploadToken, { owner: sourceOwner, repo: sourceRepo, sha: sha.toLowerCase(), expiresAt: Date.now() + 20 * 60 * 1000, processing: false })
+  pendingBuilds.set(uploadToken, { owner: sourceOwner, repo: sourceRepo, sha: sha.toLowerCase(), expiresAt: Date.now() + 20 * 60 * 1000, processing: false, publication })
   try {
-    const build = await dispatchPublicBuild({ sourceOwner, sourceRepo, sourceSha: sha, workflowOwner: buildOwner, workflowRepo: buildRepo, workflowFile: buildWorkflowFile, workflowRef: buildRef, token: githubToken, uploadUrl: `${origin}/api/builds`, uploadToken })
+    const build = await dispatchPublicBuild({ sourceOwner, sourceRepo, sourceSha: sha, workflowOwner: buildOwner, workflowRepo: buildRepo, workflowFile: buildWorkflowFile, workflowRef: buildRef, token: githubToken, uploadUrl: `${origin}/api/builds`, uploadToken, onStatus: ({ phase, runId }) => { publication.state = phase; if (runId) publication.runId = runId } })
     const project = await store.bySourceKey(sourceKey)
     if (!project || project.build_run_id !== String(build.run.id)) throw Object.assign(new Error('GitHub Actions build finished without publishing its ZIP'), { status: 502 })
     return project
@@ -210,6 +245,7 @@ app.post('/api/builds', express.raw({ type: ['application/zip', 'application/oct
     if (!String(req.headers['content-type'] || '').toLowerCase().includes('application/zip')) return res.status(415).json({ error: 'Build upload must be a ZIP' })
     if (!Buffer.isBuffer(req.body) || req.body.length === 0 || req.body.length > buildUploadMaxBytes) return res.status(413).json({ error: 'Build ZIP is empty or too large' })
     pending.processing = true
+    pending.publication.state = 'publishing'
     const project = await materializePublicProject({ owner: pending.owner, repo: pending.repo, sha: pending.sha, baseHost, gamesDir, store, archiveBuffer: req.body, buildRunId: String(req.headers['x-omgithub-build-run'] || '') })
     pendingBuilds.delete(token)
     res.status(201).json({ ok: true, commit: project.commit, screenshots: project.screenshots })
@@ -226,6 +262,21 @@ app.get('/api/github/:owner/:repo/issues/:number', async (req, res, next) => {
     const urls = extractUrls(issue, comments)
     const projectPath = urls.project ? new URL(urls.project).pathname : ''
     res.json({ number: issue.number, title: issue.title, body: issue.body, status: issue.labels.some(l => l.name === 'complete') ? 'complete' : issue.labels.some(l => l.name === 'failed') ? 'failed' : 'in progress', github_url: issue.html_url, opencode_url: urls.opencode, preview_url: urls.preview, project_path: projectPath, screenshots: urls.screenshots })
+  } catch (e) { next(e) }
+})
+
+app.get('/api/github/:owner/:repo/tree/:sha/progress', async (req, res, next) => {
+  try {
+    const publication = await startPublication({ owner: req.params.owner, repo: req.params.repo, sha: req.params.sha })
+    res.status(publication.state === 'published' ? 200 : publication.state === 'failed' ? 502 : 202).json(publicationPayload(publication))
+  } catch (e) { next(e) }
+})
+
+app.get('/api/github/:owner/:repo/progress', async (req, res, next) => {
+  try {
+    const { sha } = await resolveLatestPublicCommit({ owner: req.params.owner, repo: req.params.repo })
+    const publication = await startPublication({ owner: req.params.owner, repo: req.params.repo, sha })
+    res.status(publication.state === 'published' ? 200 : publication.state === 'failed' ? 502 : 202).json({ commit: sha.toLowerCase(), ...publicationPayload(publication) })
   } catch (e) { next(e) }
 })
 

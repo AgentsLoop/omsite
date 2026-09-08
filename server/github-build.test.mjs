@@ -15,6 +15,7 @@ function response(data, { status = 200 } = {}) {
 test('dispatches a repository build for direct ZIP upload', async () => {
   let requestId = ''
   const calls = []
+  const statuses = []
   const requestFetch = async (url, options = {}) => {
     calls.push({ url, options })
     if (url.endsWith('/dispatches')) {
@@ -28,8 +29,9 @@ test('dispatches a repository build for direct ZIP upload', async () => {
     return response({ message: 'not found' }, { status: 404 })
   }
 
-  const result = await dispatchPublicBuild({ sourceOwner: 'owner', sourceRepo: 'repo', sourceSha: 'a'.repeat(40), workflowOwner: 'AgentsLoop', workflowRepo: 'OhMyGithub', token: 'secret', uploadUrl: 'https://omgithub.com/api/builds', uploadToken: 'upload-secret', requestFetch, pollMs: 0 })
+  const result = await dispatchPublicBuild({ sourceOwner: 'owner', sourceRepo: 'repo', sourceSha: 'a'.repeat(40), workflowOwner: 'AgentsLoop', workflowRepo: 'OhMyGithub', token: 'secret', uploadUrl: 'https://omgithub.com/api/builds', uploadToken: 'upload-secret', onStatus: status => statuses.push(status), requestFetch, pollMs: 0 })
 
   assert.equal(result.run.id, 42)
   assert.equal(calls[0].options.headers.authorization, 'Bearer secret')
+  assert.deepEqual(statuses, [{ phase: 'queued' }, { phase: 'publishing', runId: '42' }])
 })
