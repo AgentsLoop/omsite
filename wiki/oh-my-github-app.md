@@ -1,61 +1,52 @@
 # Oh My Github App
 
-The public GitHub App is owned by the `AgentsLoop` organization and is available
-at [Oh My Github App](https://github.com/apps/oh-my-github-app). It is installed
-for all current and future repositories in `AgentsLoop`, and can be installed by
-other users or organizations because the App is public.
+## Installation
 
-The App has repository metadata read access and Issues read/write access. It
-subscribes only to the `Issues` event. Its configured webhook endpoint is
-`https://omgithub.com/api/github/webhooks`.
+Use the public [Oh My Github App](https://github.com/apps/oh-my-github-app).
+Keep the webhook endpoint at `https://omgithub.com/api/github/webhooks` and
+verify its signature. Grant Issues and Contents write access and Workflows
+write access for listener installation. Retain Actions read access for run
+verification and request claims.
 
-The App also has Actions and Contents read/write access so it can dispatch or
-bootstrap the repository-local workflow. The dispatched workflow uses the
-repository's own `GITHUB_TOKEN` to push its immutable result branch. Existing
-installations must approve newly requested permissions before those capabilities
-become active.
+Install `.github/workflows/opencode.yml` on the repository default branch
+before applying `OpenCode`. Generate a wrapper that calls central preparation
+and execution workflows at one resolved commit SHA. Preserve the local caller
+in the central repository. Verify the installed content before creating an
+App-submitted issue. Use `OMG_FALLBACK_OWNER`, `OMG_FALLBACK_REPO`, and
+`OMG_FALLBACK_REF` to select the central revision.
 
-## Request routing
+## Request handling
 
-The webhook service verifies `X-Hub-Signature-256`, ignores unrelated
-bot-authored and non-`OpenCode`-labeled issue events, and mints an
-installation-scoped token. It
-accepts only issue creation with `OpenCode` already present or addition of that
-exact label; comments and edits never execute work. It checks
-`.github/workflows/opencode.yml` on the selected branch:
+Create human issues with mode labels first. Wait for listener installation,
+then apply `OpenCode`. Use the native `issues.labeled` event for execution.
+Let the App install the listener and post a reminder for unlabeled human issues.
 
-When a human opens an issue without the `OpenCode` label, the App ensures that
-label exists in the repository's label catalog, leaves the issue unlabeled, and
-posts `Please add the OpenCode label to this issue to execute it.` A human
-adding that exact label later follows the execution path using the issue author
-for authorization. The App does not create an execution-triggering label event
-for the reminder.
+Require a GitHub session and write, maintain, or admin repository access for
+site submissions. Create the issue with an installation token. Store approval
+for its exact title, body, label names, target branch, and authenticated human.
+Apply mode labels before `OpenCode`.
 
-An optional issue-title suffix `branch: <existing-branch>` selects the target
-checkout. The App removes that metadata suffix from the
-OpenCode prompt and validates the branch before routing. Invalid or nonexistent
-branches receive an issue comment and stop before dispatch. The App dispatches
-the workflow from the selected branch. A repository-owned wrapper therefore
-uses the reusable pipeline revision from that branch; a bootstrapped wrapper
-continues to call the central pipeline.
+Call `/api/opencode/prepare` with an Actions OIDC token whose audience matches
+the endpoint URL. Set repository variable `OMG_APP_ORIGIN` when using another
+App origin. Verify the caller, Actions run, label event, and issue permissions.
+Require the stored approval for App-created issues. Reject modified snapshots.
+Keep approval and request claims in the persistent data store; use Firestore
+transactions when configured. Preserve the data volume across service updates.
 
-Before dispatching or bootstrapping a wrapper, the service verifies that the
-installation token has Actions, Contents, Issues, and Workflows
-write access. Missing permissions are posted to the triggering issue and the
-request stops before an Actions run is created. If Issues write access itself is
-missing, the service uses its configured notification token when that token can
-access the repository.
+Resolve `branch: <existing-branch>` during preparation. Pass its frozen commit
+as `target_sha` and branch name as `target_ref`. Keep workflow code on the
+default branch. Pass only validated inputs to execution and keep model and
+tunnel secrets out of preparation.
 
-- When the dispatch-only file exists, the App dispatches it.
-- When the lookup returns 404, the App creates a thin repository-local wrapper
-  that calls the centralized reusable workflow, then dispatches that wrapper.
-  This keeps the Actions run and logs in the repository containing the `OpenCode`
-  issue without copying the pipeline implementation.
+## Migration and retries
 
-Both routes call `.github/workflows/opencode-reusable.yml`. That reusable
-workflow is the only copy of the OpenCode build, verification, remediation,
-delivery, publishing, reporting, and cleanup pipeline. The local wrapper uses
-the repository's `GITHUB_TOKEN`; installation credentials and tokens are never
-carried in workflow inputs.
+Pause submissions and drain active runs before replacing each listener.
+Deploy the App service and install the native listener before resuming requests.
+Keep one execution owner per repository during migration. Reapply `OpenCode`
+only after the listener is ready and the request is authorized.
 
-Keep the webhook secret out of the repository and this wiki.
+Use durable label-event claims to reject duplicate execution. Check the prior
+Actions result before retrying a failed request. Treat removal and reapplication
+of `OpenCode` as a new request and validate it again.
+
+Keep the webhook secret, installation tokens, and model credentials private.

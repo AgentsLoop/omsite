@@ -2,7 +2,7 @@ import { createHmac, createSign, timingSafeEqual } from 'node:crypto'
 
 const API = 'https://api.github.com'
 const REQUIRED_INSTALLATION_PERMISSIONS = {
-  actions: 'write',
+  actions: 'read',
   contents: 'write',
   issues: 'write',
   workflows: 'write'
@@ -10,7 +10,7 @@ const REQUIRED_INSTALLATION_PERMISSIONS = {
 
 function missingInstallationPermissions(permissions = {}) {
   return Object.entries(REQUIRED_INSTALLATION_PERMISSIONS)
-    .filter(([name, level]) => permissions[name] !== level)
+    .filter(([name, level]) => permissions[name] !== level && !(level === 'read' && permissions[name] === 'write'))
     .map(([name, level]) => `${name}: ${level}`)
 }
 
@@ -74,33 +74,44 @@ export function verifyWebhookSignature(body, signature, secret) {
   return expected.length === actual.length && timingSafeEqual(expected, actual)
 }
 
-export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', ref = 'main') {
+export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', ref) {
+  if (!/^[a-f0-9]{40}$/.test(ref || '')) throw new Error('Require an immutable central workflow commit SHA')
   return [
     'name: OpenCode',
-    'run-name: "OpenCode #${{ inputs.issue_number }} — ${{ inputs.issue_title }}"',
+    'run-name: "OpenCode #${{ github.event.issue.number }} — ${{ github.event.issue.title }}"',
     '',
     'on:',
-    '  workflow_dispatch:',
-    '    inputs:',
-    '      issue_number: { required: true }',
-    '      request: { required: true }',
-    '      issue_title: { required: true }',
-    "      labels_json: { required: false, default: '[]' }",
-    '      sender: { required: true }',
+    '  issues:',
+    '    types: [labeled]',
     '',
-    'permissions:',
-    '  contents: write',
-    '  issues: write',
+    'permissions: {}',
+    '',
+    'concurrency:',
+    "  group: ${{ github.event.label.name == 'OpenCode' && format('opencode-issue-{0}-{1}', github.repository, github.event.issue.number) || format('opencode-skipped-{0}', github.run_id) }}",
+    '  cancel-in-progress: false',
     '',
     'jobs:',
+    '  prepare:',
+    "    if: github.event.label.name == 'OpenCode'",
+    '    permissions:',
+    '      contents: read',
+    '      issues: write',
+    '      actions: read',
+    '      id-token: write',
+    `    uses: ${owner}/${repo}/.github/workflows/opencode-prepare.yml@${ref}`,
+    '    with:',
+    `      runtime_ref: ${ref}`,
+    '',
     '  opencode:',
+    '    needs: prepare',
+    "    if: needs.prepare.outputs.approved == 'true'",
+    '    permissions:',
+    '      contents: write',
+    '      issues: write',
     `    uses: ${owner}/${repo}/.github/workflows/opencode-reusable.yml@${ref}`,
     '    with:',
-    '      issue_number: ${{ inputs.issue_number }}',
-    '      request: ${{ inputs.request }}',
-    '      issue_title: ${{ inputs.issue_title }}',
-    '      labels_json: ${{ inputs.labels_json }}',
-    '      sender: ${{ inputs.sender }}',
+    `      runtime_ref: ${ref}`,
+    ...['issue_number', 'request', 'issue_title', 'labels_json', 'sender', 'target_ref', 'target_sha'].map(name => `      ${name}: \${{ needs.prepare.outputs.${name} }}`),
     '    secrets:',
     '      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}',
     '      OPENCODE_AUTH_JSON: ${{ secrets.OPENCODE_AUTH_JSON }}',
@@ -141,22 +152,6 @@ export function omgRequest(event, payload) {
   }
 }
 
-async function activeWorkflowRun(request, config, requestFetch) {
-  const path = `/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/actions/runs?event=workflow_dispatch&status=in_progress&per_page=100`
-  const response = await requestFetch(`${config.api || API}${path}`, {
-    headers: {
-      accept: 'application/vnd.github+json',
-      'user-agent': 'OmGithub',
-      'x-github-api-version': '2022-11-28',
-      authorization: `Bearer ${config.installationToken}`
-    }
-  })
-  if (!response.ok) throw new Error(`Active workflow lookup returned ${response.status}`)
-  const data = await response.json()
-  const prefix = `OpenCode #${request.issueNumber} —`
-  return (data.workflow_runs || []).find(run => String(run.name || run.display_title || '').startsWith(prefix)) || null
-}
-
 async function ensureRepositoryLabel(owner, repo, token, api, commonHeaders, requestFetch) {
   const labelsUrl = `${api}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/labels`
   const labelUrl = `${labelsUrl}/${encodeURIComponent('OpenCode')}`
@@ -181,119 +176,74 @@ async function ensureRepositoryLabel(owner, repo, token, api, commonHeaders, req
   throw new Error(`OpenCode repository label creation returned ${created.status}`)
 }
 
-async function dispatchOmgRequestOnce(request, config, requestFetch) {
-  const api = config.api || API
-  const commonHeaders = {
-    accept: 'application/vnd.github+json',
-    'content-type': 'application/json',
-    'user-agent': 'OmGithub',
-    'x-github-api-version': '2022-11-28'
-  }
-  const jwt = appJwt(config.appId, config.privateKey)
-  const tokenResponse = await requestFetch(`${api}/app/installations/${request.installationId}/access_tokens`, {
-    method: 'POST', headers: { ...commonHeaders, authorization: `Bearer ${jwt}` }
-  })
-  if (!tokenResponse.ok) throw new Error(`Installation token request returned ${tokenResponse.status}`)
-  const tokenData = await tokenResponse.json()
-  const installationToken = tokenData.token
-  config = { ...config, installationToken }
-  const commentUrl = `${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/issues/${request.issueNumber}/comments`
-  const commentTokens = [...new Set([installationToken, config.notificationToken].filter(Boolean))]
-  const commentOnIssue = async body => {
-    for (const token of commentTokens) {
-      const comment = await requestFetch(commentUrl, {
-        method: 'POST',
-        headers: { ...commonHeaders, authorization: `Bearer ${token}` },
-        body: JSON.stringify({ body })
-      })
-      if (comment.ok) return true
-    }
-    return false
-  }
-  if (request.missingOpenCodeLabel) {
-    const labelCreated = await ensureRepositoryLabel(request.owner, request.repo, installationToken, api, commonHeaders, requestFetch)
-    const commented = await commentOnIssue('Please add the `OpenCode` label to this issue to execute it.')
-    return { route: 'missing-opencode-label', repository: request.repository, labelCreated, commented }
-  }
-  const permissionResponse = await requestFetch(`${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/collaborators/${encodeURIComponent(request.sender)}/permission`, {
-    headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` }
-  })
-  const permission = permissionResponse.ok ? (await permissionResponse.json()).permission : ''
-  if (!['admin', 'maintain', 'write'].includes(permission)) {
-    const commented = await commentOnIssue(`⚠️ **OpenCode did not start.**\n\n@${request.sender || 'the issue author'} needs write, maintain, or admin access to \`${request.repository}\` to start an OpenCode run.`)
-    return { route: 'unauthorized-actor', repository: request.repository, commented }
-  }
-  const workflowPath = `/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/contents/.github/workflows/opencode.yml?ref=${encodeURIComponent(request.targetRef)}`
-  const workflowResponse = await requestFetch(`${api}${workflowPath}`, {
-    headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` }
-  })
-  const missingPermissions = missingInstallationPermissions(tokenData.permissions)
-  if (missingPermissions.length) {
-    const body = [
-      '⚠️ **OpenCode did not start.**',
-      '',
-      'The Oh My GitHub App installation is missing required repository permissions:',
-      '',
-      ...missingPermissions.map(permission => `- \`${permission}\``),
-      '',
-      'Ask an installation owner to approve the updated App permissions, then remove and re-add the `OpenCode` label to retry.'
-    ].join('\n')
-    const commented = await commentOnIssue(body)
-    return { route: 'permissions-missing', repository: request.repository, missingPermissions, commented }
-  }
-  if (request.branchError) {
-    const commented = await commentOnIssue(`⚠️ **OpenCode did not start.**\n\n${request.branchError}`)
-    return { route: 'invalid-branch', repository: request.repository, targetRef: request.targetRef, commented }
-  }
-  if (request.branchSpecified) {
-    const branchResponse = await requestFetch(`${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/branches/${encodeURIComponent(request.targetRef)}`, {
-      headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` }
-    })
-    if (branchResponse.status === 404) {
-      const body = `⚠️ **OpenCode did not start.**\n\nThe requested branch \`${request.targetRef}\` does not exist in \`${request.repository}\`. Update the issue-title suffix and remove/re-add the \`OpenCode\` label to retry.`
-      const commented = await commentOnIssue(body)
-      return { route: 'invalid-branch', repository: request.repository, targetRef: request.targetRef, commented }
-    }
-    if (!branchResponse.ok) throw new Error(`Target branch lookup returned ${branchResponse.status}`)
-  }
-  const existingRun = await activeWorkflowRun(request, config, requestFetch)
-  if (existingRun) return { route: 'duplicate-active-run', repository: request.repository, runId: existingRun.id }
-  const inputs = {
-    issue_number: String(request.issueNumber),
-    request: request.request,
-    issue_title: request.issueTitle,
-    labels_json: JSON.stringify(request.labels),
-    sender: request.sender
-  }
-  if (workflowResponse.ok) {
-    const dispatch = await requestFetch(`${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/actions/workflows/opencode.yml/dispatches`, {
-      method: 'POST', headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` },
-      body: JSON.stringify({ ref: request.targetRef, inputs })
-    })
-    if (!dispatch.ok) throw new Error(`Repository-local workflow dispatch returned ${dispatch.status}`)
-    return { route: 'local', repository: request.repository }
-  }
-  if (workflowResponse.status !== 404) throw new Error(`Workflow lookup returned ${workflowResponse.status}`)
-  const workflow = repositoryWorkflow(config.fallbackOwner, config.fallbackRepo, config.fallbackRef)
-  const create = await requestFetch(`${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/contents/.github/workflows/opencode.yml`, {
-    method: 'PUT', headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` },
-    body: JSON.stringify({ message: 'Install Oh My Github App workflow', content: Buffer.from(workflow).toString('base64'), branch: request.targetRef })
-  })
-  if (!create.ok) throw new Error(`Repository workflow bootstrap returned ${create.status}`)
-  const dispatchUrl = `${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/actions/workflows/opencode.yml/dispatches`
-  let dispatch
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    dispatch = await requestFetch(dispatchUrl, {
-      method: 'POST', headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` },
-      body: JSON.stringify({ ref: request.targetRef, inputs })
-    })
-    if (dispatch.ok || dispatch.status !== 404) break
-    await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)))
-  }
-  if (!dispatch.ok) throw new Error(`Bootstrapped workflow dispatch returned ${dispatch.status}`)
-  return { route: 'bootstrapped', repository: request.repository }
+const commonHeaders = {
+  accept: 'application/vnd.github+json',
+  'content-type': 'application/json',
+  'user-agent': 'OmGithub',
+  'x-github-api-version': '2022-11-28'
 }
 
-export async function dispatchOmgRequest(request, config, requestFetch = fetch) {
-  return dispatchOmgRequestOnce(request, config, requestFetch)
+export async function ensureIssueWorkflow({ owner, repo }, config, requestFetch = fetch) {
+  const api = config.api || API
+  const repositoryPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
+  const jwt = appJwt(config.appId, config.privateKey)
+  const call = async (path, token, options = {}) => {
+    const response = await requestFetch(`${api}${path}`, {
+      ...options, headers: { ...commonHeaders, authorization: `Bearer ${token}` }
+    })
+    if (!response.ok) throw new Error(`GitHub ${path} returned ${response.status}`)
+    return response.json()
+  }
+  const installation = await call(`${repositoryPath}/installation`, jwt)
+  const tokenData = await call(`/app/installations/${installation.id}/access_tokens`, jwt, { method: 'POST' })
+  const installationToken = tokenData.token
+  const missingPermissions = missingInstallationPermissions(tokenData.permissions)
+  if (missingPermissions.length) throw new Error(`Approve required App installation permissions: ${missingPermissions.join(', ')}`)
+  const repository = await call(repositoryPath, installationToken)
+  const centralOwner = config.fallbackOwner || 'AgentsLoop'
+  const centralRepo = config.fallbackRepo || 'OhMyGithub'
+  const centralRef = config.fallbackRef || 'main'
+  const centralPath = `/repos/${encodeURIComponent(centralOwner)}/${encodeURIComponent(centralRepo)}`
+  const commit = await call(`${centralPath}/commits/${encodeURIComponent(centralRef)}`, installationToken)
+  const workflowSha = commit.sha
+  const workflow = repositoryWorkflow(centralOwner, centralRepo, workflowSha)
+  // Check both entry points before installing a caller pinned to this revision.
+  for (const file of ['opencode-prepare.yml', 'opencode-reusable.yml']) {
+    await call(`${centralPath}/contents/.github/workflows/${file}?ref=${workflowSha}`, installationToken)
+  }
+  const workflowPath = `${repositoryPath}/contents/.github/workflows/opencode.yml`
+  const readUrl = `${workflowPath}?ref=${encodeURIComponent(repository.default_branch)}`
+  const existingResponse = await requestFetch(`${api}${readUrl}`, { headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` } })
+  if (!existingResponse.ok && existingResponse.status !== 404) throw new Error(`Workflow lookup returned ${existingResponse.status}`)
+  const existing = existingResponse.ok ? await existingResponse.json() : null
+  const content = existing ? Buffer.from(existing.content || '', 'base64').toString() : ''
+  if (content === workflow) return { installationToken, repository, workflowSha, installed: false }
+  // Preserve the central repository's reviewed local caller.
+  if (owner.toLowerCase() === centralOwner.toLowerCase() && repo.toLowerCase() === centralRepo.toLowerCase()) {
+    if (!content.includes('types: [labeled]') || !content.includes('uses: ./.github/workflows/opencode-prepare.yml') || !content.includes('uses: ./.github/workflows/opencode-reusable.yml')) {
+      throw new Error('Install and review the central repository issue listener before accepting requests')
+    }
+    return { installationToken, repository, workflowSha, installed: false }
+  }
+  await call(workflowPath, installationToken, {
+    method: 'PUT',
+    body: JSON.stringify({ message: 'Install native OpenCode issue listener', content: Buffer.from(workflow).toString('base64'), branch: repository.default_branch, ...(existing ? { sha: existing.sha } : {}) })
+  })
+  const verified = await call(readUrl, installationToken)
+  if (Buffer.from(verified.content || '', 'base64').toString() !== workflow) throw new Error('Installed issue listener verification failed')
+  return { installationToken, repository, workflowSha, installed: true }
+}
+
+export async function handleOmgRequest(request, config, requestFetch = fetch) {
+  if (!request.missingOpenCodeLabel) return { route: 'issue-listener', repository: request.repository }
+  const { installationToken, installed } = await ensureIssueWorkflow(request, config, requestFetch)
+  const api = config.api || API
+  const labelCreated = await ensureRepositoryLabel(request.owner, request.repo, installationToken, api, commonHeaders, requestFetch)
+  const commentUrl = `${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/issues/${request.issueNumber}/comments`
+  const response = await requestFetch(commentUrl, {
+    method: 'POST', headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` },
+    body: JSON.stringify({ body: 'Please add the `OpenCode` label to this issue to execute it.' })
+  })
+  if (!response.ok) throw new Error(`Issue reminder returned ${response.status}`)
+  return { route: 'missing-opencode-label', repository: request.repository, labelCreated, installed, commented: true }
 }
