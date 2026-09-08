@@ -118,3 +118,25 @@ test('resolves a repository shorthand to the latest default-branch commit', asyn
   assert.equal(project.store_path, `/owner/repo/tree/${sha}`)
   assert.equal(project.title, 'Latest App')
 })
+
+test('materializes a root-level GitHub Actions build artifact', async () => {
+  const sha = 'e'.repeat(40)
+  const artifact = new AdmZip()
+  artifact.addFile('index.html', Buffer.from('<title>Built App</title>'))
+  artifact.addFile('assets/app.js', Buffer.from('console.log("built")'))
+  const rows = []
+  const store = { bySourceKey: async key => rows.find(row => row.source_key === key) || null, put: async project => { rows.push(project); return project } }
+  const requestFetch = async url => {
+    if (url.endsWith('/repos/owner/repo')) return response({ name: 'repo', private: false, owner: { login: 'owner' } })
+    if (url.endsWith(`/commits/${sha}`)) return response({ sha, commit: { message: 'Built app' } })
+    return response({ message: 'not found' }, { status: 404 })
+  }
+  const gamesDir = join(mkdtempSync(join(tmpdir(), 'omgithub-artifact-')), 'games')
+
+  const project = await materializePublicProject({ owner: 'owner', repo: 'repo', sha, baseHost: 'omgithub.com', gamesDir, store, archiveBuffer: artifact.toBuffer(), buildRunId: '42', requestFetch })
+
+  assert.equal(readFileSync(join(project.local_dir, 'index.html'), 'utf8'), '<title>Built App</title>')
+  assert.equal(readFileSync(join(project.local_dir, 'assets/app.js'), 'utf8'), 'console.log("built")')
+  assert.equal(project.build_method, 'github-actions')
+  assert.equal(project.build_run_id, '42')
+})

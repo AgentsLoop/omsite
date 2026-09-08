@@ -6,8 +6,9 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cookies, nonce, sign, verify } from './auth.mjs'
+import { buildPublicProject } from './github-build.mjs'
 import { dispatchOmgRequest, extractUrls, github, omgRequest, verifyWebhookSignature } from './github.mjs'
-import { materializeLatestPublicProject, materializePublicProject } from './public-project.mjs'
+import { materializePublicProject, resolveLatestPublicCommit } from './public-project.mjs'
 import { createStore } from './store.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -20,6 +21,11 @@ const gamesDir = join(dataDir, 'games')
 const owner = process.env.GITHUB_OWNER || 'AgentsLoop'
 const repo = process.env.GITHUB_REPO || 'OhMyGithub'
 const githubToken = process.env.GITHUB_TOKEN || ''
+const buildEnabled = process.env.OMGHITHUB_BUILD_ENABLED !== 'false'
+const buildOwner = process.env.OMGHITHUB_BUILD_OWNER || owner
+const buildRepo = process.env.OMGHITHUB_BUILD_REPO || repo
+const buildWorkflowFile = process.env.OMGHITHUB_BUILD_WORKFLOW || 'omgithub-build.yml'
+const buildRef = process.env.OMGHITHUB_BUILD_REF || 'main'
 const githubApp = {
   appId: process.env.GITHUB_APP_ID || '',
   privateKey: String(process.env.GITHUB_APP_PRIVATE_KEY || '').replaceAll('\\n', '\n'),
@@ -74,6 +80,16 @@ function publicProject(project) { const { local_dir, ...safe } = project; return
 function card(project) { return { ...publicProject(project), issue_path: project.issue ? `/${project.repo_owner}/${project.repo}/issues/${project.issue}` : '', store_path: project.commit ? `/${project.repo_owner}/${project.repo}/tree/${project.commit}` : '', screenshot: project.screenshots?.[0] || '', status: project.status || 'published' } }
 function storePayload(project) { return { title: project.title, description: project.description, commit: project.commit, status: project.status, github_url: project.github_url, owner: project.owner_login, owner_avatar: project.owner_avatar, screenshots: project.screenshots, play_url: project.url, install_url: project.install_url, store_path: project.store_path } }
 async function projects() { return await store.all() }
+async function materializeForPublication({ owner: sourceOwner, repo: sourceRepo, sha }) {
+  const sourceKey = `${sourceOwner.toLowerCase()}/${sourceRepo.toLowerCase()}@${sha.toLowerCase()}`
+  const existing = await store.bySourceKey(sourceKey)
+  if (existing?.build_method === 'github-actions') return existing
+  let build = null
+  if (buildEnabled) {
+    build = await buildPublicProject({ sourceOwner, sourceRepo, sourceSha: sha, workflowOwner: buildOwner, workflowRepo: buildRepo, workflowFile: buildWorkflowFile, workflowRef: buildRef, token: githubToken })
+  }
+  return materializePublicProject({ owner: sourceOwner, repo: sourceRepo, sha, baseHost, gamesDir, store, archiveBuffer: build?.buffer || null, buildRunId: build?.run.id ? String(build.run.id) : '' })
+}
 
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'omgithub' }))
 app.get('/auth/github', (req, res) => {
@@ -165,14 +181,15 @@ app.get('/api/github/:owner/:repo/issues/:number', async (req, res, next) => {
 
 app.get('/api/github/:owner/:repo/tree/:sha', async (req, res, next) => {
   try {
-    const project = await materializePublicProject({ owner: req.params.owner, repo: req.params.repo, sha: req.params.sha, baseHost, gamesDir, store })
+    const project = await materializeForPublication({ owner: req.params.owner, repo: req.params.repo, sha: req.params.sha })
     res.json(storePayload(project))
   } catch (e) { next(e) }
 })
 
 app.get('/api/github/:owner/:repo', async (req, res, next) => {
   try {
-    const project = await materializeLatestPublicProject({ owner: req.params.owner, repo: req.params.repo, baseHost, gamesDir, store })
+    const { sha } = await resolveLatestPublicCommit({ owner: req.params.owner, repo: req.params.repo })
+    const project = await materializeForPublication({ owner: req.params.owner, repo: req.params.repo, sha })
     res.json(storePayload(project))
   } catch (e) { next(e) }
 })

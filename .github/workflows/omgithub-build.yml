@@ -1,0 +1,97 @@
+name: OmGithub repository build
+
+run-name: "OmGithub build ${{ inputs.source_owner }}/${{ inputs.source_repo }} @ ${{ inputs.source_sha }} (${{ inputs.request_id }})"
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_owner:
+        description: Public source repository owner
+        required: true
+        type: string
+      source_repo:
+        description: Public source repository name
+        required: true
+        type: string
+      source_sha:
+        description: Exact source commit to build
+        required: true
+        type: string
+      request_id:
+        description: Unique OmGithub build request identifier
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the requested public commit
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.source_owner }}/${{ inputs.source_repo }}
+          ref: ${{ inputs.source_sha }}
+          path: source
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f package.json ]]; then
+            echo 'No package.json found; treating the repository as a static site.'
+          elif [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Build the repository
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f package.json ]] && node -e "const p=require('./package.json'); process.exit(p.scripts?.build ? 0 : 1)"; then
+            npm run build
+          else
+            echo 'No npm build script found; packaging the static repository root.'
+          fi
+
+      - name: Prepare deployable artifact
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .omgithub-build
+          mkdir -p .omgithub-build
+          if [[ -d dist ]]; then
+            cp -a dist/. .omgithub-build/
+          elif [[ -d build ]]; then
+            cp -a build/. .omgithub-build/
+          elif [[ -f index.html ]]; then
+            rsync -a --exclude='.git' --exclude='node_modules' --exclude='.omgithub-build' ./ .omgithub-build/
+          else
+            echo 'The build did not produce dist/index.html, build/index.html, or root index.html.' >&2
+            exit 1
+          fi
+          if [[ -d screenshots ]]; then
+            cp -a screenshots .omgithub-build/
+          fi
+          test -f .omgithub-build/index.html
+
+      - name: Upload deployable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: omgithub-build-${{ github.run_id }}
+          path: source/.omgithub-build
+          if-no-files-found: error
+          retention-days: 1

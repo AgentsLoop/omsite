@@ -35,28 +35,52 @@ function validateSource(owner, repo, sha) {
   if (!/^[0-9a-f]{40}$/i.test(sha)) throw Object.assign(new Error('A full 40-character commit SHA is required'), { status: 400 })
 }
 
+export async function resolveLatestPublicCommit({ owner, repo, requestFetch = fetch }) {
+  validateRepository(owner, repo)
+  const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
+  const repository = await githubPublic(base, requestFetch)
+  if (repository.private) throw Object.assign(new Error('Only public repositories are supported'), { status: 404 })
+  const branch = repository.default_branch || 'main'
+  const commit = await githubPublic(`${base}/commits/${encodeURIComponent(branch)}`, requestFetch)
+  return { sha: commit.sha, repository, commit }
+}
+
 function projectSlug(owner, repo, sha) {
   const prefix = `${owner}-${repo}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 32)
   return `${prefix || 'project'}-${sha.slice(0, 12).toLowerCase()}`
 }
 
-function relativeZipName(entryName) {
+function normalizedEntryName(entryName) {
   const normalized = entryName.replaceAll('\\', '/')
   if (normalized.startsWith('/') || normalized.split('/').includes('..')) throw new Error(`Unsafe ZIP entry: ${entryName}`)
-  const slash = normalized.indexOf('/')
-  return slash === -1 ? '' : normalized.slice(slash + 1)
+  return normalized
 }
 
-function deploymentRoot(entries) {
-  const files = new Set(entries.filter(entry => !entry.isDirectory).map(entry => relativeZipName(entry.entryName)))
+function archiveRoot(entries) {
+  const names = entries.filter(entry => !entry.isDirectory).map(entry => normalizedEntryName(entry.entryName))
+  const roots = new Set(names.filter(name => name.includes('/')).map(name => name.split('/')[0]))
+  if (roots.size !== 1 || names.some(name => !name.includes('/'))) return ''
+  const root = [...roots][0]
+  return `${root}/`
+}
+
+function relativeZipName(entryName, root = '') {
+  const normalized = normalizedEntryName(entryName)
+  if (!root) return normalized
+  if (normalized === root.slice(0, -1)) return ''
+  return normalized.startsWith(root) ? normalized.slice(root.length) : ''
+}
+
+function deploymentRoot(entries, root) {
+  const files = new Set(entries.filter(entry => !entry.isDirectory).map(entry => relativeZipName(entry.entryName, root)))
   if (files.has('dist/index.html')) return 'dist/'
   if (files.has('index.html')) return ''
   throw Object.assign(new Error('Public commit must contain dist/index.html or index.html'), { status: 422 })
 }
 
-function deploymentOutputName(entry, root) {
+function deploymentOutputName(entry, root, archiveRootPath) {
   if (entry.isDirectory) return ''
-  const relative = relativeZipName(entry.entryName)
+  const relative = relativeZipName(entry.entryName, archiveRootPath)
   if (!relative.startsWith(root)) return ''
   const outputName = relative.slice(root.length)
   if (!outputName) return ''
@@ -69,11 +93,12 @@ function deploymentOutputName(entry, root) {
 function extractDeployment(zip, destination) {
   const entries = zip.getEntries()
   if (entries.length > MAX_ENTRIES) throw new Error('Repository archive contains too many entries')
-  const root = deploymentRoot(entries)
+  const archiveRootPath = archiveRoot(entries)
+  const root = deploymentRoot(entries, archiveRootPath)
   let total = 0
   for (const entry of entries) {
-    relativeZipName(entry.entryName)
-    if (!deploymentOutputName(entry, root)) continue
+    normalizedEntryName(entry.entryName)
+    if (!deploymentOutputName(entry, root, archiveRootPath)) continue
     const size = Number(entry.header.size)
     if (!Number.isSafeInteger(size) || size < 0 || size > MAX_ENTRY_BYTES) throw new Error(`Repository file exceeds the ${MAX_ENTRY_BYTES} byte limit`)
     total += size
@@ -82,10 +107,10 @@ function extractDeployment(zip, destination) {
 
   const staging = `${destination}.staging-${process.pid}-${Date.now()}`
   rmSync(staging, { recursive: true, force: true })
-    mkdirSync(staging, { recursive: true })
+  mkdirSync(staging, { recursive: true })
   try {
     for (const entry of entries) {
-      const outputName = deploymentOutputName(entry, root)
+      const outputName = deploymentOutputName(entry, root, archiveRootPath)
       if (!outputName) continue
       const output = resolve(staging, outputName)
       if (!output.startsWith(`${resolve(staging)}${sep}`)) throw new Error(`Unsafe deployment path: ${outputName}`)
@@ -102,9 +127,10 @@ function extractDeployment(zip, destination) {
 }
 
 function screenshotUrls(entries, owner, repo, sha) {
+  const root = archiveRoot(entries)
   return entries
     .filter(entry => !entry.isDirectory)
-    .map(entry => relativeZipName(entry.entryName))
+    .map(entry => relativeZipName(entry.entryName, root))
     .filter(name => /(^|\/)screenshots\/final-[^/]+\.(png|jpe?g|webp)$/i.test(name))
     .sort()
     .map(name => `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${sha}/${name.split('/').map(encodeURIComponent).join('/')}`)
@@ -124,11 +150,11 @@ function pageMetadata(indexPath) {
   return { title, description }
 }
 
-export async function materializePublicProject({ owner, repo, sha, baseHost, gamesDir, store, requestFetch = fetch }) {
+export async function materializePublicProject({ owner, repo, sha, baseHost, gamesDir, store, requestFetch = fetch, archiveBuffer = null, buildRunId = '' }) {
   validateSource(owner, repo, sha)
   const sourceKey = `${owner.toLowerCase()}/${repo.toLowerCase()}@${sha.toLowerCase()}`
   const existing = await store.bySourceKey(sourceKey)
-  if (existing) return existing
+  if (existing && (!archiveBuffer || existing.build_method === 'github-actions')) return existing
 
   const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
   const [repository, commit] = await Promise.all([
@@ -138,11 +164,15 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
   if (repository.private) throw Object.assign(new Error('Only public repositories are supported'), { status: 404 })
   if (String(commit.sha).toLowerCase() !== sha.toLowerCase()) throw Object.assign(new Error('Commit SHA did not resolve exactly'), { status: 404 })
 
-  const archiveResponse = await requestFetch(`${API}${base}/zipball/${sha}`, { headers: apiHeaders() })
-  if (!archiveResponse.ok) throw Object.assign(new Error(`GitHub archive returned ${archiveResponse.status}`), { status: archiveResponse.status })
-  const declaredBytes = Number(archiveResponse.headers?.get?.('content-length') || 0)
-  if (declaredBytes > MAX_ARCHIVE_BYTES) throw Object.assign(new Error('Repository archive is too large'), { status: 413 })
-  const archive = Buffer.from(await archiveResponse.arrayBuffer())
+  let archive
+  if (archiveBuffer) archive = Buffer.from(archiveBuffer)
+  else {
+    const archiveResponse = await requestFetch(`${API}${base}/zipball/${sha}`, { headers: apiHeaders() })
+    if (!archiveResponse.ok) throw Object.assign(new Error(`GitHub archive returned ${archiveResponse.status}`), { status: archiveResponse.status })
+    const declaredBytes = Number(archiveResponse.headers?.get?.('content-length') || 0)
+    if (declaredBytes > MAX_ARCHIVE_BYTES) throw Object.assign(new Error('Repository archive is too large'), { status: 413 })
+    archive = Buffer.from(await archiveResponse.arrayBuffer())
+  }
   if (archive.length > MAX_ARCHIVE_BYTES) throw Object.assign(new Error('Repository archive is too large'), { status: 413 })
 
   const zip = new AdmZip(archive)
@@ -166,6 +196,8 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
       owner_avatar: repository.owner?.avatar_url || `https://github.com/${owner}.png`,
       screenshots: screenshotUrls(entries, owner, repo, sha),
       status: 'published',
+      build_method: archiveBuffer ? 'github-actions' : 'source',
+      build_run_id: buildRunId,
       url: `https://${slug}.${baseHost}`,
       install_url: `https://${slug}.${baseHost}/install`,
       store_path: `/${owner}/${repo}/tree/${sha.toLowerCase()}`,
@@ -184,11 +216,6 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
 }
 
 export async function materializeLatestPublicProject({ owner, repo, baseHost, gamesDir, store, requestFetch = fetch }) {
-  validateRepository(owner, repo)
-  const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
-  const repository = await githubPublic(base, requestFetch)
-  if (repository.private) throw Object.assign(new Error('Only public repositories are supported'), { status: 404 })
-  const branch = repository.default_branch || 'main'
-  const commit = await githubPublic(`${base}/commits/${encodeURIComponent(branch)}`, requestFetch)
-  return materializePublicProject({ owner, repo, sha: commit.sha, baseHost, gamesDir, store, requestFetch })
+  const { sha } = await resolveLatestPublicCommit({ owner, repo, requestFetch })
+  return materializePublicProject({ owner, repo, sha, baseHost, gamesDir, store, requestFetch })
 }

@@ -27,12 +27,19 @@ production-mode local check.
 - `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`: optional GitHub login.
 - `FIREBASE_SERVICE_ACCOUNT_BASE64`: Firebase service-account JSON, base64 encoded.
 - `PUBLIC_ORIGIN=https://omgithub.com`.
+- `OMGHITHUB_BUILD_ENABLED=false`: optional local-only switch to inspect raw
+  committed browser files without running the build workflow.
 
 Publish a commit by opening `/<owner>/<repo>/tree/<40-character-commit-sha>`.
 Open `/<owner>/<repo>` to resolve and publish the repository's current default
-branch commit. The server anonymously reads the public GitHub commit,
-materializes root `index.html` or `dist/index.html`, and discovers committed
-`screenshots/final-*` images. The visitor supplies no token or credentials.
+branch commit. Before publishing, OmGithub dispatches
+`.github/workflows/omgithub-build.yml` in the central repository. That action
+checks out the exact public commit, runs `npm ci` when a lockfile exists or
+`npm install` otherwise, runs `npm run build`, and uploads the deployable
+`dist/`, `build/`, or static-root artifact. OmGithub publishes that artifact
+and discovers committed `screenshots/final-*` images. The visitor supplies no
+token or credentials; the server's `GITHUB_TOKEN` dispatches and downloads the
+short-lived build artifact.
 
 The webhook router validates `X-Hub-Signature-256` and accepts only non-bot
 `issues.opened` events that already contain the exact `OpenCode` label, or
