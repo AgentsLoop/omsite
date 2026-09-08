@@ -124,6 +124,7 @@ test('materializes a root-level GitHub Actions build artifact', async () => {
   const artifact = new AdmZip()
   artifact.addFile('index.html', Buffer.from('<title>Built App</title>'))
   artifact.addFile('assets/app.js', Buffer.from('console.log("built")'))
+  artifact.addFile('screenshots/final-build.png', Buffer.from('png'))
   const rows = []
   const store = { bySourceKey: async key => rows.find(row => row.source_key === key) || null, put: async project => { rows.push(project); return project } }
   const requestFetch = async url => {
@@ -137,6 +138,8 @@ test('materializes a root-level GitHub Actions build artifact', async () => {
 
   assert.equal(readFileSync(join(project.local_dir, 'index.html'), 'utf8'), '<title>Built App</title>')
   assert.equal(readFileSync(join(project.local_dir, 'assets/app.js'), 'utf8'), 'console.log("built")')
+  assert.equal(readFileSync(join(project.local_dir, 'screenshots/final-build.png'), 'utf8'), 'png')
   assert.equal(project.build_method, 'github-actions')
   assert.equal(project.build_run_id, '42')
+  assert.deepEqual(project.screenshots, [`https://owner-repo-${'e'.repeat(12)}.omgithub.com/screenshots/final-build.png`])
 })

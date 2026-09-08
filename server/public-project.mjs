@@ -78,19 +78,19 @@ function deploymentRoot(entries, root) {
   throw Object.assign(new Error('Public commit must contain dist/index.html or index.html'), { status: 422 })
 }
 
-function deploymentOutputName(entry, root, archiveRootPath) {
+function deploymentOutputName(entry, root, archiveRootPath, includeScreenshots = false) {
   if (entry.isDirectory) return ''
   const relative = relativeZipName(entry.entryName, archiveRootPath)
   if (!relative.startsWith(root)) return ''
   const outputName = relative.slice(root.length)
   if (!outputName) return ''
   const first = outputName.split('/')[0]
-  if (!root && (first.startsWith('.') || first === 'node_modules' || first === 'screenshots')) return ''
-  if (first === 'screenshots') return ''
+  if (!root && (first.startsWith('.') || first === 'node_modules' || (!includeScreenshots && first === 'screenshots'))) return ''
+  if (!includeScreenshots && first === 'screenshots') return ''
   return outputName
 }
 
-function extractDeployment(zip, destination) {
+function extractDeployment(zip, destination, includeScreenshots = false) {
   const entries = zip.getEntries()
   if (entries.length > MAX_ENTRIES) throw new Error('Repository archive contains too many entries')
   const archiveRootPath = archiveRoot(entries)
@@ -98,7 +98,7 @@ function extractDeployment(zip, destination) {
   let total = 0
   for (const entry of entries) {
     normalizedEntryName(entry.entryName)
-    if (!deploymentOutputName(entry, root, archiveRootPath)) continue
+    if (!deploymentOutputName(entry, root, archiveRootPath, includeScreenshots)) continue
     const size = Number(entry.header.size)
     if (!Number.isSafeInteger(size) || size < 0 || size > MAX_ENTRY_BYTES) throw new Error(`Repository file exceeds the ${MAX_ENTRY_BYTES} byte limit`)
     total += size
@@ -110,7 +110,7 @@ function extractDeployment(zip, destination) {
   mkdirSync(staging, { recursive: true })
   try {
     for (const entry of entries) {
-      const outputName = deploymentOutputName(entry, root, archiveRootPath)
+      const outputName = deploymentOutputName(entry, root, archiveRootPath, includeScreenshots)
       if (!outputName) continue
       const output = resolve(staging, outputName)
       if (!output.startsWith(`${resolve(staging)}${sep}`)) throw new Error(`Unsafe deployment path: ${outputName}`)
@@ -126,14 +126,16 @@ function extractDeployment(zip, destination) {
   }
 }
 
-function screenshotUrls(entries, owner, repo, sha) {
+function screenshotUrls(entries, owner, repo, sha, { baseHost = '', slug = '', built = false } = {}) {
   const root = archiveRoot(entries)
   return entries
     .filter(entry => !entry.isDirectory)
     .map(entry => relativeZipName(entry.entryName, root))
     .filter(name => /(^|\/)screenshots\/final-[^/]+\.(png|jpe?g|webp)$/i.test(name))
     .sort()
-    .map(name => `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${sha}/${name.split('/').map(encodeURIComponent).join('/')}`)
+    .map(name => built
+      ? `https://${slug}.${baseHost}/${name.split('/').map(encodeURIComponent).join('/')}`
+      : `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${sha}/${name.split('/').map(encodeURIComponent).join('/')}`)
 }
 
 function decodeHtml(value) {
@@ -180,7 +182,7 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
   const slug = projectSlug(owner, repo, sha)
   const destination = resolve(gamesDir, slug)
   if (!destination.startsWith(`${resolve(gamesDir)}${sep}`)) throw new Error('Unsafe project destination')
-  const extracted = extractDeployment(zip, destination)
+  const extracted = extractDeployment(zip, destination, Boolean(archiveBuffer))
   try {
     const metadata = pageMetadata(resolve(extracted.staging, 'index.html'))
     const project = {
@@ -194,7 +196,7 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
       commit: sha.toLowerCase(),
       owner_login: repository.owner?.login || owner,
       owner_avatar: repository.owner?.avatar_url || `https://github.com/${owner}.png`,
-      screenshots: screenshotUrls(entries, owner, repo, sha),
+      screenshots: screenshotUrls(entries, owner, repo, sha, { baseHost, slug, built: Boolean(archiveBuffer) }),
       status: 'published',
       build_method: archiveBuffer ? 'github-actions' : 'source',
       build_run_id: buildRunId,

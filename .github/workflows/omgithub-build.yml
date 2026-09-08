@@ -96,6 +96,28 @@ jobs:
           fi
           test -f omgithub-build/index.html
 
+      - name: Capture a screenshot when none was committed
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if compgen -G 'omgithub-build/screenshots/final-*' > /dev/null; then
+            echo 'Using committed final screenshot(s).'
+          else
+            mkdir -p omgithub-build/screenshots
+            python3 -m http.server 4173 --directory omgithub-build > /tmp/omgithub-preview.log 2>&1 &
+            server_pid=$!
+            trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+            for _ in {1..30}; do
+              if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then break; fi
+              sleep 1
+            done
+            curl --fail --silent http://127.0.0.1:4173/ > /dev/null
+            npx --yes playwright@1.55.0 install --with-deps chromium
+            npx --yes playwright@1.55.0 screenshot --wait-for-timeout 3000 --viewport-size '1440,900' http://127.0.0.1:4173/ omgithub-build/screenshots/final-build.png
+            test -s omgithub-build/screenshots/final-build.png
+          fi
+
       - name: Upload deployable artifact
         uses: actions/upload-artifact@v4
         with:
