@@ -31,9 +31,14 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-const route = useRoute(), project = ref(null), loading = ref(true), error = ref(''), selectedShot = ref(''), displayedShot = ref(''), mobilePane = ref('chat')
+import { useJsonResource } from '../composables/useJsonResource'
+const route = useRoute(), selectedShot = ref(''), displayedShot = ref(''), mobilePane = ref('chat')
+const { data: project, loading, error } = useJsonResource(
+  () => `/api/github/${encodeURIComponent(route.params.owner)}/${encodeURIComponent(route.params.repo)}/issues/${encodeURIComponent(route.params.number)}`,
+  { pollMs: 8000 }
+)
 const cleanTitle = computed(() => (project.value?.title || '').replace(/^\/goal\s*/i, ''))
 const previewUrl = computed(() => project.value?.preview_url || '')
 const previewLabel = computed(() => displayedShot.value ? 'Build screenshot' : project.value?.preview_url ? 'Playable preview' : project.value?.screenshots?.length ? 'Build screenshot' : 'Waiting for preview')
@@ -47,7 +52,9 @@ const steps = computed(() => {
   ]
 })
 const currentStep = computed(() => steps.value.find(step => step.active) || [...steps.value].reverse().find(step => step.done) || steps.value[0])
-async function load() { try { const r = await fetch(`/api/github/${route.params.owner}/${route.params.repo}/issues/${route.params.number}`); const data = await r.json(); if (!r.ok) throw new Error(data.error); const previousCount = project.value?.screenshots?.length || 0; project.value = data; if (!previewUrl.value && data.screenshots.length && (!displayedShot.value || data.screenshots.length > previousCount)) displayedShot.value = data.screenshots.at(-1) } catch (e) { error.value = e.message } finally { loading.value = false } }
-let timer
-onMounted(async () => { await load(); timer = setInterval(load, 8000) }); onBeforeUnmount(() => clearInterval(timer))
+watch(project, (current, previous) => {
+  if (!current) { selectedShot.value = ''; displayedShot.value = ''; return }
+  if (current.preview_url && !previous?.preview_url) displayedShot.value = ''
+  else if (!current.preview_url && current.screenshots.length && (!displayedShot.value || current.screenshots.length > (previous?.screenshots?.length || 0))) displayedShot.value = current.screenshots.at(-1)
+})
 </script>

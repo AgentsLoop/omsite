@@ -2,13 +2,13 @@ import express from 'express'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cookies, nonce, sign, verify } from './auth.mjs'
 import { dispatchPublicBuild } from './github-build.mjs'
 import { dispatchOmgRequest, extractUrls, github, omgRequest, verifyWebhookSignature } from './github.mjs'
-import { materializePublicProject, resolveLatestPublicCommit } from './public-project.mjs'
+import { materializePublicProject, resolveLatestPublicCommit, validateSource } from './public-project.mjs'
 import { createStore } from './store.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -51,6 +51,7 @@ if (firebaseCredential) {
 const store = createStore(dataDir, firestore)
 const sessions = new Map()
 const pendingBuilds = new Map()
+const publications = new Map()
 const rate = new Map()
 const app = express()
 app.set('trust proxy', true)
@@ -59,14 +60,19 @@ app.use((req, res, next) => { res.set('x-content-type-options', 'nosniff'); res.
 function userFor(req) {
   const raw = cookies(req.headers.cookie).omgithub_session
   const payload = raw && verify(raw, sessionSecret)
-  return payload?.sid ? sessions.get(payload.sid) || null : null
+  const session = payload?.sid && sessions.get(payload.sid)
+  if (!session) return null
+  if (session.expiresAt <= Date.now()) { sessions.delete(payload.sid); return null }
+  return session.user
 }
 function setSession(res, user) {
-  const sid = nonce(); sessions.set(sid, user)
-  res.setHeader('set-cookie', `omgithub_session=${encodeURIComponent(sign({ sid }, sessionSecret))}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${origin.startsWith('https:') ? '; Secure' : ''}`)
+  for (const [id, session] of sessions) if (session.expiresAt <= Date.now()) sessions.delete(id)
+  const sid = nonce(); sessions.set(sid, { user, expiresAt: Date.now() + 2592000000 })
+  res.append('set-cookie', `omgithub_session=${encodeURIComponent(sign({ sid }, sessionSecret))}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${origin.startsWith('https:') ? '; Secure' : ''}`)
 }
 function requestIp(req) { return String(req.ip || req.socket.remoteAddress || 'unknown') }
 function limited(req) {
+  for (const [key, entries] of rate) if (entries.at(-1) <= Date.now() - 3600000) rate.delete(key)
   const key = requestIp(req), now = Date.now(), entries = (rate.get(key) || []).filter(value => now - value < 3600000)
   if (entries.length >= 5) return true; entries.push(now); rate.set(key, entries); return false
 }
@@ -81,9 +87,16 @@ function safeGamePath(slug) { const path = resolve(gamesDir, slug); if (!path.st
 function publicProject(project) { const { local_dir, ...safe } = project; return safe }
 function card(project) { return { ...publicProject(project), issue_path: project.issue ? `/${project.repo_owner}/${project.repo}/issues/${project.issue}` : '', store_path: project.commit ? `/${project.repo_owner}/${project.repo}/tree/${project.commit}` : '', screenshot: project.screenshots?.[0] || '', status: project.status || 'published' } }
 function storePayload(project) { return { title: project.title, description: project.description, commit: project.commit, status: project.status, github_url: project.github_url, owner: project.owner_login, owner_avatar: project.owner_avatar, screenshots: project.screenshots, play_url: project.url, install_url: project.install_url, store_path: project.store_path } }
-async function projects() { return await store.all() }
 async function materializeForPublication({ owner: sourceOwner, repo: sourceRepo, sha }) {
+  validateSource(sourceOwner, sourceRepo, sha)
   const sourceKey = `${sourceOwner.toLowerCase()}/${sourceRepo.toLowerCase()}@${sha.toLowerCase()}`
+  if (publications.has(sourceKey)) return publications.get(sourceKey)
+  const publication = publishCommit({ sourceOwner, sourceRepo, sha, sourceKey })
+  publications.set(sourceKey, publication)
+  try { return await publication } finally { publications.delete(sourceKey) }
+}
+
+async function publishCommit({ sourceOwner, sourceRepo, sha, sourceKey }) {
   const existing = await store.bySourceKey(sourceKey)
   if (existing?.build_method === 'github-actions' && existing.build_transport === 'omgithub-zip' && existing.screenshots?.length) return existing
   if (!buildEnabled) return materializePublicProject({ owner: sourceOwner, repo: sourceRepo, sha, baseHost, gamesDir, store })
@@ -116,7 +129,8 @@ app.get('/auth/github', (req, res) => {
 })
 app.get('/auth/github/callback', async (req, res) => {
   try {
-    if (!req.query.code || req.query.state !== cookies(req.headers.cookie).omgithub_oauth) throw new Error('Invalid OAuth state')
+    if (typeof req.query.code !== 'string' || !req.query.code || typeof req.query.state !== 'string' || !equalSecret(cookies(req.headers.cookie).omgithub_oauth, req.query.state)) throw new Error('Invalid OAuth state')
+    res.append('set-cookie', `omgithub_oauth=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${origin.startsWith('https:') ? '; Secure' : ''}`)
     const tokenResponse = await fetch('https://github.com/login/oauth/access_token', { method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify({ client_id: process.env.GITHUB_CLIENT_ID, client_secret: process.env.GITHUB_CLIENT_SECRET, code: req.query.code, redirect_uri: `${origin}/auth/github/callback` }) })
     const tokenData = await tokenResponse.json(); if (!tokenData.access_token) throw new Error(tokenData.error_description || 'GitHub did not return a token')
     const profile = await github('/user', tokenData.access_token); setSession(res, { login: profile.login, name: profile.name, avatar_url: profile.avatar_url, html_url: profile.html_url, token: tokenData.access_token })
@@ -144,13 +158,13 @@ app.post('/api/github/webhooks', express.raw({ type: 'application/json', limit: 
 
 app.use(express.json({ limit: '2mb' }))
 app.get('/api/me', (req, res) => { const user = userFor(req); res.json({ user: user ? { login: user.login, name: user.name, avatar_url: user.avatar_url, html_url: user.html_url } : null }) })
-app.get('/api/projects', async (req, res, next) => { try { const user = userFor(req); let rows = await projects(); if (req.query.mine === '1') rows = user ? rows.filter(row => row.owner_login?.toLowerCase() === user.login.toLowerCase()) : []; res.json({ projects: rows.map(card) }) } catch (e) { next(e) } })
-app.get('/api/profiles/:login', async (req, res, next) => { try { const profile = await github(`/users/${encodeURIComponent(req.params.login)}`, githubToken); const rows = (await projects()).filter(row => row.owner_login?.toLowerCase() === req.params.login.toLowerCase()); res.json({ profile, projects: rows.map(card) }) } catch (e) { next(e) } })
+app.get('/api/projects', async (req, res, next) => { try { const user = userFor(req); let rows = await store.all(); if (req.query.mine === '1') rows = user ? rows.filter(row => row.owner_login?.toLowerCase() === user.login.toLowerCase()) : []; res.json({ projects: rows.map(card) }) } catch (e) { next(e) } })
+app.get('/api/profiles/:login', async (req, res, next) => { try { const profile = await github(`/users/${encodeURIComponent(req.params.login)}`, githubToken); const rows = (await store.all()).filter(row => row.owner_login?.toLowerCase() === req.params.login.toLowerCase()); res.json({ profile, projects: rows.map(card) }) } catch (e) { next(e) } })
 
 app.post('/api/issues', async (req, res, next) => {
   try {
     if (limited(req)) return res.status(429).json({ error: 'Creation limit reached. Try again later.' })
-    const prompt = String(req.body.prompt || '').trim(); if (prompt.length < 8 || prompt.length > 12000) return res.status(400).json({ error: 'Prompt must be between 8 and 12,000 characters.' })
+    const prompt = String(req.body?.prompt || '').trim(); if (prompt.length < 8 || prompt.length > 12000) return res.status(400).json({ error: 'Prompt must be between 8 and 12,000 characters.' })
     const user = userFor(req), token = user?.token || githubToken
     if (!token) return res.status(503).json({ error: 'GitHub issue creation is not configured.' })
     const first = prompt.split('\n')[0].slice(0, 110)
@@ -237,15 +251,18 @@ app.use(async (req, res, next) => {
   if (req.path === '/omgithub-icon.svg') return res.type('image/svg+xml').send(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#111"/><text x="256" y="360" text-anchor="middle" font-family="system-ui" font-size="330" font-weight="800" fill="#ff6719">O</text></svg>`)
   if (req.path === '/omgithub-sw.js') return res.type('application/javascript').send(`self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));self.addEventListener('fetch',()=>{});`)
   if (req.path === '/install' || req.path === '/install/') {
-    const shots = (project.screenshots || []).map(src => `<img src="${escapeHtml(src)}" alt="${escapeHtml(project.title)} screenshot">`).join('')
     return res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="theme-color" content="#ff6719"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/omgithub-icon.svg"><title>Install ${escapeHtml(project.title)}</title><style>${installCss}</style></head><body><main><section><i>O</i><small>OMGHITHUB APP</small><h1>Installing ${escapeHtml(project.title)}</h1><p id="status">Preparing native install support...</p><button id="install" disabled>Install</button><a href="/">Open app</a><a href="${origin}${project.store_path}">View store page</a></section></main><script>let event;const button=document.querySelector('#install');navigator.serviceWorker?.register('/omgithub-sw.js');addEventListener('beforeinstallprompt',e=>{e.preventDefault();event=e;button.disabled=false;document.querySelector('#status').textContent='Ready to install.'});button.onclick=async()=>{if(!event)return;event.prompt();const result=await event.userChoice;document.querySelector('#status').textContent=result.outcome==='accepted'?'Installed. You can open the game from your apps.':'Install cancelled.';event=null;button.disabled=true}</script></body></html>`)
   }
   return express.static(safeGamePath(slug), { fallthrough: true })(req, res, () => res.sendFile(join(safeGamePath(slug), 'index.html')))
 })
 
 app.use(express.static(join(root, 'dist')))
-app.get('/*splat', (_req, res) => existsSync(join(root, 'dist/index.html')) ? res.type('html').send(readFileSync(join(root, 'dist/index.html'))) : res.status(503).send('Run npm run build first.'))
-app.use((error, _req, res, _next) => { console.error(error); res.status(error.status || 500).json({ error: error.message || 'Unexpected error' }) })
+app.get('/*splat', (_req, res, next) => res.sendFile(join(root, 'dist/index.html'), error => {
+  if (!error) return
+  if (error.code === 'ENOENT') return res.status(503).send('Site build is unavailable.')
+  next(error)
+}))
+app.use((error, _req, res, next) => { if (res.headersSent) return next(error); console.error(error); res.status(error.status || 500).json({ error: error.message || 'Unexpected error' }) })
 app.listen(port, '0.0.0.0', () => console.log(`OmGithub listening on :${port} (${origin})`))
 
 function escapeHtml(value) { return String(value || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])) }

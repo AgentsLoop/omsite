@@ -1,11 +1,18 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 
 export function createStore(dataDir, firestore = null) {
   mkdirSync(dataDir, { recursive: true })
   const file = join(dataDir, 'projects.json')
   const read = () => existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : []
-  const write = (rows) => writeFileSync(file, JSON.stringify(rows, null, 2))
+  const write = (rows) => {
+    const temporary = `${file}.${randomUUID()}.tmp`
+    try {
+      writeFileSync(temporary, JSON.stringify(rows, null, 2))
+      renameSync(temporary, file)
+    } finally { rmSync(temporary, { force: true }) }
+  }
   return {
     async all() {
       if (!firestore) return read()

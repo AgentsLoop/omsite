@@ -1,5 +1,6 @@
 import AdmZip from 'adm-zip'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
+import { rename } from 'node:fs/promises'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve, sep } from 'node:path'
 
@@ -30,7 +31,7 @@ function validateRepository(owner, repo) {
   if (!/^[a-z0-9_.-]+$/i.test(owner) || !/^[a-z0-9_.-]+$/i.test(repo)) throw Object.assign(new Error('Invalid public repository path'), { status: 400 })
 }
 
-function validateSource(owner, repo, sha) {
+export function validateSource(owner, repo, sha) {
   validateRepository(owner, repo)
   if (!/^[0-9a-f]{40}$/i.test(sha)) throw Object.assign(new Error('A full 40-character commit SHA is required'), { status: 400 })
 }
@@ -85,7 +86,7 @@ function deploymentOutputName(entry, root, archiveRootPath, includeScreenshots =
   const outputName = relative.slice(root.length)
   if (!outputName) return ''
   const first = outputName.split('/')[0]
-  if (!root && (first.startsWith('.') || first === 'node_modules' || (!includeScreenshots && first === 'screenshots'))) return ''
+  if (first.startsWith('.') || first === 'node_modules') return ''
   if (!includeScreenshots && first === 'screenshots') return ''
   return outputName
 }
@@ -105,8 +106,7 @@ function extractDeployment(zip, destination, includeScreenshots = false) {
     if (total > MAX_TOTAL_BYTES) throw new Error('Repository content exceeds the total size limit')
   }
 
-  const staging = `${destination}.staging-${process.pid}-${Date.now()}`
-  rmSync(staging, { recursive: true, force: true })
+  const staging = `${destination}.staging-${randomUUID()}`
   mkdirSync(staging, { recursive: true })
   try {
     for (const entry of entries) {
@@ -117,8 +117,6 @@ function extractDeployment(zip, destination, includeScreenshots = false) {
       mkdirSync(dirname(output), { recursive: true })
       writeFileSync(output, entry.getData())
     }
-    rmSync(destination, { recursive: true, force: true })
-    mkdirSync(dirname(destination), { recursive: true })
     return { staging, root }
   } catch (error) {
     rmSync(staging, { recursive: true, force: true })
@@ -126,11 +124,11 @@ function extractDeployment(zip, destination, includeScreenshots = false) {
   }
 }
 
-function screenshotUrls(entries, owner, repo, sha, { baseHost = '', slug = '', built = false } = {}) {
+function screenshotUrls(entries, owner, repo, sha, { baseHost = '', slug = '', built = false, deploymentRoot = '' } = {}) {
   const root = archiveRoot(entries)
   return entries
     .filter(entry => !entry.isDirectory)
-    .map(entry => relativeZipName(entry.entryName, root))
+    .map(entry => built ? deploymentOutputName(entry, deploymentRoot, root, true) : relativeZipName(entry.entryName, root))
     .filter(name => /(^|\/)screenshots\/final-[^/]+\.(png|jpe?g|webp)$/i.test(name))
     .sort()
     .map(name => built
@@ -196,7 +194,7 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
       commit: sha.toLowerCase(),
       owner_login: repository.owner?.login || owner,
       owner_avatar: repository.owner?.avatar_url || `https://github.com/${owner}.png`,
-      screenshots: screenshotUrls(entries, owner, repo, sha, { baseHost, slug, built: Boolean(archiveBuffer) }),
+      screenshots: screenshotUrls(entries, owner, repo, sha, { baseHost, slug, built: Boolean(archiveBuffer), deploymentRoot: extracted.root }),
       status: 'published',
       build_method: archiveBuffer ? 'github-actions' : 'source',
       build_transport: archiveBuffer ? 'omgithub-zip' : 'source',
@@ -209,7 +207,7 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
       local_dir: destination
     }
     rmSync(destination, { recursive: true, force: true })
-    await import('node:fs/promises').then(fs => fs.rename(extracted.staging, destination))
+    await rename(extracted.staging, destination)
     await store.put(project)
     return project
   } catch (error) {

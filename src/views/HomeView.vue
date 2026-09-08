@@ -29,18 +29,14 @@
 </template>
 
 <script setup>
-import { onMounted, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import GameCard from '../components/GameCard.vue'
+import { useJsonResource } from '../composables/useJsonResource'
 const props = defineProps({ me: Object })
-const router = useRouter(), prompt = ref(''), loading = ref(false), error = ref(''), projects = ref([]), loadingProjects = ref(true)
-async function loadProjects() {
-  loadingProjects.value = true
-  try {
-    const r = await fetch(props.me ? '/api/projects?mine=1' : '/api/projects')
-    projects.value = r.ok ? (await r.json()).projects : []
-  } catch { projects.value = [] } finally { loadingProjects.value = false }
-}
+const router = useRouter(), prompt = ref(''), loading = ref(false), error = ref('')
+const { data, loading: loadingProjects } = useJsonResource(() => props.me ? '/api/projects?mine=1' : '/api/projects')
+const projects = computed(() => data.value?.projects || [])
 async function create() {
   if (!prompt.value.trim() || loading.value) return
   loading.value = true; error.value = ''
@@ -50,5 +46,4 @@ async function create() {
     await router.push(data.omgithub_path)
   } catch (e) { error.value = e.message; loading.value = false }
 }
-onMounted(loadProjects); watch(() => props.me, loadProjects)
 </script>

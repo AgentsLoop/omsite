@@ -1,70 +1,47 @@
 # OmGithub site
 
-Vue creator/store frontend plus a Node service that mirrors GitHub issue and
-immutable commit routes, tracks OpenCode workflow progress, stores generated
-project metadata in Firebase, and hosts public-commit projects on wildcard
-subdomains.
+Use the Vue frontend and Node service to create issues, display OpenCode
+progress, publish public commits, and serve project subdomains.
 
 ## Local development
 
+Install dependencies from `site/`. Copy `.env.example` to `.env`, set the
+required values, and load them into the server environment before starting
+development. Use `PUBLIC_ORIGIN=http://localhost:5173` for local OAuth
+redirects through the Vite proxy.
+
 ```sh
-cp .env.example .env
 npm install
 npm run dev
 ```
 
-The production server serves `dist/`, so run `npm run build && npm start` for a
-production-mode local check.
+Build the frontend with `npm run build` before using `npm start` to serve the
+production frontend.
 
-## Required production configuration
+## Configuration
 
-- `GITHUB_TOKEN`: applies the `Goal` and `OpenCode` labels to Site-created
-  issues and raises GitHub API limits.
-- `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_WEBHOOK_SECRET`:
-  authenticate signed App webhooks and mint installation-scoped tokens.
-- `OMG_FALLBACK_OWNER`, `OMG_FALLBACK_REPO`, and `OMG_FALLBACK_REF`: identify
-  the centralized reusable workflow used by bootstrapped repository wrappers.
-- `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`: optional GitHub login.
-- `FIREBASE_SERVICE_ACCOUNT_BASE64`: Firebase service-account JSON, base64 encoded.
-- `PUBLIC_ORIGIN=https://omgithub.com`.
-- `OMGHITHUB_BUILD_ENABLED=false`: optional local-only switch to inspect raw
-  committed browser files without running the build workflow.
+- Set `GITHUB_TOKEN` to apply `Goal` and `OpenCode` labels and dispatch public
+  repository builds.
+- Set `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_WEBHOOK_SECRET`
+  to authenticate App webhooks and installation requests.
+- Set `OMG_FALLBACK_OWNER`, `OMG_FALLBACK_REPO`, and `OMG_FALLBACK_REF` to
+  select the central reusable workflow for repository wrappers.
+- Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` to enable GitHub login.
+- Set a stable `SESSION_SECRET`. Expect a server restart to end sessions;
+  keep one server process for the in-memory session and build registries.
+- Set `FIREBASE_SERVICE_ACCOUNT_BASE64` or `FIREBASE_SERVICE_ACCOUNT_JSON`
+  to use Firebase. Otherwise, persist the local catalog under `DATA_DIR`.
+- Set `PUBLIC_ORIGIN=https://omgithub.com` in production. Set
+  `PUBLIC_ALIASES` to a comma-separated list of additional public domains.
+- Set `OMGHITHUB_BUILD_OWNER`, `OMGHITHUB_BUILD_REPO`,
+  `OMGHITHUB_BUILD_WORKFLOW`, and `OMGHITHUB_BUILD_REF` to override the build
+  workflow defaults. Use the existing `OMGHITHUB_` spelling for these keys.
+- Set `OMGHITHUB_BUILD_ENABLED=false` to publish committed browser files
+  directly during local inspection.
 
-Publish a commit by opening `/<owner>/<repo>/tree/<40-character-commit-sha>`.
-Open `/<owner>/<repo>` to resolve and publish the repository's current default
-branch commit. Before publishing, OmGithub dispatches
-`.github/workflows/omgithub-build.yml` in the central repository. That action
-checks out the exact public commit, runs `npm ci` when a lockfile exists or
-`npm install` otherwise, runs `npm run build`, and uploads the deployable
-`dist/`, `build/`, or static-root ZIP directly to `POST /api/builds`. OmGithub
-validates the one-time upload token, source headers, exact commit, ZIP limits,
-and `index.html`, then extracts and publishes the ZIP before the Action exits.
-The visitor supplies no token or credentials; the server's `GITHUB_TOKEN`
-dispatches the build and the Action's short-lived upload token authorizes the
-direct handoff. No GitHub Actions artifact is retained.
+Use [the publishing guide](../wiki/omgithub.md) for immutable routes, build
+uploads, deployment limits, and hosting. Use [the GitHub App guide](../wiki/oh-my-github-app.md)
+for event routing, required permissions, and branch selection.
 
-The webhook router validates `X-Hub-Signature-256` and accepts only non-bot
-`issues.opened` events that already contain the exact `OpenCode` label, or
-`issues.labeled` events that add that label.
-Comments, edits, and other labels do not execute the workflow. A newly opened
-human issue without `OpenCode` receives a reminder, and the App ensures the
-label exists in the repository label catalog without applying it to the issue.
-Adding `OpenCode` later starts the workflow. The repository-local workflow is dispatch-only
-and is dispatched with the installation token. A 404 creates a thin local
-wrapper and dispatches it in the target repository; both dispatch routes call
-the same central `opencode-reusable.yml` pipeline.
-
-An optional issue-title suffix `branch: <existing-branch>` selects the target
-checkout. The router removes the suffix from the request,
-verifies that the branch exists, and dispatches the workflow from that branch.
-Invalid branches are reported on the issue without starting an Actions run.
-
-Before dispatch or bootstrap, the router checks that the installation token grants
-Actions, Contents, Issues, and Workflows write access. If any are
-missing, it posts the missing permissions to the triggering issue and does not
-start an Actions run. When Site issue creation cannot apply its required labels,
-it leaves the issue with the same actionable warning instead of starting work.
-
-Deploy the Docker service to A1 with `../scripts/deploy-omgithub-a1.sh`. The
-container publishes only to `127.0.0.1:8794`; host Caddy terminates TLS for
-`omgithub.com` and `*.omgithub.com`.
+Deploy to A1 with `../scripts/deploy-omgithub-a1.sh`. Bind the container to
+`127.0.0.1:8794` and terminate TLS through host Caddy.

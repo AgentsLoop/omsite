@@ -59,8 +59,12 @@ export async function dispatchPublicBuild({
   const deadline = startedAt + timeoutMs
   let run = null
   while (Date.now() < deadline) {
-    const data = await githubJson(`${workflow}/runs?event=workflow_dispatch&branch=${encodeURIComponent(workflowRef)}&per_page=50`, token, requestFetch)
-    run = (data.workflow_runs || []).find(candidate => String(candidate.display_title || '').includes(requestId))
+    if (run) {
+      run = await githubJson(`/repos/${encodeURIComponent(workflowOwner)}/${encodeURIComponent(workflowRepo)}/actions/runs/${run.id}`, token, requestFetch)
+    } else {
+      const data = await githubJson(`${workflow}/runs?event=workflow_dispatch&branch=${encodeURIComponent(workflowRef)}&per_page=50`, token, requestFetch)
+      run = (data.workflow_runs || []).find(candidate => String(candidate.display_title || '').includes(requestId))
+    }
     if (run?.status === 'completed') break
     await wait(Math.min(pollMs, Math.max(0, deadline - Date.now())))
   }

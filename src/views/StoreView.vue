@@ -6,18 +6,17 @@
     <section class="screens-section"><h2>Screenshots</h2><div class="store-shots"><img v-for="shot in project.screenshots" :key="shot" :src="shot" alt="Project screenshot" @click="selected = shot" /></div><p v-if="!project.screenshots.length">No final screenshots were committed under a screenshots directory.</p></section>
     <div v-if="selected" class="lightbox" @click="selected = ''"><img :src="selected" alt="Screenshot enlarged" /></div>
   </main>
-  <main v-else class="studio-loading"><span v-if="loading" class="spinner large"></span><p v-else>Project unavailable.</p></main>
+  <main v-else class="studio-loading"><span v-if="loading" class="spinner large"></span><p v-else>{{ error || 'Project unavailable.' }}</p></main>
 </template>
 <script setup>
 import { ref, watch } from 'vue'; import { useRoute } from 'vue-router'
-const route = useRoute(), project = ref(null), selected = ref(''), loading = ref(true)
+import { useJsonResource } from '../composables/useJsonResource'
+const route = useRoute(), selected = ref('')
+const { data: project, loading, error } = useJsonResource(() => {
+  const { owner, repo, sha } = route.params
+  const base = `/api/github/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
+  return sha ? `${base}/tree/${encodeURIComponent(sha)}` : base
+})
 async function share() { await navigator.clipboard?.writeText(location.href) }
-watch(() => [route.params.owner, route.params.repo, route.params.sha], async ([owner, repo, sha]) => {
-  loading.value = true; project.value = null
-  try {
-    const endpoint = sha ? `/api/github/${owner}/${repo}/tree/${sha}` : `/api/github/${owner}/${repo}`
-    const r = await fetch(endpoint)
-    if (r.ok) project.value = await r.json()
-  } finally { loading.value = false }
-}, { immediate: true })
+watch(() => route.fullPath, () => { selected.value = '' })
 </script>
