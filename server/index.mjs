@@ -83,7 +83,7 @@ async function projects() { return await store.all() }
 async function materializeForPublication({ owner: sourceOwner, repo: sourceRepo, sha }) {
   const sourceKey = `${sourceOwner.toLowerCase()}/${sourceRepo.toLowerCase()}@${sha.toLowerCase()}`
   const existing = await store.bySourceKey(sourceKey)
-  if (existing?.build_method === 'github-actions') return existing
+  if (existing?.build_method === 'github-actions' && existing.screenshots?.length) return existing
   let build = null
   if (buildEnabled) {
     build = await buildPublicProject({ sourceOwner, sourceRepo, sourceSha: sha, workflowOwner: buildOwner, workflowRepo: buildRepo, workflowFile: buildWorkflowFile, workflowRef: buildRef, token: githubToken })
