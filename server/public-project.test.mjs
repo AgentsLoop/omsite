@@ -140,6 +140,7 @@ test('materializes a root-level GitHub Actions build artifact', async () => {
   assert.equal(readFileSync(join(project.local_dir, 'assets/app.js'), 'utf8'), 'console.log("built")')
   assert.equal(readFileSync(join(project.local_dir, 'screenshots/final-build.png'), 'utf8'), 'png')
   assert.equal(project.build_method, 'github-actions')
+  assert.equal(project.build_transport, 'omgithub-zip')
   assert.equal(project.build_run_id, '42')
   assert.deepEqual(project.screenshots, [`https://owner-repo-${'e'.repeat(12)}.omgithub.com/screenshots/final-build.png`])
 })

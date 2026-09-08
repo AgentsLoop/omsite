@@ -85,7 +85,7 @@ async function projects() { return await store.all() }
 async function materializeForPublication({ owner: sourceOwner, repo: sourceRepo, sha }) {
   const sourceKey = `${sourceOwner.toLowerCase()}/${sourceRepo.toLowerCase()}@${sha.toLowerCase()}`
   const existing = await store.bySourceKey(sourceKey)
-  if (existing?.build_method === 'github-actions' && existing.screenshots?.length) return existing
+  if (existing?.build_method === 'github-actions' && existing.build_transport === 'omgithub-zip' && existing.screenshots?.length) return existing
   if (!buildEnabled) return materializePublicProject({ owner: sourceOwner, repo: sourceRepo, sha, baseHost, gamesDir, store })
 
   for (const [token, pending] of pendingBuilds) if (pending.expiresAt < Date.now()) pendingBuilds.delete(token)

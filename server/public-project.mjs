@@ -199,6 +199,7 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
       screenshots: screenshotUrls(entries, owner, repo, sha, { baseHost, slug, built: Boolean(archiveBuffer) }),
       status: 'published',
       build_method: archiveBuffer ? 'github-actions' : 'source',
+      build_transport: archiveBuffer ? 'omgithub-zip' : 'source',
       build_run_id: buildRunId,
       url: `https://${slug}.${baseHost}`,
       install_url: `https://${slug}.${baseHost}/install`,
