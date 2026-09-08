@@ -1,12 +1,12 @@
 import express from 'express'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cookies, nonce, sign, verify } from './auth.mjs'
-import { buildPublicProject } from './github-build.mjs'
+import { dispatchPublicBuild } from './github-build.mjs'
 import { dispatchOmgRequest, extractUrls, github, omgRequest, verifyWebhookSignature } from './github.mjs'
 import { materializePublicProject, resolveLatestPublicCommit } from './public-project.mjs'
 import { createStore } from './store.mjs'
@@ -26,6 +26,7 @@ const buildOwner = process.env.OMGHITHUB_BUILD_OWNER || owner
 const buildRepo = process.env.OMGHITHUB_BUILD_REPO || repo
 const buildWorkflowFile = process.env.OMGHITHUB_BUILD_WORKFLOW || 'omgithub-build.yml'
 const buildRef = process.env.OMGHITHUB_BUILD_REF || 'main'
+const buildUploadMaxBytes = 80 * 1024 * 1024
 const githubApp = {
   appId: process.env.GITHUB_APP_ID || '',
   privateKey: String(process.env.GITHUB_APP_PRIVATE_KEY || '').replaceAll('\\n', '\n'),
@@ -49,6 +50,7 @@ if (firebaseCredential) {
 }
 const store = createStore(dataDir, firestore)
 const sessions = new Map()
+const pendingBuilds = new Map()
 const rate = new Map()
 const app = express()
 app.set('trust proxy', true)
@@ -84,11 +86,25 @@ async function materializeForPublication({ owner: sourceOwner, repo: sourceRepo,
   const sourceKey = `${sourceOwner.toLowerCase()}/${sourceRepo.toLowerCase()}@${sha.toLowerCase()}`
   const existing = await store.bySourceKey(sourceKey)
   if (existing?.build_method === 'github-actions' && existing.screenshots?.length) return existing
-  let build = null
-  if (buildEnabled) {
-    build = await buildPublicProject({ sourceOwner, sourceRepo, sourceSha: sha, workflowOwner: buildOwner, workflowRepo: buildRepo, workflowFile: buildWorkflowFile, workflowRef: buildRef, token: githubToken })
+  if (!buildEnabled) return materializePublicProject({ owner: sourceOwner, repo: sourceRepo, sha, baseHost, gamesDir, store })
+
+  for (const [token, pending] of pendingBuilds) if (pending.expiresAt < Date.now()) pendingBuilds.delete(token)
+  const uploadToken = randomBytes(32).toString('hex')
+  pendingBuilds.set(uploadToken, { owner: sourceOwner, repo: sourceRepo, sha: sha.toLowerCase(), expiresAt: Date.now() + 20 * 60 * 1000, processing: false })
+  try {
+    const build = await dispatchPublicBuild({ sourceOwner, sourceRepo, sourceSha: sha, workflowOwner: buildOwner, workflowRepo: buildRepo, workflowFile: buildWorkflowFile, workflowRef: buildRef, token: githubToken, uploadUrl: `${origin}/api/builds`, uploadToken })
+    const project = await store.bySourceKey(sourceKey)
+    if (!project || project.build_run_id !== String(build.run.id)) throw Object.assign(new Error('GitHub Actions build finished without publishing its ZIP'), { status: 502 })
+    return project
+  } finally {
+    pendingBuilds.delete(uploadToken)
   }
-  return materializePublicProject({ owner: sourceOwner, repo: sourceRepo, sha, baseHost, gamesDir, store, archiveBuffer: build?.buffer || null, buildRunId: build?.run.id ? String(build.run.id) : '' })
+}
+
+function equalSecret(expected, actual) {
+  const left = Buffer.from(String(expected || ''))
+  const right = Buffer.from(String(actual || ''))
+  return left.length > 0 && left.length === right.length && timingSafeEqual(left, right)
 }
 
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'omgithub' }))
@@ -167,6 +183,26 @@ app.post('/api/issues', async (req, res, next) => {
     }
     res.status(201).json({ number: issue.number, github_url: issue.html_url, omgithub_path: `/${owner}/${repo}/issues/${issue.number}`, started: true })
   } catch (e) { next(e) }
+})
+
+app.post('/api/builds', express.raw({ type: ['application/zip', 'application/octet-stream'], limit: `${buildUploadMaxBytes}b` }), async (req, res, next) => {
+  let pending = null
+  try {
+    const token = String(req.headers['x-omgithub-build-token'] || '')
+    pending = pendingBuilds.get(token)
+    if (!pending || pending.expiresAt < Date.now()) return res.status(401).json({ error: 'Invalid or expired build upload token' })
+    if (pending.processing) return res.status(409).json({ error: 'Build upload is already being processed' })
+    if (!equalSecret(pending.owner, req.headers['x-omgithub-source-owner']) || !equalSecret(pending.repo, req.headers['x-omgithub-source-repo']) || !equalSecret(pending.sha, req.headers['x-omgithub-source-sha'])) return res.status(400).json({ error: 'Build source headers do not match the requested commit' })
+    if (!String(req.headers['content-type'] || '').toLowerCase().includes('application/zip')) return res.status(415).json({ error: 'Build upload must be a ZIP' })
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0 || req.body.length > buildUploadMaxBytes) return res.status(413).json({ error: 'Build ZIP is empty or too large' })
+    pending.processing = true
+    const project = await materializePublicProject({ owner: pending.owner, repo: pending.repo, sha: pending.sha, baseHost, gamesDir, store, archiveBuffer: req.body, buildRunId: String(req.headers['x-omgithub-build-run'] || '') })
+    pendingBuilds.delete(token)
+    res.status(201).json({ ok: true, commit: project.commit, screenshots: project.screenshots })
+  } catch (e) {
+    if (pending) pending.processing = false
+    next(e)
+  }
 })
 
 app.get('/api/github/:owner/:repo/issues/:number', async (req, res, next) => {

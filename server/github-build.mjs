@@ -28,7 +28,7 @@ function workflowPath(owner, repo, file) {
   return `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/workflows/${file.split('/').map(encodeURIComponent).join('/')}`
 }
 
-export async function buildPublicProject({
+export async function dispatchPublicBuild({
   sourceOwner,
   sourceRepo,
   sourceSha,
@@ -37,6 +37,8 @@ export async function buildPublicProject({
   workflowFile = 'omgithub-build.yml',
   workflowRef = 'main',
   token,
+  uploadUrl,
+  uploadToken,
   requestFetch = fetch,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   pollMs = DEFAULT_POLL_MS
@@ -50,7 +52,7 @@ export async function buildPublicProject({
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       ref: workflowRef,
-      inputs: { source_owner: sourceOwner, source_repo: sourceRepo, source_sha: sourceSha, request_id: requestId }
+      inputs: { source_owner: sourceOwner, source_repo: sourceRepo, source_sha: sourceSha, request_id: requestId, upload_url: uploadUrl, upload_token: uploadToken }
     })
   })
 
@@ -65,12 +67,5 @@ export async function buildPublicProject({
   if (!run) throw Object.assign(new Error('GitHub Actions build did not start before the timeout'), { status: 504 })
   if (run.status !== 'completed') throw Object.assign(new Error('GitHub Actions build timed out'), { status: 504 })
   if (run.conclusion !== 'success') throw Object.assign(new Error(`GitHub Actions build ${run.conclusion || 'failed'}`), { status: 502 })
-
-  const artifacts = await githubJson(`/repos/${encodeURIComponent(workflowOwner)}/${encodeURIComponent(workflowRepo)}/actions/runs/${run.id}/artifacts?per_page=100`, token, requestFetch)
-  const artifact = (artifacts.artifacts || []).find(candidate => candidate.name === `omgithub-build-${run.id}` && !candidate.expired)
-  if (!artifact) throw Object.assign(new Error('GitHub Actions build completed without a deployable artifact'), { status: 502 })
-
-  const response = await requestFetch(artifact.archive_download_url, { headers: headers(token) })
-  if (!response.ok) throw Object.assign(new Error(`GitHub artifact download returned ${response.status}`), { status: response.status })
-  return { buffer: Buffer.from(await response.arrayBuffer()), run, artifact }
+  return { run }
 }

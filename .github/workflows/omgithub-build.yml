@@ -21,6 +21,14 @@ on:
         description: Unique OmGithub build request identifier
         required: true
         type: string
+      upload_url:
+        description: OmGithub endpoint that receives the deploy ZIP
+        required: true
+        type: string
+      upload_token:
+        description: One-time token for the deploy ZIP upload
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -74,7 +82,7 @@ jobs:
             echo 'No npm build script found; packaging the static repository root.'
           fi
 
-      - name: Prepare deployable artifact
+      - name: Prepare deployable files
         working-directory: source
         shell: bash
         run: |
@@ -118,10 +126,26 @@ jobs:
             test -s omgithub-build/screenshots/final-build.png
           fi
 
-      - name: Upload deployable artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: omgithub-build-${{ github.run_id }}
-          path: source/omgithub-build
-          if-no-files-found: error
-          retention-days: 1
+      - name: Upload deployable ZIP to OmGithub
+        working-directory: source
+        shell: bash
+        env:
+          OMGHITHUB_UPLOAD_URL: ${{ inputs.upload_url }}
+          OMGHITHUB_UPLOAD_TOKEN: ${{ inputs.upload_token }}
+          OMGHITHUB_SOURCE_OWNER: ${{ inputs.source_owner }}
+          OMGHITHUB_SOURCE_REPO: ${{ inputs.source_repo }}
+          OMGHITHUB_SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          (cd omgithub-build && zip -qr ../omgithub-build.zip .)
+          test -s omgithub-build.zip
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 \
+            -X POST \
+            -H 'content-type: application/zip' \
+            -H "x-omgithub-build-token: $OMGHITHUB_UPLOAD_TOKEN" \
+            -H "x-omgithub-source-owner: $OMGHITHUB_SOURCE_OWNER" \
+            -H "x-omgithub-source-repo: $OMGHITHUB_SOURCE_REPO" \
+            -H "x-omgithub-source-sha: $OMGHITHUB_SOURCE_SHA" \
+            -H "x-omgithub-build-run: $GITHUB_RUN_ID" \
+            --data-binary @omgithub-build.zip \
+            "$OMGHITHUB_UPLOAD_URL"

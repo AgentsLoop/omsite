@@ -36,10 +36,12 @@ branch commit. Before publishing, OmGithub dispatches
 `.github/workflows/omgithub-build.yml` in the central repository. That action
 checks out the exact public commit, runs `npm ci` when a lockfile exists or
 `npm install` otherwise, runs `npm run build`, and uploads the deployable
-`dist/`, `build/`, or static-root artifact. OmGithub publishes that artifact
-and discovers committed `screenshots/final-*` images. The visitor supplies no
-token or credentials; the server's `GITHUB_TOKEN` dispatches and downloads the
-short-lived build artifact.
+`dist/`, `build/`, or static-root ZIP directly to `POST /api/builds`. OmGithub
+validates the one-time upload token, source headers, exact commit, ZIP limits,
+and `index.html`, then extracts and publishes the ZIP before the Action exits.
+The visitor supplies no token or credentials; the server's `GITHUB_TOKEN`
+dispatches the build and the Action's short-lived upload token authorizes the
+direct handoff. No GitHub Actions artifact is retained.
 
 The webhook router validates `X-Hub-Signature-256` and accepts only non-bot
 `issues.opened` events that already contain the exact `OpenCode` label, or
