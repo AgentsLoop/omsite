@@ -79,27 +79,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf .omgithub-build
-          mkdir -p .omgithub-build
+          rm -rf omgithub-build
+          mkdir -p omgithub-build
           if [[ -d dist ]]; then
-            cp -a dist/. .omgithub-build/
+            cp -a dist/. omgithub-build/
           elif [[ -d build ]]; then
-            cp -a build/. .omgithub-build/
+            cp -a build/. omgithub-build/
           elif [[ -f index.html ]]; then
-            rsync -a --exclude='.git' --exclude='node_modules' --exclude='.omgithub-build' ./ .omgithub-build/
+            rsync -a --exclude='.git' --exclude='node_modules' --exclude='omgithub-build' ./ omgithub-build/
           else
             echo 'The build did not produce dist/index.html, build/index.html, or root index.html.' >&2
             exit 1
           fi
           if [[ -d screenshots ]]; then
-            cp -a screenshots .omgithub-build/
+            cp -a screenshots omgithub-build/
           fi
-          test -f .omgithub-build/index.html
+          test -f omgithub-build/index.html
 
       - name: Upload deployable artifact
         uses: actions/upload-artifact@v4
         with:
           name: omgithub-build-${{ github.run_id }}
-          path: source/.omgithub-build
+          path: source/omgithub-build
           if-no-files-found: error
           retention-days: 1
