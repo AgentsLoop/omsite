@@ -45,8 +45,11 @@ for event routing, required permissions, and branch selection.
 
 Open `/owner/repo/tree/ref/path` to publish a game from a repository
 subdirectory. OmGithub resolves the branch or tag, builds that directory, and
-publishes its `dist/`, `build/`, or static root. For example, open
-`/asmoyou/toy2game/tree/main/games/balance-astronaut`.
+publishes its `dist/`, `build/`, or static root. Open
+`/owner/repo/blob/ref/path/game.html` to publish a selected HTML entry file;
+OmGithub renames that file to `index.html` and preserves sibling assets. For
+example, open
+`/Ayi1337/gpt6-astra-one-shot-games/blob/main/mosswing/mosswing.html`.
 
 Deploy to A1 with `../scripts/deploy-omgithub-a1.sh`. Bind the container to
 `127.0.0.1:8794` and terminate TLS through host Caddy.

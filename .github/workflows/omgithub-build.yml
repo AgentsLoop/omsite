@@ -22,6 +22,11 @@ on:
         required: false
         default: ''
         type: string
+      source_entry:
+        description: Optional HTML entry file to rename to index.html
+        required: false
+        default: ''
+        type: string
       request_id:
         description: Unique OmGithub build request identifier
         required: true
@@ -60,11 +65,14 @@ jobs:
         shell: bash
         env:
           OMGHITHUB_SOURCE_PATH: ${{ inputs.source_path }}
+          OMGHITHUB_SOURCE_ENTRY: ${{ inputs.source_entry }}
         run: |
           set -euo pipefail
           project_dir="${OMGHITHUB_SOURCE_PATH:-}"
+          source_entry="${OMGHITHUB_SOURCE_ENTRY:-}"
           if [[ -z "$project_dir" ]]; then project_dir='.'; fi
           [[ "$project_dir" != /* && "$project_dir" != *'..'* ]] || { echo 'Invalid source path.' >&2; exit 1; }
+          [[ "$source_entry" != /* && "$source_entry" != *'..'* ]] || { echo 'Invalid source entry.' >&2; exit 1; }
           [[ -d "$project_dir" ]] || { echo "Source path does not exist: $project_dir" >&2; exit 1; }
           cd "$project_dir"
           if [[ ! -f package.json ]]; then
@@ -104,10 +112,13 @@ jobs:
         shell: bash
         env:
           OMGHITHUB_SOURCE_PATH: ${{ inputs.source_path }}
+          OMGHITHUB_SOURCE_ENTRY: ${{ inputs.source_entry }}
         run: |
           set -euo pipefail
           project_dir="${OMGHITHUB_SOURCE_PATH:-}"
+          source_entry="${OMGHITHUB_SOURCE_ENTRY:-}"
           if [[ -z "$project_dir" ]]; then project_dir='.'; fi
+          [[ "$source_entry" != /* && "$source_entry" != *'..'* ]] || { echo 'Invalid source entry.' >&2; exit 1; }
           cd "$project_dir"
           build_root="$GITHUB_WORKSPACE/source/omgithub-build"
           rm -rf "$build_root"
@@ -129,8 +140,11 @@ jobs:
             cp -a "$deploy_dir"/. "$build_root/"
           elif [[ -f index.html ]]; then
             rsync -a --exclude='.git' --exclude='node_modules' --exclude='omgithub-build' ./ "$build_root/"
+          elif [[ -n "$source_entry" && -f "$source_entry" ]]; then
+            rsync -a --exclude='.git' --exclude='node_modules' --exclude='omgithub-build' ./ "$build_root/"
+            mv "$build_root/$source_entry" "$build_root/index.html"
           else
-            echo 'The build did not produce a deployable index.html in a known output directory or the source root.' >&2
+            echo 'The build did not produce a deployable index.html in a known output directory, the source root, or the requested source entry.' >&2
             exit 1
           fi
           if [[ -d screenshots ]]; then
@@ -175,6 +189,7 @@ jobs:
           OMGHITHUB_SOURCE_REPO: ${{ inputs.source_repo }}
           OMGHITHUB_SOURCE_SHA: ${{ inputs.source_sha }}
           OMGHITHUB_SOURCE_PATH: ${{ inputs.source_path }}
+          OMGHITHUB_SOURCE_ENTRY: ${{ inputs.source_entry }}
         run: |
           set -euo pipefail
           (cd omgithub-build && zip -qr ../omgithub-build.zip .)
@@ -187,6 +202,7 @@ jobs:
             -H "x-omgithub-source-repo: $OMGHITHUB_SOURCE_REPO" \
             -H "x-omgithub-source-sha: $OMGHITHUB_SOURCE_SHA" \
             -H "x-omgithub-source-path: $OMGHITHUB_SOURCE_PATH" \
+            -H "x-omgithub-source-entry: $OMGHITHUB_SOURCE_ENTRY" \
             -H "x-omgithub-build-run: $GITHUB_RUN_ID" \
             --data-binary @omgithub-build.zip \
             "$OMGHITHUB_UPLOAD_URL"

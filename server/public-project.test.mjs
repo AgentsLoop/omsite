@@ -69,7 +69,7 @@ test('requires a full commit SHA and a committed browser entrypoint', async () =
   }
   await assert.rejects(
     materializePublicProject({ owner: 'owner', repo: 'repo', sha, baseHost: 'omgithub.com', gamesDir: '/tmp/nope', store, requestFetch }),
-    /must contain dist\/index.html or index.html/
+    /must contain dist\/index.html/
   )
 })
 
@@ -169,4 +169,30 @@ test('materializes a selected game directory from a repository ZIP', async () =>
   assert.equal(project.store_path, publicPath)
   assert.equal(project.legacy_store_path, `/owner/repo/tree/${sha}/games/balance-astronaut`)
   assert.match(project.slug, /-games-balance-astronaut|-[0-9a-f]{8}$/)
+})
+
+test('materializes a selected HTML entry file as index.html', async () => {
+  const sha = '7'.repeat(40)
+  const zip = new AdmZip()
+  zip.addFile('owner-repo-g/mosswing/mosswing.html', Buffer.from('<title>Mosswing</title><p>game</p>'))
+  zip.addFile('owner-repo-g/mosswing/src/game.js', Buffer.from('console.log("mosswing")'))
+  const rows = []
+  const store = { bySourceKey: async key => rows.find(row => row.source_key === key) || null, put: async project => { rows.push(project); return project } }
+  const requestFetch = async url => {
+    if (url.endsWith('/repos/owner/repo')) return response({ name: 'repo', private: false, owner: { login: 'owner' } })
+    if (url.endsWith(`/commits/${sha}`)) return response({ sha, commit: { message: 'Selected HTML game' } })
+    if (url.endsWith(`/zipball/${sha}`)) return response(zip.toBuffer())
+    return response({ message: 'not found' }, { status: 404 })
+  }
+  const gamesDir = join(mkdtempSync(join(tmpdir(), 'omgithub-html-entry-')), 'games')
+  const publicPath = '/owner/repo/blob/main/mosswing/mosswing.html'
+
+  const project = await materializePublicProject({ owner: 'owner', repo: 'repo', sha, projectPath: 'mosswing', sourceEntry: 'mosswing.html', publicPath, baseHost: 'omgithub.com', gamesDir, store, requestFetch })
+
+  assert.equal(readFileSync(join(project.local_dir, 'index.html'), 'utf8'), '<title>Mosswing</title><p>game</p>')
+  assert.equal(readFileSync(join(project.local_dir, 'src/game.js'), 'utf8'), 'console.log("mosswing")')
+  assert.equal(project.public_path, publicPath)
+  assert.equal(project.store_path, publicPath)
+  assert.equal(project.legacy_store_path, `/owner/repo/blob/${sha}/mosswing/mosswing.html`)
+  assert.equal(project.github_url, `https://github.com/owner/repo/blob/${sha}/mosswing/mosswing.html`)
 })

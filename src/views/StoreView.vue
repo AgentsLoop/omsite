@@ -28,7 +28,8 @@ const { data: publication, loading, error } = useJsonResource(() => {
   const base = `/api/github/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
   const ref = route.params.ref || sha
   const path = route.params.path ? String(route.params.path).split('/').filter(Boolean).map(encodeURIComponent).join('/') : ''
-  return ref ? `${base}/tree/${encodeURIComponent(ref)}${path ? `/${path}` : ''}/progress` : `${base}/progress`
+  const routeKind = route.path.includes('/blob/') ? 'blob' : 'tree'
+  return ref ? `${base}/${routeKind}/${encodeURIComponent(ref)}${path ? `/${path}` : ''}/progress` : `${base}/progress`
 }, { pollMs: 2000, acceptStatuses: [202, 502], shouldPoll: result => result?.state !== 'published' && result?.state !== 'failed' })
 const project = computed(() => publication.value?.project || null)
 const steps = [

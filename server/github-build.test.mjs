@@ -22,6 +22,7 @@ test('dispatches a repository build for direct ZIP upload', async () => {
       const inputs = JSON.parse(options.body).inputs
       requestId = inputs.request_id
       assert.equal(inputs.source_path, '')
+      assert.equal(inputs.source_entry, '')
       assert.equal(inputs.upload_url, 'https://omgithub.com/api/builds')
       assert.equal(inputs.upload_token, 'upload-secret')
       return response('', { status: 204 })
@@ -44,6 +45,7 @@ test('dispatches a selected repository subdirectory to the build workflow', asyn
       const inputs = JSON.parse(options.body).inputs
       requestId = inputs.request_id
       assert.equal(inputs.source_path, 'games/balance-astronaut')
+      assert.equal(inputs.source_entry, '')
       return response('', { status: 204 })
     }
     if (url.includes('/runs?')) return response({ workflow_runs: [{ id: 43, status: 'completed', conclusion: 'success', display_title: `OmGithub build ${requestId}` }] })
@@ -53,4 +55,23 @@ test('dispatches a selected repository subdirectory to the build workflow', asyn
   const result = await dispatchPublicBuild({ sourceOwner: 'owner', sourceRepo: 'repo', sourceSha: 'b'.repeat(40), sourcePath: 'games/balance-astronaut', workflowOwner: 'AgentsLoop', workflowRepo: 'OhMyGithub', token: 'secret', uploadUrl: 'https://omgithub.com/api/builds', uploadToken: 'upload-secret', requestFetch, pollMs: 0 })
 
   assert.equal(result.run.id, 43)
+})
+
+test('dispatches a selected HTML entry file', async () => {
+  let requestId = ''
+  const requestFetch = async (url, options = {}) => {
+    if (url.endsWith('/dispatches')) {
+      const inputs = JSON.parse(options.body).inputs
+      requestId = inputs.request_id
+      assert.equal(inputs.source_path, 'mosswing')
+      assert.equal(inputs.source_entry, 'mosswing.html')
+      return response('', { status: 204 })
+    }
+    if (url.includes('/runs?')) return response({ workflow_runs: [{ id: 44, status: 'completed', conclusion: 'success', display_title: `OmGithub build ${requestId}` }] })
+    return response({ message: 'not found' }, { status: 404 })
+  }
+
+  const result = await dispatchPublicBuild({ sourceOwner: 'owner', sourceRepo: 'repo', sourceSha: 'c'.repeat(40), sourcePath: 'mosswing', sourceEntry: 'mosswing.html', workflowOwner: 'AgentsLoop', workflowRepo: 'OhMyGithub', token: 'secret', uploadUrl: 'https://omgithub.com/api/builds', uploadToken: 'upload-secret', requestFetch, pollMs: 0 })
+
+  assert.equal(result.run.id, 44)
 })

@@ -12,6 +12,12 @@ inside a repository. Resolve `<ref>` as a branch, tag, or commit SHA. Build
 only `<path>`. For example, use
 `https://omgithub.com/asmoyou/toy2game/tree/main/games/balance-astronaut`.
 
+Open `https://omgithub.com/<owner>/<repo>/blob/<ref>/<file>` to publish one
+HTML game file and its sibling assets. Build the file's directory, rename the
+selected HTML file to `index.html`, and preserve the `blob` URL as the store
+path. For example, use
+`https://omgithub.com/Ayi1337/gpt6-astra-one-shot-games/blob/main/mosswing/mosswing.html`.
+
 Keep the source repository public. Supply no visitor credentials. Configure the
 server's `GITHUB_TOKEN` to dispatch
 [the build workflow](../.github/workflows/omgithub-build.yml).
@@ -23,7 +29,8 @@ first uncached visit. Keep the full commit-SHA route available only as a
 backwards-compatible route.
 
 Let the workflow install dependencies, build the source, select `dist/`,
-`build/`, or the static root, and capture a screenshot when needed. Upload the
+`build/`, the static root, or a selected HTML entry file, and capture a
+screenshot when needed. Upload the
 deployable ZIP directly to `/api/builds` with the temporary upload token and
 matching source headers. Retain no GitHub Actions artifact.
 
