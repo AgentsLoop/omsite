@@ -112,16 +112,25 @@ jobs:
           build_root="$GITHUB_WORKSPACE/source/omgithub-build"
           rm -rf "$build_root"
           mkdir -p "$build_root"
-          if [[ -f dist/index.html ]]; then
-            cp -a dist/. "$build_root/"
-          elif [[ -f build/index.html ]]; then
-            cp -a build/. "$build_root/"
-          elif [[ -f .output/public/index.html ]]; then
-            cp -a .output/public/. "$build_root/"
+          deploy_dir=''
+          for candidate in dist build .output/public .output out dist/client; do
+            if [[ -f "$candidate/index.html" ]]; then
+              deploy_dir="$candidate"
+              break
+            fi
+          done
+          if [[ -z "$deploy_dir" ]]; then
+            generated_index="$(find . -path './.git' -prune -o -path './node_modules' -prune -o -type f -name index.html -print | sort | sed -n '1p')"
+            if [[ -n "$generated_index" && "$generated_index" != './index.html' ]]; then
+              deploy_dir="${generated_index%/index.html}"
+            fi
+          fi
+          if [[ -n "$deploy_dir" ]]; then
+            cp -a "$deploy_dir"/. "$build_root/"
           elif [[ -f index.html ]]; then
             rsync -a --exclude='.git' --exclude='node_modules' --exclude='omgithub-build' ./ "$build_root/"
           else
-            echo 'The build did not produce dist/index.html, build/index.html, .output/public/index.html, or root index.html.' >&2
+            echo 'The build did not produce a deployable index.html in a known output directory or the source root.' >&2
             exit 1
           fi
           if [[ -d screenshots ]]; then
