@@ -25,8 +25,9 @@ the authenticated `GITHUB_TOKEN`.
 
 ## Configuration
 
-- Set `GITHUB_TOKEN` to apply `Goal` and `OpenCode` labels and dispatch public
-  repository builds.
+- Set `GITHUB_TOKEN` for public repository builds and reads.
+- Require GitHub login and repository write access for issue submission. Apply
+  execution labels with the App installation token after storing approval.
 - Set `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_WEBHOOK_SECRET`
   to authenticate App webhooks and installation requests.
 - Set `OMG_FALLBACK_OWNER`, `OMG_FALLBACK_REPO`, and `OMG_FALLBACK_REF` to
@@ -35,7 +36,10 @@ the authenticated `GITHUB_TOKEN`.
 - Set a stable `SESSION_SECRET`. Expect a server restart to end sessions;
   keep one server process for the in-memory session and build registries.
 - Set `FIREBASE_SERVICE_ACCOUNT_BASE64` or `FIREBASE_SERVICE_ACCOUNT_JSON`
-  to use Firebase. Otherwise, persist the local catalog under `DATA_DIR`.
+  to use Firebase. Persist execution approvals and claims there too. Otherwise,
+  keep the local catalog and `opencode-executions/` under persistent `DATA_DIR`.
+- Set repository variable `OMG_APP_ORIGIN` when the preparation endpoint uses
+  a different HTTPS origin. Match its OIDC audience to `/api/opencode/prepare`.
 - Set `PUBLIC_ORIGIN=https://omgithub.com` in production. Set
   `PUBLIC_ALIASES` to a comma-separated list of additional public domains.
 - Set `OMGHITHUB_BUILD_OWNER`, `OMGHITHUB_BUILD_REPO`,

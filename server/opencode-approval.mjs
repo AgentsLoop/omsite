@@ -6,7 +6,7 @@ import { appJwt, parseIssueRequest } from './github.mjs'
 const ISSUER = 'https://token.actions.githubusercontent.com'
 const deny = (message, status = 403) => { throw Object.assign(new Error(message), { status }) }
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex')
-const lifecycleLabels = new Set(['in progress', 'complete', 'failed'])
+const lifecycleLabels = new Set(['in progress', 'validating', 'complete', 'failed'])
 const labels = issue => (issue.labels || []).map(label => typeof label === 'string' ? label : label.name).filter(name => !lifecycleLabels.has(name)).sort()
 export const snapshotHash = (issue, targetRef) => hash({ title: issue.title || '', body: issue.body || '', labels: labels(issue), targetRef })
 
