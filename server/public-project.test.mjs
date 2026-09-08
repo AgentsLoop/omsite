@@ -160,10 +160,13 @@ test('materializes a selected game directory from a repository ZIP', async () =>
   }
   const gamesDir = join(mkdtempSync(join(tmpdir(), 'omgithub-subdirectory-')), 'games')
 
-  const project = await materializePublicProject({ owner: 'owner', repo: 'repo', sha, projectPath: 'games/balance-astronaut', baseHost: 'omgithub.com', gamesDir, store, requestFetch, buildRunId: '43' })
+  const publicPath = '/owner/repo/tree/main/games/balance-astronaut'
+  const project = await materializePublicProject({ owner: 'owner', repo: 'repo', sha, projectPath: 'games/balance-astronaut', publicPath, baseHost: 'omgithub.com', gamesDir, store, requestFetch, buildRunId: '43' })
 
   assert.equal(readFileSync(join(project.local_dir, 'index.html'), 'utf8'), '<title>Balance Astronaut</title>')
   assert.equal(readFileSync(join(project.local_dir, 'assets/game.js'), 'utf8'), 'console.log("astronaut")')
-  assert.equal(project.store_path, `/owner/repo/tree/${sha}/games/balance-astronaut`)
+  assert.equal(project.public_path, publicPath)
+  assert.equal(project.store_path, publicPath)
+  assert.equal(project.legacy_store_path, `/owner/repo/tree/${sha}/games/balance-astronaut`)
   assert.match(project.slug, /-games-balance-astronaut|-[0-9a-f]{8}$/)
 })

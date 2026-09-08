@@ -169,9 +169,11 @@ function pageMetadata(indexPath) {
   return { title, description }
 }
 
-export async function materializePublicProject({ owner, repo, sha, baseHost, gamesDir, store, requestFetch = fetch, archiveBuffer = null, buildRunId = '', projectPath = '' }) {
+export async function materializePublicProject({ owner, repo, sha, baseHost, gamesDir, store, requestFetch = fetch, archiveBuffer = null, buildRunId = '', projectPath = '', publicPath = '' }) {
   validateSource(owner, repo, sha)
   projectPath = validateProjectPath(projectPath)
+  publicPath = String(publicPath || '').trim()
+  if (publicPath && (!publicPath.startsWith('/') || publicPath.includes('..'))) throw Object.assign(new Error('Invalid public project path'), { status: 400 })
   const sourceKey = `${owner.toLowerCase()}/${repo.toLowerCase()}@${sha.toLowerCase()}${projectPath ? `:${projectPath}` : ''}`
   const existing = await store.bySourceKey(sourceKey)
   if (existing && !archiveBuffer) return existing
@@ -203,6 +205,7 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
   const extracted = extractDeployment(zip, destination, Boolean(archiveBuffer), archiveBuffer ? '' : projectPath)
   try {
     const metadata = pageMetadata(resolve(extracted.staging, 'index.html'))
+    const legacyStorePath = `/${owner}/${repo}/tree/${sha.toLowerCase()}${projectPath ? `/${projectPath}` : ''}`
     const project = {
       id: createHash('sha256').update(sourceKey).digest('hex').slice(0, 20),
       source_key: sourceKey,
@@ -221,7 +224,9 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
       build_run_id: buildRunId,
       url: `https://${slug}.${baseHost}`,
       install_url: `https://${slug}.${baseHost}/install`,
-      store_path: `/${owner}/${repo}/tree/${sha.toLowerCase()}${projectPath ? `/${projectPath}` : ''}`,
+      public_path: publicPath || '',
+      legacy_store_path: legacyStorePath,
+      store_path: publicPath || legacyStorePath,
       github_url: `https://github.com/${owner}/${repo}/tree/${sha}${projectPath ? `/${projectPath}` : ''}`,
       published_at: new Date().toISOString(),
       local_dir: destination
@@ -236,7 +241,7 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
   }
 }
 
-export async function materializeLatestPublicProject({ owner, repo, baseHost, gamesDir, store, requestFetch = fetch }) {
+export async function materializeLatestPublicProject({ owner, repo, baseHost, gamesDir, store, requestFetch = fetch, publicPath = '' }) {
   const { sha } = await resolveLatestPublicCommit({ owner, repo, requestFetch })
-  return materializePublicProject({ owner, repo, sha, baseHost, gamesDir, store, requestFetch })
+  return materializePublicProject({ owner, repo, sha, baseHost, gamesDir, store, requestFetch, publicPath })
 }

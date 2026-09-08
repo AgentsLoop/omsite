@@ -1,19 +1,26 @@
 # OmGithub publishing
 
-## Publish a public commit
+## Publish a public repository path
 
-Open `https://omgithub.com/<owner>/<repo>/tree/<40-character-commit-sha>` to
-publish an exact public commit. Open `https://omgithub.com/<owner>/<repo>` to
-resolve the current default-branch commit first.
+Open `https://omgithub.com/<owner>/<repo>` to publish the repository's default
+branch. Open `https://omgithub.com/<owner>/<repo>/tree/<ref>/<path>` to publish
+a named branch or tag and a game directory. Prefer these named paths in links
+and store pages.
 
 Open `https://omgithub.com/<owner>/<repo>/tree/<ref>/<path>` to publish a game
 inside a repository. Resolve `<ref>` as a branch, tag, or commit SHA. Build
 only `<path>`. For example, use
 `https://omgithub.com/asmoyou/toy2game/tree/main/games/balance-astronaut`.
 
-Use a full commit SHA. Keep the source repository public. Supply no visitor
-credentials. Configure the server's `GITHUB_TOKEN` to dispatch
+Keep the source repository public. Supply no visitor credentials. Configure the
+server's `GITHUB_TOKEN` to dispatch
 [the build workflow](../.github/workflows/omgithub-build.yml).
+
+Keep the project catalog and deployment files on the server. Check the named
+repository path cache before calling GitHub. Reuse a cached published project
+for every repeat visit and progress poll. Resolve a branch or tag only on the
+first uncached visit. Keep the full commit-SHA route available only as a
+backwards-compatible route.
 
 Let the workflow install dependencies, build the source, select `dist/`,
 `build/`, or the static root, and capture a screenshot when needed. Upload the
@@ -25,9 +32,9 @@ limits in [public-project.mjs](../site/server/public-project.mjs). Read the
 replacement metadata before removing an existing deployment. Serve the
 published files on their project subdomain.
 
-Reuse a stored Actions deployment with screenshots for later visits. Share
-concurrent publication requests for the same repository and commit within
-one server process. Use one server process for the in-memory build registry.
+Reuse a stored Actions deployment for later visits. Share concurrent
+publication requests for the same named path and source commit within one
+server process. Use one server process for the in-memory build registry.
 
 Set `OMGHITHUB_BUILD_ENABLED=false` only to publish committed browser files
 directly. In that mode, provide `dist/index.html` or root `index.html` in the
@@ -35,11 +42,14 @@ commit and use committed `screenshots/final-*` images for the store page.
 
 ## Link from an issue
 
-Include the immutable URL in the completed issue comment:
+Prefer the repository path in the completed issue comment:
 
 ```markdown
-[Open Project](https://omgithub.com/<owner>/<repo>/tree/<commit-sha>)
+[Open Project](https://omgithub.com/<owner>/<repo>/tree/<ref>/<path>)
 ```
+
+Keep the full commit-SHA link working for old issue comments and old shared
+links.
 
 Poll issue comments for session links, preview links, screenshots, and the
 completed project link. Cancel requests on navigation. Wait for each response

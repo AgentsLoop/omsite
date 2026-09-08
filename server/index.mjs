@@ -52,6 +52,7 @@ const store = createStore(dataDir, firestore)
 const sessions = new Map()
 const pendingBuilds = new Map()
 const publications = new Map()
+const routePublications = new Map()
 const rate = new Map()
 const app = express()
 app.set('trust proxy', true)
@@ -85,8 +86,10 @@ function hostSlug(req) {
 }
 function safeGamePath(slug) { const path = resolve(gamesDir, slug); if (!path.startsWith(`${resolve(gamesDir)}${sep}`)) throw new Error('Unsafe game path'); return path }
 function publicProject(project) { const { local_dir, ...safe } = project; return safe }
-function card(project) { return { ...publicProject(project), issue_path: project.issue ? `/${project.repo_owner}/${project.repo}/issues/${project.issue}` : '', store_path: project.commit ? `/${project.repo_owner}/${project.repo}/tree/${project.commit}` : '', screenshot: project.screenshots?.[0] || '', status: project.status || 'published' } }
-function storePayload(project) { return { title: project.title, description: project.description, commit: project.commit, status: project.status, github_url: project.github_url, owner: project.owner_login, owner_avatar: project.owner_avatar, screenshots: project.screenshots, play_url: project.url, install_url: project.install_url, store_path: project.store_path } }
+function card(project) { return { ...publicProject(project), issue_path: project.issue ? `/${project.repo_owner}/${project.repo}/issues/${project.issue}` : '', store_path: project.public_path || project.store_path || (project.commit ? `/${project.repo_owner}/${project.repo}/tree/${project.commit}` : ''), screenshot: project.screenshots?.[0] || '', status: project.status || 'published' } }
+function storePayload(project) { return { title: project.title, description: project.description, commit: project.commit, status: project.status, github_url: project.github_url, owner: project.owner_login, owner_avatar: project.owner_avatar, screenshots: project.screenshots, play_url: project.url, install_url: project.install_url, public_path: project.public_path || '', store_path: project.public_path || project.store_path } }
+function namedPublicPath(owner, repo, ref = '', projectPath = '') { return `/${owner}/${repo}${ref ? `/tree/${ref}` : ''}${projectPath ? `/${projectPath}` : ''}` }
+function isCommitRef(ref) { return /^[0-9a-f]{40}$/i.test(String(ref || '')) }
 const publicationCopy = {
   checking: 'Checking the immutable source commit.',
   queued: 'GitHub Actions has queued the repository build.',
@@ -96,21 +99,22 @@ const publicationCopy = {
   failed: 'Publication failed.'
 }
 function publicationPayload(publication) {
+  const current = publication.sourcePublication || publication
   return {
-    state: publication.state,
-    message: publication.error || publicationCopy[publication.state] || publicationCopy.checking,
-    run_id: publication.runId || null,
-    project: publication.project ? storePayload(publication.project) : null
+    state: current.state,
+    message: publication.error || current.error || publicationCopy[current.state] || publicationCopy.checking,
+    run_id: current.runId || null,
+    project: current.project ? storePayload(current.project) : null
   }
 }
-async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha, projectPath = '' }) {
+async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha, projectPath = '', publicPath = '' }) {
   validateSource(sourceOwner, sourceRepo, sha)
   projectPath = validateProjectPath(projectPath)
   const sourceKey = `${sourceOwner.toLowerCase()}/${sourceRepo.toLowerCase()}@${sha.toLowerCase()}${projectPath ? `:${projectPath}` : ''}`
   const existingPublication = publications.get(sourceKey)
   if (existingPublication) return existingPublication
-  const publication = { sourceKey, state: 'checking', project: null, error: '', runId: '' }
-  publication.promise = publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, publication })
+  const publication = { sourceKey, sha: sha.toLowerCase(), publicPath, state: 'checking', project: null, error: '', runId: '' }
+  publication.promise = publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, publicPath, publication })
     .then(project => {
       publication.project = project
       publication.state = 'published'
@@ -128,18 +132,53 @@ async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha, pro
   publications.set(sourceKey, publication)
   return publication
 }
-async function materializeForPublication({ owner: sourceOwner, repo: sourceRepo, sha }) {
-  return (await startPublication({ owner: sourceOwner, repo: sourceRepo, sha })).promise
+async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref = '', projectPath = '', publicPath, latest = false }) {
+  projectPath = validateProjectPath(projectPath)
+  const cached = await store.byPublicPath(publicPath)
+  if (cached) return { state: 'published', project: cached, error: '', runId: '', promise: Promise.resolve(cached) }
+  const existingPublication = routePublications.get(publicPath)
+  if (existingPublication) return existingPublication
+
+  const publication = { publicPath, state: 'checking', project: null, error: '', runId: '' }
+  publication.promise = (async () => {
+    const resolved = latest
+      ? await resolveLatestPublicCommit({ owner: sourceOwner, repo: sourceRepo })
+      : await resolvePublicCommit({ owner: sourceOwner, repo: sourceRepo, ref })
+    publication.sha = resolved.sha.toLowerCase()
+    publication.sourcePublication = await startPublication({ owner: sourceOwner, repo: sourceRepo, sha: resolved.sha, projectPath, publicPath })
+    const project = await publication.sourcePublication.promise
+    const namedProject = project.public_path === publicPath && project.store_path === publicPath
+      ? project
+      : await store.put({ ...project, public_path: publicPath, store_path: publicPath })
+    publication.project = namedProject
+    publication.state = 'published'
+    return namedProject
+  })().catch(error => {
+    publication.error = error.message || 'Publication failed.'
+    publication.state = 'failed'
+    throw error
+  }).finally(() => setTimeout(() => {
+    if (routePublications.get(publicPath) === publication) routePublications.delete(publicPath)
+  }, 60 * 1000))
+  publication.promise.catch(() => {})
+  routePublications.set(publicPath, publication)
+  return publication
+}
+async function materializeForPublication({ owner: sourceOwner, repo: sourceRepo, sha, projectPath = '', publicPath = '' }) {
+  return (await startPublication({ owner: sourceOwner, repo: sourceRepo, sha, projectPath, publicPath })).promise
 }
 
-async function publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, publication }) {
+async function publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, publicPath, publication }) {
   const existing = await store.bySourceKey(sourceKey)
-  if (existing?.build_method === 'github-actions' && existing.build_transport === 'omgithub-zip' && existing.screenshots?.length) return existing
-  if (!buildEnabled) return materializePublicProject({ owner: sourceOwner, repo: sourceRepo, sha, baseHost, gamesDir, store })
+  if (existing?.status === 'published' && existing.url) {
+    if (publicPath && (existing.public_path !== publicPath || existing.store_path !== publicPath)) return store.put({ ...existing, public_path: publicPath, store_path: publicPath })
+    return existing
+  }
+  if (!buildEnabled) return materializePublicProject({ owner: sourceOwner, repo: sourceRepo, sha, projectPath, publicPath, baseHost, gamesDir, store })
 
   for (const [token, pending] of pendingBuilds) if (pending.expiresAt < Date.now()) pendingBuilds.delete(token)
   const uploadToken = randomBytes(32).toString('hex')
-  pendingBuilds.set(uploadToken, { owner: sourceOwner, repo: sourceRepo, sha: sha.toLowerCase(), projectPath, expiresAt: Date.now() + 20 * 60 * 1000, processing: false, publication })
+  pendingBuilds.set(uploadToken, { owner: sourceOwner, repo: sourceRepo, sha: sha.toLowerCase(), projectPath, publicPath, expiresAt: Date.now() + 20 * 60 * 1000, processing: false, publication })
   try {
     const build = await dispatchPublicBuild({ sourceOwner, sourceRepo, sourceSha: sha, sourcePath: projectPath, workflowOwner: buildOwner, workflowRepo: buildRepo, workflowFile: buildWorkflowFile, workflowRef: buildRef, token: githubToken, uploadUrl: `${origin}/api/builds`, uploadToken, onStatus: ({ phase, runId }) => { publication.state = phase; if (runId) publication.runId = runId } })
     const project = await store.bySourceKey(sourceKey)
@@ -249,7 +288,7 @@ app.post('/api/builds', express.raw({ type: ['application/zip', 'application/oct
     if (!Buffer.isBuffer(req.body) || req.body.length === 0 || req.body.length > buildUploadMaxBytes) return res.status(413).json({ error: 'Build ZIP is empty or too large' })
     pending.processing = true
     pending.publication.state = 'publishing'
-    const project = await materializePublicProject({ owner: pending.owner, repo: pending.repo, sha: pending.sha, projectPath: pending.projectPath, baseHost, gamesDir, store, archiveBuffer: req.body, buildRunId: String(req.headers['x-omgithub-build-run'] || '') })
+    const project = await materializePublicProject({ owner: pending.owner, repo: pending.repo, sha: pending.sha, projectPath: pending.projectPath, publicPath: pending.publicPath, baseHost, gamesDir, store, archiveBuffer: req.body, buildRunId: String(req.headers['x-omgithub-build-run'] || '') })
     pendingBuilds.delete(token)
     res.status(201).json({ ok: true, commit: project.commit, screenshots: project.screenshots })
   } catch (e) {
@@ -273,9 +312,11 @@ app.get('/api/github/:owner/:repo/tree/:ref/*path', async (req, res, next) => {
     const parts = (Array.isArray(req.params.path) ? req.params.path : [req.params.path]).filter(Boolean)
     const isProgress = parts.at(-1) === 'progress'
     const projectPath = (isProgress ? parts.slice(0, -1) : parts).join('/')
-    const { sha } = await resolvePublicCommit({ owner: req.params.owner, repo: req.params.repo, ref: req.params.ref })
-    const publication = await startPublication({ owner: req.params.owner, repo: req.params.repo, sha, projectPath })
-    const payload = { commit: sha.toLowerCase(), ...publicationPayload(publication) }
+    const ref = req.params.ref
+    const publication = isCommitRef(ref)
+      ? await startPublication({ owner: req.params.owner, repo: req.params.repo, sha: ref, projectPath })
+      : await startNamedPublication({ owner: req.params.owner, repo: req.params.repo, ref, projectPath, publicPath: namedPublicPath(req.params.owner, req.params.repo, ref, projectPath) })
+    const payload = { commit: publication.sha || null, ...publicationPayload(publication) }
     if (isProgress) return res.status(publication.state === 'published' ? 200 : publication.state === 'failed' ? 502 : 202).json(payload)
     const project = await publication.promise
     res.json(storePayload(project))
@@ -284,24 +325,26 @@ app.get('/api/github/:owner/:repo/tree/:ref/*path', async (req, res, next) => {
 
 app.get('/api/github/:owner/:repo/progress', async (req, res, next) => {
   try {
-    const { sha } = await resolveLatestPublicCommit({ owner: req.params.owner, repo: req.params.repo })
-    const publication = await startPublication({ owner: req.params.owner, repo: req.params.repo, sha })
-    res.status(publication.state === 'published' ? 200 : publication.state === 'failed' ? 502 : 202).json({ commit: sha.toLowerCase(), ...publicationPayload(publication) })
+    const publicPath = namedPublicPath(req.params.owner, req.params.repo)
+    const publication = await startNamedPublication({ owner: req.params.owner, repo: req.params.repo, publicPath, latest: true })
+    res.status(publication.state === 'published' ? 200 : publication.state === 'failed' ? 502 : 202).json({ commit: publication.sha || null, ...publicationPayload(publication) })
   } catch (e) { next(e) }
 })
 
 app.get('/api/github/:owner/:repo/tree/:ref', async (req, res, next) => {
   try {
-    const { sha } = await resolvePublicCommit({ owner: req.params.owner, repo: req.params.repo, ref: req.params.ref })
-    const project = await materializeForPublication({ owner: req.params.owner, repo: req.params.repo, sha })
+    const publication = isCommitRef(req.params.ref)
+      ? await startPublication({ owner: req.params.owner, repo: req.params.repo, sha: req.params.ref })
+      : await startNamedPublication({ owner: req.params.owner, repo: req.params.repo, ref: req.params.ref, publicPath: namedPublicPath(req.params.owner, req.params.repo, req.params.ref) })
+    const project = await publication.promise
     res.json(storePayload(project))
   } catch (e) { next(e) }
 })
 
 app.get('/api/github/:owner/:repo', async (req, res, next) => {
   try {
-    const { sha } = await resolveLatestPublicCommit({ owner: req.params.owner, repo: req.params.repo })
-    const project = await materializeForPublication({ owner: req.params.owner, repo: req.params.repo, sha })
+    const publication = await startNamedPublication({ owner: req.params.owner, repo: req.params.repo, publicPath: namedPublicPath(req.params.owner, req.params.repo), latest: true })
+    const project = await publication.promise
     res.json(storePayload(project))
   } catch (e) { next(e) }
 })

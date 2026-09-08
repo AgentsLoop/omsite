@@ -29,6 +29,11 @@ export function createStore(dataDir, firestore = null) {
       const snap = await firestore.collection('omgithub_projects').where('source_key', '==', sourceKey).limit(1).get()
       return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() }
     },
+    async byPublicPath(publicPath) {
+      if (!firestore) return read().find(row => row.public_path === publicPath) || null
+      const snap = await firestore.collection('omgithub_projects').where('public_path', '==', publicPath).limit(1).get()
+      return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() }
+    },
     async put(project) {
       if (firestore) await firestore.collection('omgithub_projects').doc(project.id).set(project, { merge: true })
       const rows = read(), index = rows.findIndex(row => row.id === project.id)
