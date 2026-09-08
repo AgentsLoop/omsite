@@ -20,12 +20,17 @@ Add these fields to every published game record:
 - `rating`: the public average rating from 1 to 10.
 - `rating_count`: the number of user ratings.
 - `rating_sum`: the internal sum of user ratings.
+- `play_count`: the public count of unique counted plays.
 - `metadata_source`: `opencode`, `github-list`, `manual`, or `import`.
 - `metadata_updated_at`: an ISO timestamp.
 
 Use one tag array only. Read GitHub repository topics, append validated extracted tags, lowercase, trim, deduplicate, and map aliases to canonical values. Keep the original extracted text in a private audit field when needed for review, but expose only the merged validated `tags` array in the public API.
 
 Keep `complexity_score` private. Do not return it from the public project API or display it on cards or store pages. Use it only to seed the initial public rating. Set `rating` to the generated complexity score while `rating_count` is zero. After a user rates the game, calculate the public rating as `(complexity_score + rating_sum) / (1 + rating_count)`. This gives the generated score one initial vote, then gives real user ratings increasing control as the rating count grows.
+
+Count a play when a visitor opens a game through the store-page Play action or when the published game sends its first successful play event. Use an anonymous browser session key and one count per project per 24 hours to prevent reload inflation. Increment `play_count` atomically. Do not use GitHub traffic statistics for this value.
+
+Store comments in a separate `project_comments` collection. Keep `project_id`, GitHub user ID, login, avatar URL, body, optional `rating`, created time, updated time, and moderation status. Allow one editable comment per signed-in GitHub user and project. Allow a comment rating from 1 to 10. When a comment includes or changes a rating, update that user's one project rating and recalculate the public aggregate in the same transaction. Deleting the comment must not delete the rating unless the user explicitly removes the rating.
 
 ## Extract metadata during the GitHub Action
 
@@ -71,9 +76,9 @@ Use an idempotent upsert. Never create duplicate records for the same canonical 
 
 Add a metadata panel to each store page.
 
-Display the prompt in a readable, collapsed section with a copy button. Show the merged tags and public rating. Do not display the complexity score. Link each prompt source and evidence source when available.
+Display the prompt in a readable, collapsed section with a copy button. Show the merged tags, public rating, rating count, and play count. Do not display the complexity score. Link each prompt source and evidence source when available.
 
-Add the same tags and public rating to the project card when space permits. Let signed-in users rate a game from 1 to 10. Store one updatable rating per GitHub user and project. Recalculate the rating immediately after each vote. Add filters for tag and rating range after the metadata is available.
+Add the same tags, public rating, and play count to the project card when space permits. Let signed-in users rate a game from 1 to 10. Store one updatable rating per GitHub user and project. Recalculate the rating immediately after each vote. Add a comments section to the store page. Let signed-in users post, edit, and remove their own comment; let them add or update an optional rating in that comment. Show approved comments in newest-first order. Add filters for tag and rating range after the metadata is available.
 
 Keep Discovery sorting by cached GitHub stars and latest publication. Add metadata filtering without calling GitHub when the user changes a filter.
 
@@ -153,12 +158,13 @@ Treat a game folder in a monorepo as distinct from the repository root. Treat re
 6. Import the direct repositories and selected folders.
 7. Scan catalog repositories for additional unique games and prompts.
 8. Backfill metadata for existing published games.
-9. Add private complexity storage, seeded public ratings, and one-user-per-game rating updates.
-10. Verify every imported game has a working play URL, valid `index.html`, screenshot status, source path, prompt status, non-empty description, public rating, and evidence-backed metadata.
+9. Add private complexity storage, seeded public ratings, one-user-per-game rating updates, and comment persistence.
+10. Add atomic, deduplicated play counting from the store Play action and the published game event.
+11. Verify every imported game has a working play URL, valid `index.html`, screenshot status, source path, prompt status, non-empty description, public rating, play count, comments, and evidence-backed metadata.
 
 ## Acceptance criteria
 
-- A published game displays its prompt, merged tags, and public rating when evidence exists.
+- A published game displays its prompt, merged tags, public rating, rating count, and play count when evidence exists.
 - A missing source description is replaced with an evidence-backed OpenCode description.
 - The GitHub Action extracts metadata through OpenCode and uploads validated JSON with the build.
 - Prompt-list imports write directly to the database through an idempotent operation.
@@ -167,3 +173,5 @@ Treat a game folder in a monorepo as distinct from the repository root. Treat re
 - All supplied direct repositories and selected game folders are checked, with unsupported or non-playable sources recorded in the import report.
 - Every complexity score has file evidence, remains an integer from 1 to 10, and is not exposed in the public API or UI.
 - A new game rating starts from its complexity score, and user ratings move the public rating over time.
+- A signed-in user can add, edit, or remove one comment for a game and can attach or update one rating from 1 to 10.
+- A game play increments the public play count once per browser session and project in a 24-hour period.
