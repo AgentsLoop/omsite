@@ -156,7 +156,7 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
   validateSource(owner, repo, sha)
   const sourceKey = `${owner.toLowerCase()}/${repo.toLowerCase()}@${sha.toLowerCase()}`
   const existing = await store.bySourceKey(sourceKey)
-  if (existing && (!archiveBuffer || existing.build_method === 'github-actions')) return existing
+  if (existing && !archiveBuffer) return existing
 
   const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
   const [repository, commit] = await Promise.all([
