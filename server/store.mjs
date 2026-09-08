@@ -34,6 +34,17 @@ export function createStore(dataDir, firestore = null) {
       const snap = await firestore.collection('omgithub_projects').where('public_path', '==', publicPath).limit(1).get()
       return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() }
     },
+    async byRepositoryPath(owner, repo, projectPath = '') {
+      const rows = firestore ? await this.all() : read()
+      const prefix = `${String(owner).toLowerCase()}/${String(repo).toLowerCase()}@`
+      return rows
+        .filter(row => {
+          if (row.status !== 'published' || !row.source_key?.startsWith(prefix)) return false
+          const source = row.source_key.slice(prefix.length)
+          return projectPath ? source === `${source.match(/^[0-9a-f]{40}/i)?.[0] || ''}:${projectPath}` : /^[0-9a-f]{40}$/i.test(source)
+        })
+        .sort((left, right) => String(right.published_at || '').localeCompare(String(left.published_at || '')))[0] || null
+    },
     async put(project) {
       if (firestore) await firestore.collection('omgithub_projects').doc(project.id).set(project, { merge: true })
       const rows = read(), index = rows.findIndex(row => row.id === project.id)

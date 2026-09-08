@@ -136,6 +136,13 @@ async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref
   projectPath = validateProjectPath(projectPath)
   const cached = await store.byPublicPath(publicPath)
   if (cached) return { state: 'published', project: cached, error: '', runId: '', promise: Promise.resolve(cached) }
+  const legacyCached = await store.byRepositoryPath(sourceOwner, sourceRepo, projectPath)
+  if (legacyCached) {
+    const namedProject = legacyCached.public_path === publicPath && legacyCached.store_path === publicPath
+      ? legacyCached
+      : await store.put({ ...legacyCached, public_path: publicPath, store_path: publicPath })
+    return { state: 'published', project: namedProject, error: '', runId: '', promise: Promise.resolve(namedProject) }
+  }
   const existingPublication = routePublications.get(publicPath)
   if (existingPublication) return existingPublication
 
