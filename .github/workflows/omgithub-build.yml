@@ -61,7 +61,15 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -f package.json ]] && node -e "const p=require('./package.json'); process.exit(p.scripts?.build ? 0 : 1)"; then
-            npm run build
+            if ! npm run build; then
+              if node -e "const p=require('./package.json'); process.exit(String(p.scripts?.build || '').includes('vite') ? 0 : 1)"; then
+                echo 'Default Vite target failed; retrying with esnext for modern browser modules.'
+                rm -rf dist build
+                npm run build -- --target esnext
+              else
+                exit 1
+              fi
+            fi
           else
             echo 'No npm build script found; packaging the static repository root.'
           fi
