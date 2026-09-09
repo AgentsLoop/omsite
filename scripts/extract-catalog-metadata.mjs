@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
-import { validateCatalogMetadata, normalizeTags } from '../server/catalog-metadata.mjs'
+import { validateCatalogMetadata, normalizeTags } from '../server/lib/catalog-metadata.mjs'
 
 export function validateSourceEvidence(metadata, files, sourceBase) {
   const validated = validateCatalogMetadata(metadata)

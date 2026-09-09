@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import AdmZip from 'adm-zip'
-import { materializeLatestPublicProject, materializePublicProject } from './public-project.mjs'
+import { materializeLatestPublicProject, materializePublicProject } from '../lib/public-project.mjs'
 
 function response(data, { status = 200, headers = {} } = {}) {
   const body = typeof data === 'string' || Buffer.isBuffer(data) ? data : JSON.stringify(data)

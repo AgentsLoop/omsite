@@ -1,7 +1,7 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
 import { resolve } from 'node:path'
-import { createStore } from './store.mjs'
+import { createStore } from '../lib/store.mjs'
 
 const dataDir = resolve(process.env.DATA_DIR || './data')
 const githubToken = process.env.GITHUB_TOKEN || ''

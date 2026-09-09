@@ -1,16 +1,16 @@
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { createStore } from './store.mjs'
-import { DEFAULT_LIMITS, applyPromptRecords, canonicalKey, createGithubCache, isDirectGameSource, normalizeSource, publishCandidate, readJson, recordKey, scanSource, writeJson } from './catalog-import-lib.mjs'
+import { createStore } from '../lib/store.mjs'
+import { DEFAULT_LIMITS, applyPromptRecords, canonicalKey, createGithubCache, isDirectGameSource, normalizeSource, publishCandidate, readJson, recordKey, scanSource, writeJson } from '../lib/catalog-import-lib.mjs'
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 export const HELP = `Import explicit GitHub game directories or HTML files without creating GitHub artifacts.
 
-Run: node server/catalog-import.mjs [options]
+Run: node server/cli/catalog-import.mjs [options]
   --dry-run                 Scan and save a report (default; no DB or publish writes)
   --publish                 Disabled. Submit reviewed game links manually in OmGithub.
   --prompts                 Upsert extracted prompts through createStore
-  --manifest FILE           Source manifest (default: scripts/catalog-sources.json)
+  --manifest FILE           Source manifest (default: config/catalog-sources.json)
   --report FILE             Resumable report (default: DATA_DIR/catalog-import-report.json)
   --cache-dir DIR           GitHub URL cache (default: DATA_DIR/catalog-import-cache)
   --origin URL              OmGithub origin (default: PUBLIC_ORIGIN or https://omgithub.com)
@@ -35,7 +35,7 @@ the exact reviewed link manually in OmGithub.
 
 export function parseArgs(argv, env = process.env) {
   const dataDir = resolve(env.DATA_DIR || './data')
-  const options = { dataDir, manifest: resolve(root, 'scripts/catalog-sources.json'), report: resolve(dataDir, 'catalog-import-report.json'),
+  const options = { dataDir, manifest: resolve(root, 'config/catalog-sources.json'), report: resolve(dataDir, 'catalog-import-report.json'),
     cacheDir: resolve(dataDir, 'catalog-import-cache'), origin: env.PUBLIC_ORIGIN || 'https://omgithub.com', ttlDays: 30,
     limits: { ...DEFAULT_LIMITS }, attempts: 6, pollMs: 5000, publish: false, prompts: false, refresh: false }
   const values = { '--manifest': 'manifest', '--report': 'report', '--cache-dir': 'cacheDir', '--origin': 'origin', '--ttl-days': 'ttlDays', '--attempts': 'attempts', '--poll-ms': 'pollMs' }

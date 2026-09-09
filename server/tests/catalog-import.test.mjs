@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { canonicalKey, discoverGames, extractPrompts, isDirectGameSource, normalizeSource, publishCandidate } from './catalog-import-lib.mjs'
-import { parseArgs } from './catalog-import.mjs'
+import { canonicalKey, discoverGames, extractPrompts, isDirectGameSource, normalizeSource, publishCandidate } from '../lib/catalog-import-lib.mjs'
+import { parseArgs } from '../cli/catalog-import.mjs'
 
 test('catalog source identities ignore refs and retain selected HTML files', () => {
   const named = normalizeSource('https://github.com/Owner/Repo/tree/main/games/demo')
@@ -38,7 +38,7 @@ test('a direct game source publishes only the explicitly selected directory', as
   const github = async url => url.endsWith('/repos/owner/repo')
     ? { default_branch: 'main' }
     : { sha: 'a'.repeat(40), tree: [{ type: 'blob', path: 'games/demo/index.html', size: 10 }, { type: 'blob', path: 'tools/debug.html', size: 10 }] }
-  const scan = await (await import('./catalog-import-lib.mjs')).scanSource(source, { github })
+  const scan = await (await import('../lib/catalog-import-lib.mjs')).scanSource(source, { github })
   assert.equal(scan.candidates[0].review_required, false)
   assert.equal(canonicalKey(scan.candidates[0]), 'owner/repo:games/demo:')
   assert.equal(scan.candidates.length, 1)

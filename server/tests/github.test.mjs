@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { generateKeyPairSync } from 'node:crypto'
-import { ensureIssueWorkflow, setupRepositories, extractUrls, repositoryWorkflow } from './github.mjs'
+import { ensureIssueWorkflow, setupRepositories, extractUrls, repositoryWorkflow } from '../lib/github.mjs'
 
 test('extractUrls separates OpenCode, screenshots, preview, and immutable project URL', () => {
   const sha = 'a'.repeat(40)

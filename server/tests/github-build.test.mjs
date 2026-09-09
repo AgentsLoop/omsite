@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { dispatchPublicBuild } from './github-build.mjs'
+import { dispatchPublicBuild } from '../lib/github-build.mjs'
 
 function response(data, { status = 200 } = {}) {
   const body = typeof data === 'string' || Buffer.isBuffer(data) ? data : JSON.stringify(data)

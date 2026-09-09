@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { createProjectSocial } from './project-social.mjs'
+import { createProjectSocial } from '../lib/project-social.mjs'
 
 const project = { repo_owner: 'Owner', repo: 'Game', source_key: `owner/game@${'a'.repeat(40)}:games/One`, complexity_score: 6 }
 const user = { id: 12, login: 'player', avatar_url: 'https://github.com/player.png' }

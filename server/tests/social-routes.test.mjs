@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import express from 'express'
-import { createSocialRouter } from './social-routes.mjs'
+import { createSocialRouter } from '../lib/social-routes.mjs'
 
 test('social routes require a signed-in same-origin mutation and deduplicate visitor identity', async t => {
   const project = { id: 'game', status: 'published', url: 'https://game.omgithub.com' }

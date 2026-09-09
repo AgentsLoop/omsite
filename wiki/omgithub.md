@@ -62,7 +62,7 @@ deployable ZIP directly to `/api/builds` with the temporary upload token and
 matching source headers. Retain no GitHub Actions artifact.
 
 Require `index.html` in the deployment. Enforce the archive entry and size
-limits in [public-project.mjs](../server/public-project.mjs). Read the
+limits in [public-project.mjs](../server/lib/public-project.mjs). Read the
 replacement metadata before removing an existing deployment. Serve the
 published files on their project subdomain.
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createGithubCache } from './github-cache.mjs'
+import { createGithubCache } from '../lib/github-cache.mjs'
 
 test('GitHub cache persists metadata across instances and reuses stale data on rate limits', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'omgithub-cache-'))

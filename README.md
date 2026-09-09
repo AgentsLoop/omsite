@@ -18,6 +18,17 @@ npm run dev
 Build the frontend with `npm run build` before using `npm start` to serve the
 production frontend.
 
+## Project layout
+
+- Keep Vue pages and components in `src/`.
+- Keep the HTTP entry point at `server/index.mjs`.
+- Keep reusable server modules in `server/lib/`.
+- Keep maintenance commands in `server/cli/`.
+- Keep server tests in `server/tests/`.
+- Keep reviewed command input in `config/`.
+- Keep deployment and metadata extraction commands in `scripts/`.
+- Keep operational documentation in `wiki/` and design proposals in `ideas/`.
+
 Publish repository builds with catalog metadata. Configure `OPENCODE_API_KEY`
 or `OPENCODE_AUTH_JSON` in GitHub Actions. Let the workflow extract one merged
 tag list, an evidence-backed description, an exact recorded prompt when one
@@ -26,7 +37,7 @@ rating, review count, comments, and deduplicated play count on the store page.
 
 Scan only a reviewed manifest of direct GitHub `tree` directories or `blob`
 HTML files before importing games. Do not add repository roots, catalog pages,
-or lists to this manifest. The importer publishes only the exact selected game.
+or lists to this manifest. Use the scanner only to prepare a review report.
 
 ```sh
 GITHUB_TOKEN=... npm run catalog:scan

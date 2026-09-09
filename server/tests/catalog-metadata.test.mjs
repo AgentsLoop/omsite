@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import AdmZip from 'adm-zip'
-import { CATALOG_METADATA_FILE, validateCatalogMetadata, validateManualPublishMetadata, normalizeTags, mergeCatalogMetadata, publicCatalogMetadata, readCatalogMetadata } from './catalog-metadata.mjs'
-import { validateSourceEvidence } from '../scripts/extract-catalog-metadata.mjs'
+import { CATALOG_METADATA_FILE, validateCatalogMetadata, validateManualPublishMetadata, normalizeTags, mergeCatalogMetadata, publicCatalogMetadata, readCatalogMetadata } from '../lib/catalog-metadata.mjs'
+import { validateSourceEvidence } from '../../scripts/extract-catalog-metadata.mjs'
 
 const metadata = () => ({ schema_version: 1, description: 'Move a cube through a maze.', description_source: 'opencode', prompt: '', tags: ['ThreeJS', 'game'], complexity_score: 4, metadata_source: 'opencode', metadata_updated_at: '2026-09-09T00:00:00.000Z', metadata_evidence: ['description', 'tags', 'complexity_score'].map(field => ({ field, file: 'game.js', line_start: 1, line_end: 1 })) })
 
