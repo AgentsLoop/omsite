@@ -1,5 +1,11 @@
 # OmGithub publishing
 
+## Submit a game from the site
+
+Select **Submit your game** in the header. Paste a public GitHub repository,
+`tree` folder, or `blob` HTML file URL. Submit the form to open the game page
+and follow build progress. Use this flow without signing in.
+
 ## Publish a public repository path
 
 Open `https://omgithub.com/<owner>/<repo>` to publish the repository's default

@@ -994,3 +994,28 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, summary:focu
     font-size: 38px;
   }
 }
+
+.submit-game-button {
+  display: inline-block;
+  border: 0;
+  border-radius: 11px;
+  padding: 11px 15px;
+  background: var(--orange);
+  color: #0c0c0d;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+}
+.topbar > .submit-game-button { margin-left: auto; }
+.topbar > .login-button, .topbar > .user-pill { margin-left: 0; }
+.submit-game-form { display: grid; gap: 14px; margin-top: 28px; }
+.submit-game-form label { font-weight: 600; }
+.submit-game-form input { width: 100%; min-width: 0; padding: 14px; border: 1px solid #555; border-radius: 10px; background: #171719; color: white; font: inherit; }
+.submit-game-form small { color: #b9b9ba; line-height: 1.6; }
+.submit-game-form .submit-game-button { justify-self: start; }
+@media (max-width: 600px) {
+  .topbar { flex-wrap: wrap; height: auto; min-height: 76px; gap: 12px; padding-top: 12px; padding-bottom: 12px; }
+  .topbar > .submit-game-button { font-size: 12px; padding: 10px; }
+}

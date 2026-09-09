@@ -5,10 +5,12 @@ import HomeView from './views/HomeView.vue'
 import ProjectView from './views/ProjectView.vue'
 import ProfileView from './views/ProfileView.vue'
 import StoreView from './views/StoreView.vue'
+import SubmitView from './views/SubmitView.vue'
 import './style.css'
 
 const routes = [
   { path: '/', component: HomeView },
+  { path: '/submit', component: SubmitView },
   { path: '/:owner/:repo/issues/:number', component: ProjectView },
   { path: '/:owner/:repo/blob/:ref/:path(.*)', component: StoreView },
   { path: '/:owner/:repo/tree/:ref/:path(.*)', component: StoreView },
