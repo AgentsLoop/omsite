@@ -11,6 +11,7 @@ test('catalog source identities ignore refs and retain selected HTML files', () 
   assert.equal(blob.entry, 'play.html')
   assert.notEqual(canonicalKey(named), canonicalKey(blob))
   assert.equal(isDirectGameSource({ ...named, kind: 'game' }), true)
+  assert.equal(isDirectGameSource({ ...normalizeSource('https://github.com/owner/repo/tree/main'), kind: 'game' }), true)
   assert.equal(isDirectGameSource({ ...normalizeSource('owner/repo'), kind: 'game' }), false)
 })
 

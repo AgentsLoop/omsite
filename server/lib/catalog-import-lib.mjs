@@ -36,7 +36,11 @@ export function canonicalKey(source) {
 }
 
 export function isDirectGameSource(source) {
-  return source.kind === 'game' && Boolean(source.path || source.entry)
+  if (source.kind !== 'game' || !source.ref) return false
+  if (source.path || source.entry) return true
+  // A tree URL with no path is an explicit repository root. The publisher may
+  // use it after verifying the repository contains exactly one browser game.
+  return /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/tree\/[^/]+$/i.test(String(source.url || ''))
 }
 
 export function dedupeSources(sources) {
