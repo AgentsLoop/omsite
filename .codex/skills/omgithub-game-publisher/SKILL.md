@@ -15,7 +15,7 @@ Accept an arbitrary source URL. Inspect it, find game candidates, verify each ga
 6. Copy a creation prompt only when the source records it verbatim. Keep its source URL. Do not infer, paraphrase, or generate a missing prompt.
 7. Inspect screenshots and runtime assets. Extract direct HTTPS image URLs from screenshot embeds and submit up to eight as `screenshot_embeddings`. If screenshots are absent, let the OmGithub build capture one. Do not submit a candidate with an unresolved entry point, missing local assets, or a known runtime failure.
 8. Check OmGithub for an existing publication with the same repository and game path. Skip duplicates and already-published games.
-9. Submit accepted games one at a time through the OmGithub manual publish request. Include all extracted optional metadata. Wait for each submission to be accepted before sending the next one. Stop after the first failed submission and report the failure.
+9. Submit accepted games one at a time through the anonymous OmGithub manual publish request. Send the OmGithub origin header. Do not require or request GitHub sign-in. Include all extracted optional metadata. Wait for each submission to be accepted before sending the next one. Stop after the first failed submission and report the failure.
 10. Verify the published store page, screenshot, and Play link. Remove the candidate from the accepted result if it does not run as a game.
 
 Return a compact result with published games, skipped duplicates, rejected candidates with reasons, and failures. Never classify a link as a game only because it appears in a game list.

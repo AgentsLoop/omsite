@@ -21,7 +21,9 @@ path. For example, use
 ## Submit reviewed metadata
 
 Review source code before publication. Submit one direct `tree` or `blob` link
-with `POST /api/publish` from the signed-in OmGithub site. Send `source_url`
+with `POST /api/publish` from the OmGithub site. Do not require GitHub sign-in.
+Require the OmGithub origin, apply the publication rate limit, and validate the
+direct game source before starting a build. Send `source_url`
 and optional `metadata`. Support `title`, `description`, `tags`, `prompt`,
 `prompt_source_url`, `screenshot_embeddings`, and `source`. Send up to eight
 HTTPS screenshot URLs in `screenshot_embeddings`. Show them in the screenshot
