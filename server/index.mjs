@@ -139,8 +139,7 @@ async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha, pro
   sourceEntry = validateSourceEntry(sourceEntry)
   const sourceKey = `${sourceOwner.toLowerCase()}/${sourceRepo.toLowerCase()}@${sha.toLowerCase()}${projectPath ? `:${projectPath}` : ''}${sourceEntry ? `:${sourceEntry}` : ''}`
   const existingPublication = publications.get(sourceKey)
-  if (refresh && existingPublication?.state === 'published') publications.delete(sourceKey)
-  if (existingPublication?.state === 'failed') publications.delete(sourceKey)
+  if ((refresh && existingPublication?.state === 'published') || existingPublication?.state === 'failed') publications.delete(sourceKey)
   else if (existingPublication) return existingPublication
   const publication = { sourceKey, sha: sha.toLowerCase(), publicPath, state: 'checking', project: null, error: '', runId: '' }
   publication.promise = publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, sourceEntry, publicPath, manualMetadata, publication, refresh })
@@ -177,8 +176,7 @@ async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref
     return { state: 'published', project: namedProject, error: '', runId: '', promise: Promise.resolve(namedProject) }
   }
   const existingPublication = routePublications.get(publicPath)
-  if (refresh && existingPublication?.state === 'published') routePublications.delete(publicPath)
-  if (existingPublication?.state === 'failed') routePublications.delete(publicPath)
+  if ((refresh && existingPublication?.state === 'published') || existingPublication?.state === 'failed') routePublications.delete(publicPath)
   else if (existingPublication) return existingPublication
 
   const publication = { publicPath, state: 'checking', project: null, error: '', runId: '' }
