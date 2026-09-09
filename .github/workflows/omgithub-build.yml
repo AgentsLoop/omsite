@@ -201,7 +201,7 @@ jobs:
             done
             curl --fail --silent http://127.0.0.1:4173/ > /dev/null
             google-chrome --version
-            if ! timeout --foreground -s KILL 45s google-chrome --headless --no-sandbox --use-gl=swiftshader --enable-unsafe-swiftshader --run-all-compositor-stages-before-draw --virtual-time-budget=3000 --window-size=960,540 --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/; then
+            if ! timeout --foreground -s KILL 45s google-chrome --headless --no-sandbox --use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --run-all-compositor-stages-before-draw --virtual-time-budget=3000 --window-size=960,540 --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/; then
               timeout --foreground -s KILL 15s google-chrome --headless --no-sandbox --disable-gpu --disable-software-rasterizer --window-size=960,540 --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/ || true
             fi
             if ! test -s "$build_root/screenshots/final-build.png"; then

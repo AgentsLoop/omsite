@@ -133,16 +133,17 @@ function publicationPayload(publication) {
     project: current.project ? storePayload(current.project) : null
   }
 }
-async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha, projectPath = '', sourceEntry = '', publicPath = '', manualMetadata = {} }) {
+async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha, projectPath = '', sourceEntry = '', publicPath = '', manualMetadata = {}, refresh = false }) {
   validateSource(sourceOwner, sourceRepo, sha)
   projectPath = validateProjectPath(projectPath)
   sourceEntry = validateSourceEntry(sourceEntry)
   const sourceKey = `${sourceOwner.toLowerCase()}/${sourceRepo.toLowerCase()}@${sha.toLowerCase()}${projectPath ? `:${projectPath}` : ''}${sourceEntry ? `:${sourceEntry}` : ''}`
   const existingPublication = publications.get(sourceKey)
+  if (refresh && existingPublication?.state === 'published') publications.delete(sourceKey)
   if (existingPublication?.state === 'failed') publications.delete(sourceKey)
   else if (existingPublication) return existingPublication
   const publication = { sourceKey, sha: sha.toLowerCase(), publicPath, state: 'checking', project: null, error: '', runId: '' }
-  publication.promise = publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, sourceEntry, publicPath, manualMetadata, publication })
+  publication.promise = publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, sourceEntry, publicPath, manualMetadata, publication, refresh })
     .then(project => {
       publication.project = project
       publication.state = 'published'
@@ -160,15 +161,15 @@ async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha, pro
   publications.set(sourceKey, publication)
   return publication
 }
-async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref = '', projectPath = '', sourceEntry = '', publicPath, latest = false, manualMetadata = {} }) {
+async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref = '', projectPath = '', sourceEntry = '', publicPath, latest = false, manualMetadata = {}, refresh = false }) {
   projectPath = validateProjectPath(projectPath)
   const cached = await store.byPublicPath(publicPath)
-  if (cached) {
+  if (cached && !refresh) {
     const project = Object.keys(manualMetadata).length ? await store.put(withManualMetadata(cached, manualMetadata)) : cached
     return { state: 'published', project, error: '', runId: '', promise: Promise.resolve(project) }
   }
   const legacyCached = await store.byRepositoryPath(sourceOwner, sourceRepo, projectPath, sourceEntry)
-  if (legacyCached) {
+  if (legacyCached && !refresh) {
     let namedProject = legacyCached.public_path === publicPath && legacyCached.store_path === publicPath
       ? legacyCached
       : await store.put({ ...legacyCached, public_path: publicPath, store_path: publicPath })
@@ -176,6 +177,7 @@ async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref
     return { state: 'published', project: namedProject, error: '', runId: '', promise: Promise.resolve(namedProject) }
   }
   const existingPublication = routePublications.get(publicPath)
+  if (refresh && existingPublication?.state === 'published') routePublications.delete(publicPath)
   if (existingPublication?.state === 'failed') routePublications.delete(publicPath)
   else if (existingPublication) return existingPublication
 
@@ -185,7 +187,7 @@ async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref
       ? await resolveLatestPublicCommit({ owner: sourceOwner, repo: sourceRepo, requestFetch: publicGithubFetch })
       : await resolvePublicCommit({ owner: sourceOwner, repo: sourceRepo, ref, requestFetch: publicGithubFetch })
     publication.sha = resolved.sha.toLowerCase()
-    publication.sourcePublication = await startPublication({ owner: sourceOwner, repo: sourceRepo, sha: resolved.sha, projectPath, sourceEntry, publicPath, manualMetadata })
+    publication.sourcePublication = await startPublication({ owner: sourceOwner, repo: sourceRepo, sha: resolved.sha, projectPath, sourceEntry, publicPath, manualMetadata, refresh })
     const project = await publication.sourcePublication.promise
     const namedProject = project.public_path === publicPath && project.store_path === publicPath
       ? project
@@ -208,9 +210,9 @@ async function materializeForPublication({ owner: sourceOwner, repo: sourceRepo,
   return (await startPublication({ owner: sourceOwner, repo: sourceRepo, sha, projectPath, sourceEntry, publicPath })).promise
 }
 
-async function publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, sourceEntry = '', publicPath, manualMetadata = {}, publication }) {
+async function publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, sourceEntry = '', publicPath, manualMetadata = {}, publication, refresh = false }) {
   const existing = await store.bySourceKey(sourceKey)
-  if (existing?.status === 'published' && existing.url) {
+  if (!refresh && existing?.status === 'published' && existing.url) {
     if ((publicPath && (existing.public_path !== publicPath || existing.store_path !== publicPath)) || Object.keys(manualMetadata).length) return store.put({ ...withManualMetadata(existing, manualMetadata), public_path: publicPath || existing.public_path, store_path: publicPath || existing.store_path })
     return existing
   }
@@ -317,7 +319,8 @@ app.post('/api/publish', async (req, res, next) => {
     const manualMetadata = validateManualPublishMetadata(req.body?.metadata, { sourceUrl: source.url })
     const routeKind = source.entry ? 'blob' : 'tree'
     const publicPath = namedPublicPath(source.owner, source.repo, source.ref, source.path, routeKind, source.entry)
-    const publication = await startNamedPublication({ owner: source.owner, repo: source.repo, ref: source.ref, projectPath: source.path, sourceEntry: source.entry, publicPath, manualMetadata })
+    const refresh = req.body?.refresh === true
+    const publication = await startNamedPublication({ owner: source.owner, repo: source.repo, ref: source.ref, projectPath: source.path, sourceEntry: source.entry, publicPath, manualMetadata, refresh })
     res.status(publication.state === 'published' ? 200 : 202).json({ source_url: source.url, ...publicationPayload(publication) })
   } catch (error) { next(error) }
 })
