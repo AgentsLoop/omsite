@@ -57,7 +57,7 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
   if (!/^[a-f0-9]{40}$/.test(ref || '')) throw new Error('Require an immutable central workflow commit SHA')
   return [
     'name: OpenCode',
-    'run-name: "OpenCode #${{ github.event.issue.number }} — ${{ github.event.issue.title }}"',
+    'run-name: "OpenCode #${{ github.event.issue.number || inputs.issue_number }}${{ github.event.issue.title && format(\' — {0}\', github.event.issue.title) || \'\' }}"',
     '',
     'on:',
     '  issues:',
@@ -81,7 +81,7 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '    permissions:',
     '      contents: read',
     '      issues: write',
-    '      actions: read',
+    '      actions: write',
     `    uses: ${owner}/${repo}/.github/workflows/opencode-prepare.yml@${ref}`,
     '    with:',
     `      runtime_ref: ${ref}`,

@@ -1,5 +1,5 @@
 name: OpenCode
-run-name: "OpenCode #${{ github.event.issue.number }} — ${{ github.event.issue.title }}"
+run-name: "OpenCode #${{ github.event.issue.number || inputs.issue_number }}${{ github.event.issue.title && format(' — {0}', github.event.issue.title) || '' }}"
 
 on:
   issues:
@@ -23,10 +23,10 @@ jobs:
     permissions:
       contents: read
       issues: write
-      actions: read
-    uses: AgentsLoop/OhMyGithub/.github/workflows/opencode-prepare.yml@26c08adc6718d4bd420ff81ed1a6c2744869e966
+      actions: write
+    uses: AgentsLoop/OhMyGithub/.github/workflows/opencode-prepare.yml@687fd44b912b4d8534697f582aa14501fbacb2d7
     with:
-      runtime_ref: 26c08adc6718d4bd420ff81ed1a6c2744869e966
+      runtime_ref: 687fd44b912b4d8534697f582aa14501fbacb2d7
 
   opencode:
     needs: prepare
@@ -35,9 +35,9 @@ jobs:
       contents: write
       issues: write
       actions: read
-    uses: AgentsLoop/OhMyGithub/.github/workflows/opencode-reusable.yml@26c08adc6718d4bd420ff81ed1a6c2744869e966
+    uses: AgentsLoop/OhMyGithub/.github/workflows/opencode-reusable.yml@687fd44b912b4d8534697f582aa14501fbacb2d7
     with:
-      runtime_ref: 26c08adc6718d4bd420ff81ed1a6c2744869e966
+      runtime_ref: 687fd44b912b4d8534697f582aa14501fbacb2d7
       issue_number: ${{ needs.prepare.outputs.issue_number }}
       request: ${{ needs.prepare.outputs.request }}
       issue_title: ${{ needs.prepare.outputs.issue_title }}

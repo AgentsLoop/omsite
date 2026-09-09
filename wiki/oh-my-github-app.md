@@ -31,12 +31,15 @@ Attach the execution label when creating the issue in either access mode.
 
 Validate author access and resolve the target branch on the Actions runner.
 Use one `issues.opened` run per issue. Serialize jobs with Actions concurrency.
+When `branch:` selects another branch, dispatch the caller at that branch and
+stop the default-branch run. Run preparation and OpenCode in the dispatched run.
 Start an existing issue from Actions → OpenCode → Run workflow and enter its
 issue number. Read the current issue and branch on each manual start.
 
 Append `branch: <existing-branch>` to select project checkout. Freeze its
 commit during preparation and use the branch as the result base. Load the
-caller from the default branch and central workflow code from its pinned SHA.
+initial listener from the default branch. Load the execution caller from the
+selected branch and central workflow code from the revision that caller pins.
 
 Create site submissions with the signed-in user's GitHub token. Let the
 repository's Actions access variable control execution.
