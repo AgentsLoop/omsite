@@ -202,7 +202,7 @@ jobs:
             curl --fail --silent http://127.0.0.1:4173/ > /dev/null
             google-chrome --version
             if ! timeout --foreground -s KILL 45s google-chrome --headless --no-sandbox --disable-gpu --run-all-compositor-stages-before-draw --virtual-time-budget=5000 --window-size=1440,900 --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/; then
-              source_screenshot="$(find "$GITHUB_WORKSPACE/source" -type f | rg -i '/[^/]*(screenshot|gameplay|hud|play|title|beauty)[^/]*\.(png|jpe?g|webp)$' | head -n 1 || true)"
+              source_screenshot="$(find "$GITHUB_WORKSPACE/source" -type f | grep -Ei '/[^/]*(screenshot|gameplay|hud|play|title|beauty)[^/]*\.(png|jpe?g|webp)$' | head -n 1 || true)"
               test -n "$source_screenshot"
               cp "$source_screenshot" "$build_root/screenshots/final-build.${source_screenshot##*.}"
             fi
