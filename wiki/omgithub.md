@@ -90,6 +90,9 @@ Let the workflow install dependencies, build the source, select `dist/`,
 screenshot when needed. Upload the
 deployable ZIP directly to `/api/builds` with the temporary upload token and
 matching source headers. Retain no GitHub Actions artifact.
+Sign the short-lived upload token so a public request can finish on any
+healthy OmGithub process. Continue to validate the source commit, selected
+path, archive size, and `index.html` before publishing.
 
 Require `index.html` in the deployment. Enforce the archive entry and size
 limits in [public-project.mjs](../server/lib/public-project.mjs). Read the

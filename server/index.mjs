@@ -227,7 +227,17 @@ async function publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectP
   if (!buildEnabled) return materializePublicProject({ owner: sourceOwner, repo: sourceRepo, sha, projectPath, sourceEntry, publicPath, baseHost, gamesDir, store, requestFetch: publicGithubFetch })
 
   for (const [token, pending] of pendingBuilds) if (pending.expiresAt < Date.now()) pendingBuilds.delete(token)
-  const uploadToken = randomBytes(32).toString('hex')
+  const uploadToken = sign({
+    purpose: 'omgithub-build',
+    owner: sourceOwner,
+    repo: sourceRepo,
+    sha: sha.toLowerCase(),
+    projectPath,
+    sourceEntry,
+    publicPath,
+    manualMetadata,
+    expiresAt: Date.now() + 20 * 60 * 1000
+  }, sessionSecret)
   pendingBuilds.set(uploadToken, { owner: sourceOwner, repo: sourceRepo, sha: sha.toLowerCase(), projectPath, sourceEntry, publicPath, manualMetadata, expiresAt: Date.now() + 20 * 60 * 1000, processing: false, publication })
   try {
     const build = await dispatchPublicBuild({ sourceOwner, sourceRepo, sourceSha: sha, sourcePath: projectPath, sourceEntry, workflowOwner: buildOwner, workflowRepo: buildRepo, workflowFile: buildWorkflowFile, workflowRef: buildRef, token: githubToken, uploadUrl: `${origin}/api/builds`, uploadToken, onStatus: ({ phase, runId }) => { publication.state = phase; if (runId) publication.runId = runId } })
@@ -338,6 +348,24 @@ app.post('/api/builds', express.raw({ type: ['application/zip', 'application/oct
   try {
     const token = String(req.headers['x-omgithub-build-token'] || '')
     pending = pendingBuilds.get(token)
+    if (!pending) {
+      const claims = verify(token, sessionSecret)
+      if (claims?.purpose === 'omgithub-build' && Number(claims.expiresAt) > Date.now()) {
+        pending = {
+          owner: claims.owner,
+          repo: claims.repo,
+          sha: claims.sha,
+          projectPath: claims.projectPath || '',
+          sourceEntry: claims.sourceEntry || '',
+          publicPath: claims.publicPath || '',
+          manualMetadata: claims.manualMetadata || {},
+          expiresAt: Number(claims.expiresAt),
+          processing: false,
+          publication: { state: 'publishing', project: null, error: '', runId: '' }
+        }
+        pendingBuilds.set(token, pending)
+      }
+    }
     if (!pending || pending.expiresAt < Date.now()) return res.status(401).json({ error: 'Invalid or expired build upload token' })
     if (pending.processing) return res.status(409).json({ error: 'Build upload is already being processed' })
     const uploadPath = String(req.headers['x-omgithub-source-path'] || '')
