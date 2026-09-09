@@ -22,8 +22,11 @@ path. For example, use
 
 Review source code before publication. Submit one direct `tree` or `blob` link
 with `POST /api/publish` from the signed-in OmGithub site. Send `source_url`
-and optional `metadata`. Support `title`, `description`, `tags`, `prompt`, and
-`prompt_source_url`. Store a prompt only when its source URL identifies the
+and optional `metadata`. Support `title`, `description`, `tags`, `prompt`,
+`prompt_source_url`, `screenshot_embeddings`, and `source`. Send up to eight
+HTTPS screenshot URLs in `screenshot_embeddings`. Show them in the screenshot
+gallery. Store `source` as the catalog or awesome-list provenance URL. Never
+return `source` through public project APIs or display it in the UI. Store a prompt only when its source URL identifies the
 recorded prompt. Do not submit repository roots, list pages, or unreviewed
 links. Do not bulk-submit a list.
 

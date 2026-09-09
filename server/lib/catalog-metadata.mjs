@@ -5,6 +5,20 @@ const promptSources = new Set(['github-file', 'github-list', 'issue', 'workflow'
 const aliases = { threejs: 'three.js', 'three-js': 'three.js', 'three.js': 'three.js', 'godot-engine': 'godot', 'play-canvas': 'playcanvas', 'gpt-6-astra': 'astra' }
 const fail = message => { throw Object.assign(new Error(`Invalid catalog metadata: ${message}`), { status: 422 }) }
 
+function httpsUrl(value, field) {
+  if (typeof value !== 'string' || !value.trim() || value.length > 2048) fail(field)
+  try {
+    const url = new URL(value.trim())
+    if (url.protocol !== 'https:' || url.username || url.password) fail(field)
+    return url.href
+  } catch { fail(field) }
+}
+
+export function normalizeScreenshotEmbeddings(values = []) {
+  if (!Array.isArray(values) || values.length > 8) fail('screenshot_embeddings')
+  return [...new Set(values.map(value => httpsUrl(value, 'screenshot_embeddings')))]
+}
+
 export function normalizeTags(...groups) {
   return [...new Set(groups.flat().filter(value => typeof value === 'string').map(value => {
     const tag = value.trim().toLowerCase().replace(/\s+/g, '-')
@@ -29,6 +43,8 @@ export function validateManualPublishMetadata(input, { sourceUrl = '' } = {}) {
     if (!Array.isArray(input.tags) || input.tags.length > 64 || input.tags.some(tag => typeof tag !== 'string' || tag.length > 100)) fail('tags')
     metadata.tags = normalizeTags(input.tags)
   }
+  if (input.screenshot_embeddings !== undefined) metadata.screenshot_embeddings = normalizeScreenshotEmbeddings(input.screenshot_embeddings)
+  if (input.source !== undefined) metadata.source = httpsUrl(input.source, 'source')
   if (input.prompt !== undefined) {
     if (typeof input.prompt !== 'string' || input.prompt.length > 60000) fail('prompt')
     if (input.prompt.trim()) {
@@ -84,7 +100,7 @@ export function readCatalogMetadata(entries, root = '') {
 export function mergeCatalogMetadata({ existing = {}, extracted = {}, manual = {}, htmlDescription = '', repositoryDescription = '', topics = [] } = {}) {
   const result = { ...extracted }
   // Retain imported and manual source values on a repeat publication.
-  for (const field of ['description', 'description_source', 'prompt', 'prompt_source', 'prompt_source_url']) {
+  for (const field of ['description', 'description_source', 'prompt', 'prompt_source', 'prompt_source_url', 'source', 'screenshot_embeddings']) {
     if (existing[field]) result[field] = existing[field]
   }
   if (!existing.description && htmlDescription) Object.assign(result, { description: htmlDescription, description_source: 'html' })
@@ -96,6 +112,6 @@ export function mergeCatalogMetadata({ existing = {}, extracted = {}, manual = {
 }
 
 export function publicCatalogMetadata(project) {
-  const { complexity_score, metadata_evidence, metadata_audit, rating_sum, local_dir, ...safe } = project
+  const { complexity_score, metadata_evidence, metadata_audit, rating_sum, local_dir, source, screenshot_embeddings, ...safe } = project
   return safe
 }

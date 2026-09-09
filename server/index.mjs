@@ -103,6 +103,14 @@ function publicProject(project) {
 }
 function card(project) { return { ...publicProject(project), issue_path: project.issue ? `/${project.repo_owner}/${project.repo}/issues/${project.issue}` : '', store_path: project.public_path || project.store_path || (project.commit ? `/${project.repo_owner}/${project.repo}/tree/${project.commit}` : ''), screenshot: project.screenshots?.[0] || '', status: project.status || 'published' } }
 function storePayload(project) { return { ...publicProject(project), owner: project.owner_login, screenshots: project.screenshots || [], play_url: project.url, public_path: project.public_path || '', store_path: project.public_path || project.store_path } }
+function withManualMetadata(project, metadata = {}) {
+  return {
+    ...project,
+    ...metadata,
+    tags: normalizeTags(project.tags || [], metadata.tags || []),
+    screenshots: [...new Set([...(project.screenshots || []), ...(metadata.screenshot_embeddings || [])])]
+  }
+}
 function namedPublicPath(owner, repo, ref = '', projectPath = '', routeKind = 'tree', sourceEntry = '') {
   const routePath = ref ? `/${routeKind}/${ref}` : ''
   return `/${owner}/${repo}${routePath}${projectPath ? `/${projectPath}` : ''}${sourceEntry ? `/${sourceEntry}` : ''}`
@@ -155,14 +163,15 @@ async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref
   projectPath = validateProjectPath(projectPath)
   const cached = await store.byPublicPath(publicPath)
   if (cached) {
-    const project = Object.keys(manualMetadata).length ? await store.put({ ...cached, ...manualMetadata, tags: normalizeTags(cached.tags || [], manualMetadata.tags || []) }) : cached
+    const project = Object.keys(manualMetadata).length ? await store.put(withManualMetadata(cached, manualMetadata)) : cached
     return { state: 'published', project, error: '', runId: '', promise: Promise.resolve(project) }
   }
   const legacyCached = await store.byRepositoryPath(sourceOwner, sourceRepo, projectPath, sourceEntry)
   if (legacyCached) {
-    const namedProject = legacyCached.public_path === publicPath && legacyCached.store_path === publicPath
+    let namedProject = legacyCached.public_path === publicPath && legacyCached.store_path === publicPath
       ? legacyCached
       : await store.put({ ...legacyCached, public_path: publicPath, store_path: publicPath })
+    if (Object.keys(manualMetadata).length) namedProject = await store.put(withManualMetadata(namedProject, manualMetadata))
     return { state: 'published', project: namedProject, error: '', runId: '', promise: Promise.resolve(namedProject) }
   }
   const existingPublication = routePublications.get(publicPath)
@@ -200,7 +209,7 @@ async function materializeForPublication({ owner: sourceOwner, repo: sourceRepo,
 async function publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, sourceEntry = '', publicPath, manualMetadata = {}, publication }) {
   const existing = await store.bySourceKey(sourceKey)
   if (existing?.status === 'published' && existing.url) {
-    if ((publicPath && (existing.public_path !== publicPath || existing.store_path !== publicPath)) || Object.keys(manualMetadata).length) return store.put({ ...existing, ...manualMetadata, tags: normalizeTags(existing.tags || [], manualMetadata.tags || []), public_path: publicPath || existing.public_path, store_path: publicPath || existing.store_path })
+    if ((publicPath && (existing.public_path !== publicPath || existing.store_path !== publicPath)) || Object.keys(manualMetadata).length) return store.put({ ...withManualMetadata(existing, manualMetadata), public_path: publicPath || existing.public_path, store_path: publicPath || existing.store_path })
     return existing
   }
   if (!buildEnabled) return materializePublicProject({ owner: sourceOwner, repo: sourceRepo, sha, projectPath, sourceEntry, publicPath, baseHost, gamesDir, store, requestFetch: publicGithubFetch })

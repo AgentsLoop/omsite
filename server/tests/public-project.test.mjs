@@ -137,7 +137,9 @@ test('materializes a root-level GitHub Actions build ZIP', async () => {
   }
   const gamesDir = join(mkdtempSync(join(tmpdir(), 'omgithub-build-')), 'games')
 
-  const project = await materializePublicProject({ owner: 'owner', repo: 'repo', sha, baseHost: 'omgithub.com', gamesDir, store, archiveBuffer: zip.toBuffer(), buildRunId: '42', requestFetch })
+  const embeddedScreenshot = 'https://raw.githubusercontent.com/example/catalog/main/built-app.png'
+  const source = 'https://github.com/example/awesome-games'
+  const project = await materializePublicProject({ owner: 'owner', repo: 'repo', sha, baseHost: 'omgithub.com', gamesDir, store, archiveBuffer: zip.toBuffer(), buildRunId: '42', requestFetch, manualMetadata: { screenshot_embeddings: [embeddedScreenshot], source } })
 
   assert.equal(readFileSync(join(project.local_dir, 'index.html'), 'utf8'), '<title>Built App</title>')
   assert.equal(readFileSync(join(project.local_dir, 'assets/app.js'), 'utf8'), 'console.log("built")')
@@ -152,7 +154,9 @@ test('materializes a root-level GitHub Actions build ZIP', async () => {
   assert.equal(project.metadata_incomplete, true)
   assert.equal(existsSync(join(project.local_dir, '.omgithub-metadata.json')), false)
   assert.equal(existsSync(join(project.local_dir, 'assets/.omgithub-metadata.json')), false)
-  assert.deepEqual(project.screenshots, [`https://owner-repo-${'e'.repeat(12)}.omgithub.com/screenshots/final-build.png`])
+  assert.deepEqual(project.screenshots, [`https://owner-repo-${'e'.repeat(12)}.omgithub.com/screenshots/final-build.png`, embeddedScreenshot])
+  assert.deepEqual(project.screenshot_embeddings, [embeddedScreenshot])
+  assert.equal(project.source, source)
 })
 
 test('materializes a selected game directory from a repository ZIP', async () => {

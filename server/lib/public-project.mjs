@@ -223,6 +223,7 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
   const extracted = extractDeployment(zip, destination, Boolean(archiveBuffer), archiveBuffer ? '' : projectPath, archiveBuffer ? '' : sourceEntry)
   try {
     const metadata = pageMetadata(resolve(extracted.staging, 'index.html'))
+    const catalog = mergeCatalogMetadata({ existing: existing || {}, extracted: catalogMetadata || {}, manual: manualMetadata, htmlDescription: metadata.description, repositoryDescription: repository.description, topics: repository.topics || [] })
     const legacyStorePath = `/${owner}/${repo}/${sourceEntry ? 'blob' : 'tree'}/${sha.toLowerCase()}${projectPath ? `/${projectPath}` : ''}${sourceEntry ? `/${sourceEntry}` : ''}`
     const project = {
       id: createHash('sha256').update(sourceKey).digest('hex').slice(0, 20),
@@ -230,7 +231,7 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
       slug,
       title: String(metadata.title || repository.name).slice(0, 160),
       description: String(metadata.description || repository.description || commit.commit?.message?.split('\n')[0] || 'Published from a public GitHub commit.').slice(0, 500),
-      ...mergeCatalogMetadata({ existing: existing || {}, extracted: catalogMetadata || {}, manual: manualMetadata, htmlDescription: metadata.description, repositoryDescription: repository.description, topics: repository.topics || [] }),
+      ...catalog,
       repo_owner: repository.owner?.login || owner,
       repo: repository.name || repo,
       commit: sha.toLowerCase(),
@@ -238,7 +239,7 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
       github_stars_updated_at: new Date().toISOString(),
       owner_login: repository.owner?.login || owner,
       owner_avatar: repository.owner?.avatar_url || `https://github.com/${owner}.png`,
-      screenshots: screenshotUrls(entries, owner, repo, sha, { baseHost, slug, built: Boolean(archiveBuffer), deploymentRoot: extracted.root }),
+      screenshots: [...new Set([...screenshotUrls(entries, owner, repo, sha, { baseHost, slug, built: Boolean(archiveBuffer), deploymentRoot: extracted.root }), ...(catalog.screenshot_embeddings || [])])],
       status: 'published',
       build_method: archiveBuffer ? 'github-actions' : 'source',
       build_transport: archiveBuffer ? 'omgithub-zip' : 'source',

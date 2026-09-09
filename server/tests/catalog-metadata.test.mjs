@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import AdmZip from 'adm-zip'
-import { CATALOG_METADATA_FILE, validateCatalogMetadata, validateManualPublishMetadata, normalizeTags, mergeCatalogMetadata, publicCatalogMetadata, readCatalogMetadata } from '../lib/catalog-metadata.mjs'
+import { CATALOG_METADATA_FILE, validateCatalogMetadata, validateManualPublishMetadata, normalizeTags, normalizeScreenshotEmbeddings, mergeCatalogMetadata, publicCatalogMetadata, readCatalogMetadata } from '../lib/catalog-metadata.mjs'
 import { validateSourceEvidence } from '../../scripts/extract-catalog-metadata.mjs'
 
 const metadata = () => ({ schema_version: 1, description: 'Move a cube through a maze.', description_source: 'opencode', prompt: '', tags: ['ThreeJS', 'game'], complexity_score: 4, metadata_source: 'opencode', metadata_updated_at: '2026-09-09T00:00:00.000Z', metadata_evidence: ['description', 'tags', 'complexity_score'].map(field => ({ field, file: 'game.js', line_start: 1, line_end: 1 })) })
@@ -37,12 +37,25 @@ test('preserves imported source metadata and keeps private fields out of project
 test('accepts optional manual publish metadata and keeps prompt provenance', () => {
   const manual = validateManualPublishMetadata({
     description: 'A reviewed browser game.', tags: ['ThreeJS', 'arcade'], prompt: 'Build a small arcade game.',
-    prompt_source_url: 'https://github.com/example/game/blob/main/PROMPT.md'
+    prompt_source_url: 'https://github.com/example/game/blob/main/PROMPT.md',
+    screenshot_embeddings: ['https://raw.githubusercontent.com/example/game/main/screenshot.png'],
+    source: 'https://github.com/example/awesome-games'
   }, { sourceUrl: 'https://github.com/example/game/tree/main/game' })
   assert.deepEqual(manual.tags, ['three.js', 'arcade'])
   assert.equal(manual.prompt_source, 'manual')
   assert.equal(manual.description_source, 'manual')
+  assert.equal(manual.screenshot_embeddings.length, 1)
+  assert.equal(manual.source, 'https://github.com/example/awesome-games')
   assert.throws(() => validateManualPublishMetadata({ prompt: 'No source' }), /prompt_source_url/)
+  assert.throws(() => normalizeScreenshotEmbeddings(['http://example.com/image.png']), /screenshot_embeddings/)
+  assert.throws(() => validateManualPublishMetadata({ source: 'not a URL' }), /source/)
+})
+
+test('keeps discovery provenance private while exposing embedded screenshots through the gallery', () => {
+  const safe = publicCatalogMetadata({ source: 'https://github.com/example/list', screenshot_embeddings: ['https://example.com/game.png'], screenshots: ['https://example.com/game.png'] })
+  assert.equal('source' in safe, false)
+  assert.equal('screenshot_embeddings' in safe, false)
+  assert.deepEqual(safe.screenshots, ['https://example.com/game.png'])
 })
 
 test('reads reserved metadata and rejects invalid JSON before deployment', () => {
