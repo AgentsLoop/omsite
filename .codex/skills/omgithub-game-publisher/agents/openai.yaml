@@ -1,4 +1,4 @@
 interface:
-  display_name: "OmGithub Game Review"
-  short_description: "Review list links and prepare direct game submissions"
-  default_prompt: "Review game links from a source list. Extract only direct GitHub tree or HTML links, inspect each source, and prepare metadata. Do not publish."
+  display_name: "OmGithub Game Publisher"
+  short_description: "Inspect arbitrary links and publish verified games"
+  default_prompt: "Inspect this link, extract individual playable games, verify each game from source code, and publish accepted games to OmGithub with evidence-backed metadata."
