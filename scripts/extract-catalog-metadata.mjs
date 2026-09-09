@@ -21,6 +21,20 @@ export function validateSourceEvidence(metadata, files, sourceBase) {
   return validated
 }
 
+export function validateSourceEvidenceOrDropPrompt(metadata, files, sourceBase) {
+  try { return validateSourceEvidence(metadata, files, sourceBase) }
+  catch (error) {
+    if (!metadata.prompt || error.message !== 'Original prompt must match cited source text exactly') throw error
+    return validateSourceEvidence({
+      ...metadata,
+      prompt: '',
+      prompt_source: '',
+      prompt_source_url: '',
+      metadata_evidence: metadata.metadata_evidence.filter(item => item.field !== 'prompt')
+    }, files, sourceBase)
+  }
+}
+
 export async function extractCatalogMetadata(env = process.env, { repository: cachedRepository } = {}) {
   const source = resolve(env.OMGHITHUB_SOURCE_DIR || 'source')
   if (!/^[0-9a-f]{40}$/i.test(env.OMGHITHUB_SOURCE_SHA || '')) throw new Error('A full source commit SHA is required')
@@ -66,7 +80,7 @@ export async function extractCatalogMetadata(env = process.env, { repository: ca
           files[name] = execFileSync('git', ['show', `HEAD:${name}`], { cwd: source, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
         }
       }
-      return validateSourceEvidence(input, files, sourceBase)
+      return validateSourceEvidenceOrDropPrompt(input, files, sourceBase)
     }
     let metadata
     try { metadata = validateAnswer(run('Return the catalog JSON requested by the attachment.')) }

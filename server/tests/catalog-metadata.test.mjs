@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import AdmZip from 'adm-zip'
 import { CATALOG_METADATA_FILE, validateCatalogMetadata, validateManualPublishMetadata, normalizeTags, normalizeScreenshotEmbeddings, mergeCatalogMetadata, publicCatalogMetadata, readCatalogMetadata } from '../lib/catalog-metadata.mjs'
-import { validateSourceEvidence } from '../../scripts/extract-catalog-metadata.mjs'
+import { validateSourceEvidence, validateSourceEvidenceOrDropPrompt } from '../../scripts/extract-catalog-metadata.mjs'
 
 const metadata = () => ({ schema_version: 1, description: 'Move a cube through a maze.', description_source: 'opencode', prompt: '', tags: ['ThreeJS', 'game'], complexity_score: 4, metadata_source: 'opencode', metadata_updated_at: '2026-09-09T00:00:00.000Z', metadata_evidence: ['description', 'tags', 'complexity_score'].map(field => ({ field, file: 'game.js', line_start: 1, line_end: 1 })) })
 
@@ -21,6 +21,10 @@ test('checks source lines and rejects invented original prompts', () => {
   assert.match(validateSourceEvidence(input, files, 'https://github.com/o/r/blob/sha').prompt_source_url, /README.md#L1-L1$/)
   assert.throws(() => validateSourceEvidence({ ...input, prompt: 'Make a shooter.' }, files, 'https://github.com/o/r'), /exactly/)
   assert.throws(() => validateSourceEvidence(input, { ...files, 'game.js': undefined }, 'https://github.com/o/r'), /outside/)
+  const withoutInventedPrompt = validateSourceEvidenceOrDropPrompt({ ...input, prompt: 'Make a shooter.' }, files, 'https://github.com/o/r')
+  assert.equal(withoutInventedPrompt.prompt, '')
+  assert.equal(withoutInventedPrompt.prompt_source_url, '')
+  assert.equal(withoutInventedPrompt.metadata_evidence.some(item => item.field === 'prompt'), false)
 })
 
 test('preserves imported source metadata and keeps private fields out of projection', () => {
