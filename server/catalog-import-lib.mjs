@@ -182,8 +182,17 @@ export function progressUrl(origin, source) {
 export async function publishCandidate(source, { origin, requestFetch = fetch, attempts = 6, pollMs = 5000, onProgress = async () => {}, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
   const url = progressUrl(origin, source)
   for (let attempt = 0; attempt < attempts; attempt++) {
-    const response = await requestFetch(url, { redirect: 'error', signal: AbortSignal.timeout(30000) })
-    const body = await response.json()
+    let response
+    let body
+    try {
+      response = await requestFetch(url, { redirect: 'error', signal: AbortSignal.timeout(30000) })
+      body = JSON.parse(await response.text())
+    } catch (error) {
+      // A proxy can briefly return its HTML error document while an accepted build is
+      // still starting. Leave that build resumable instead of marking the game failed.
+      if (attempt + 1 < attempts) { await sleep(pollMs); continue }
+      return { state: 'pending', progress_url: url, message: 'Waiting for the publication status endpoint.' }
+    }
     if (!response.ok && body.state !== 'failed') throw new Error(`OmGithub HTTP ${response.status}`)
     await onProgress({ ...body, progress_url: url })
     if (['published', 'failed'].includes(body.state)) return { ...body, progress_url: url }

@@ -46,3 +46,12 @@ test('publication polling returns the final project state without artifacts', as
   assert.equal(result.state, 'published')
   assert.equal(result.project.id, 'game')
 })
+
+test('publication polling retains a pending build after a temporary non-JSON response', async () => {
+  const result = await publishCandidate({ ...normalizeSource('owner/repo'), kind: 'game' }, {
+    origin: 'https://omgithub.com', attempts: 1, pollMs: 0,
+    requestFetch: async () => new Response('<!doctype html><title>Retry</title>', { status: 502 })
+  })
+  assert.equal(result.state, 'pending')
+  assert.match(result.message, /Waiting/)
+})
