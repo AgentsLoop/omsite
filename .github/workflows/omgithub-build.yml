@@ -197,6 +197,7 @@ jobs:
             sed -i "s/powerPreference: *'high-performance'/powerPreference: 'low-power'/g; s/powerPreference: *\"high-performance\"/powerPreference: 'low-power'/g" "$build_root/index.html"
             if [[ -d "$build_root/assets" ]]; then
               find "$build_root/assets" -type f -name '*.js' -exec sed -i "s/powerPreference: *'high-performance'/powerPreference: 'low-power'/g; s/powerPreference: *\"high-performance\"/powerPreference: 'low-power'/g" {} +
+              find "$build_root/assets" -type f -name '*.js' -exec perl -0pi -e 's/powerPreference:\x60high-performance\x60/powerPreference:\x60low-power\x60/g' {} +
             fi
             python3 -c 'from pathlib import Path; import sys; p=Path(sys.argv[1]); h=p.read_text(); s="""<script>addEventListener("load",()=>setTimeout(()=>document.querySelector("#start,[data-game-start]")?.click(),150))</script>"""; p.write_text(h.replace("</body>", s+"</body>"))' "$build_root/index.html"
             python3 -m http.server 4173 --directory "$build_root" > /tmp/omgithub-preview.log 2>&1 &
