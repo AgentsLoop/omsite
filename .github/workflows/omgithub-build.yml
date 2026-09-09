@@ -199,8 +199,8 @@ jobs:
               sleep 1
             done
             curl --fail --silent http://127.0.0.1:4173/ > /dev/null
-            npx --yes playwright@1.55.0 install --with-deps chromium
-            npx --yes playwright@1.55.0 screenshot --wait-for-timeout 3000 --viewport-size '1440,900' http://127.0.0.1:4173/ "$build_root/screenshots/final-build.png"
+            google-chrome --version
+            npx --yes playwright@1.55.0 screenshot --channel chrome --wait-for-timeout 3000 --viewport-size '1440,900' http://127.0.0.1:4173/ "$build_root/screenshots/final-build.png"
             test -s "$build_root/screenshots/final-build.png"
           fi
 
