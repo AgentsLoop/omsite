@@ -301,7 +301,6 @@ app.post('/api/issues', async (req, res, next) => {
 app.post('/api/publish', async (req, res, next) => {
   try {
     if (!sameOrigin(req)) return res.status(403).json({ error: 'Use the OmGithub site to submit a reviewed game.' })
-    if (limited(req)) return res.status(429).json({ error: 'Publication limit reached. Try again later.' })
     const source = normalizeSource(String(req.body?.source_url || ''))
     if (!isDirectGameSource({ ...source, kind: 'game' })) return res.status(400).json({ error: 'Use a direct GitHub tree directory or HTML file URL.' })
     const manualMetadata = validateManualPublishMetadata(req.body?.metadata, { sourceUrl: source.url })
