@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { dispatchPublicBuild, normalizeBuildRunner } from '../lib/github-build.mjs'
 
@@ -95,4 +96,15 @@ test('dispatches a selected HTML entry file', async () => {
   const result = await dispatchPublicBuild({ sourceOwner: 'owner', sourceRepo: 'repo', sourceSha: 'c'.repeat(40), sourcePath: 'mosswing', sourceEntry: 'mosswing.html', workflowOwner: 'AgentsLoop', workflowRepo: 'OhMyGithub', token: 'secret', uploadUrl: 'https://omgithub.com/api/builds', uploadToken: 'upload-secret', requestFetch, pollMs: 0 })
 
   assert.equal(result.run.id, 44)
+})
+
+test('packages an explicit HTML entry before repository index fallbacks', () => {
+  const workflow = readFileSync(new URL('../../.github/workflows/omgithub-build.yml', import.meta.url), 'utf8')
+  const selectedEntry = workflow.indexOf('if [[ -n "$source_entry" && -f "$source_entry" ]]')
+  const builtDirectory = workflow.indexOf('elif [[ -n "$deploy_dir" ]]')
+  const rootIndex = workflow.indexOf('elif [[ -f index.html ]]')
+
+  assert.notEqual(selectedEntry, -1)
+  assert.ok(selectedEntry < builtDirectory)
+  assert.ok(builtDirectory < rootIndex)
 })

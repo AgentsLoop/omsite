@@ -174,13 +174,13 @@ jobs:
               deploy_dir="${generated_index%/index.html}"
             fi
           fi
-          if [[ -n "$deploy_dir" ]]; then
+          if [[ -n "$source_entry" && -f "$source_entry" ]]; then
+            rsync -a --exclude='.git' --exclude='node_modules' --exclude='omgithub-build' ./ "$build_root/"
+            mv -f "$build_root/$source_entry" "$build_root/index.html"
+          elif [[ -n "$deploy_dir" ]]; then
             cp -a "$deploy_dir"/. "$build_root/"
           elif [[ -f index.html ]]; then
             rsync -a --exclude='.git' --exclude='node_modules' --exclude='omgithub-build' ./ "$build_root/"
-          elif [[ -n "$source_entry" && -f "$source_entry" ]]; then
-            rsync -a --exclude='.git' --exclude='node_modules' --exclude='omgithub-build' ./ "$build_root/"
-            mv "$build_root/$source_entry" "$build_root/index.html"
           else
             echo 'The build did not produce a deployable index.html in a known output directory, the source root, or the requested source entry.' >&2
             exit 1
