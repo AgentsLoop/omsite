@@ -161,7 +161,7 @@ jobs:
           if [[ "$build_dir" != "$project_dir" && "$has_vite" == 'true' ]]; then
             relative_project="${project_dir#"$build_dir"/}"
             vite_config="$RUNNER_TEMP/omgithub-vite.config.mjs"
-            printf '%s\n' "import { defineConfig } from 'vite';" 'export default defineConfig({});' > "$vite_config"
+            printf '%s\n' 'export default {};' > "$vite_config"
             cd "$build_dir"
             npx vite build "$relative_project" --config "$vite_config"
           elif [[ -f "$build_dir/package.json" ]] && node -e "const p=require('./$build_dir/package.json'); process.exit(p.scripts?.build ? 0 : 1)"; then
