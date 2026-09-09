@@ -239,13 +239,17 @@ jobs:
               local seconds="$1"
               shift
               python3 - "$seconds" "$@" <<'PY'
+          import os
+          import signal
           import subprocess
           import sys
 
+          process = subprocess.Popen(sys.argv[2:], start_new_session=True)
           try:
-              result = subprocess.run(sys.argv[2:], timeout=float(sys.argv[1]))
-              raise SystemExit(result.returncode)
+              raise SystemExit(process.wait(timeout=float(sys.argv[1])))
           except subprocess.TimeoutExpired:
+              os.killpg(process.pid, signal.SIGKILL)
+              process.wait()
               raise SystemExit(124)
           PY
             }
