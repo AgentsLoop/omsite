@@ -224,15 +224,29 @@ jobs:
           /usr/bin/time -p cp "$RUNNER_TEMP/omgithub-catalog-metadata.json" omgithub-build/.omgithub-metadata.json
           (cd omgithub-build && zip -qr ../omgithub-build.zip .)
           test -s omgithub-build.zip
-          curl --fail --silent --show-error --retry 3 --retry-delay 2 \
-            -X POST \
-            -H 'content-type: application/zip' \
-            -H "x-omgithub-build-token: $OMGHITHUB_UPLOAD_TOKEN" \
-            -H "x-omgithub-source-owner: $OMGHITHUB_SOURCE_OWNER" \
-            -H "x-omgithub-source-repo: $OMGHITHUB_SOURCE_REPO" \
-            -H "x-omgithub-source-sha: $OMGHITHUB_SOURCE_SHA" \
-            -H "x-omgithub-source-path: $OMGHITHUB_SOURCE_PATH" \
-            -H "x-omgithub-source-entry: $OMGHITHUB_SOURCE_ENTRY" \
-            -H "x-omgithub-build-run: $GITHUB_RUN_ID" \
-            --data-binary @omgithub-build.zip \
-            "$OMGHITHUB_UPLOAD_URL"
+          upload_part() {
+            local file="$1" index="$2" count="$3"
+            curl --fail --silent --show-error --retry 3 --retry-delay 2 \
+              -X POST \
+              -H 'content-type: application/zip' \
+              -H "x-omgithub-build-token: $OMGHITHUB_UPLOAD_TOKEN" \
+              -H "x-omgithub-source-owner: $OMGHITHUB_SOURCE_OWNER" \
+              -H "x-omgithub-source-repo: $OMGHITHUB_SOURCE_REPO" \
+              -H "x-omgithub-source-sha: $OMGHITHUB_SOURCE_SHA" \
+              -H "x-omgithub-source-path: $OMGHITHUB_SOURCE_PATH" \
+              -H "x-omgithub-source-entry: $OMGHITHUB_SOURCE_ENTRY" \
+              -H "x-omgithub-build-run: $GITHUB_RUN_ID" \
+              -H "x-omgithub-build-part: $index" \
+              -H "x-omgithub-build-parts: $count" \
+              --data-binary "@$file" \
+              "$OMGHITHUB_UPLOAD_URL"
+          }
+          upload_size=$((90 * 1024 * 1024))
+          zip_size=$(wc -c < omgithub-build.zip)
+          if (( zip_size <= upload_size )); then
+            upload_part omgithub-build.zip 0 1
+          else
+            split -b "$upload_size" -d -a 4 omgithub-build.zip omgithub-build.part.
+            parts=(omgithub-build.part.*)
+            for index in "${!parts[@]}"; do upload_part "${parts[$index]}" "$index" "${#parts[@]}"; done
+          fi

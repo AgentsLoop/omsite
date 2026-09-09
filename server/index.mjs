@@ -325,9 +325,21 @@ app.post('/api/builds', express.raw({ type: ['application/zip', 'application/oct
     if (!equalSecret(pending.owner, req.headers['x-omgithub-source-owner']) || !equalSecret(pending.repo, req.headers['x-omgithub-source-repo']) || !equalSecret(pending.sha, req.headers['x-omgithub-source-sha']) || !pathMatches || !entryMatches) return res.status(400).json({ error: 'Build source headers do not match the requested commit, directory, or entry file' })
     if (!String(req.headers['content-type'] || '').toLowerCase().includes('application/zip')) return res.status(415).json({ error: 'Build upload must be a ZIP' })
     if (!Buffer.isBuffer(req.body) || req.body.length === 0 || req.body.length > buildUploadMaxBytes) return res.status(413).json({ error: 'Build ZIP is empty or too large' })
+    const partCount = Number(req.headers['x-omgithub-build-parts'] || 1)
+    const partIndex = Number(req.headers['x-omgithub-build-part'] || 0)
+    if (!Number.isInteger(partCount) || !Number.isInteger(partIndex) || partCount < 1 || partCount > 64 || partIndex < 0 || partIndex >= partCount) return res.status(400).json({ error: 'Invalid build ZIP part headers' })
+    let archiveBuffer = req.body
+    if (partCount > 1) {
+      if (!pending.parts || pending.parts.count !== partCount) pending.parts = { count: partCount, chunks: new Map() }
+      pending.parts.chunks.set(partIndex, req.body)
+      if (pending.parts.chunks.size !== partCount) return res.status(202).json({ ok: true, received_parts: pending.parts.chunks.size, total_parts: partCount })
+      archiveBuffer = Buffer.concat([...Array(partCount).keys()].map(index => pending.parts.chunks.get(index)))
+      delete pending.parts
+      if (archiveBuffer.length > buildUploadMaxBytes) return res.status(413).json({ error: 'Reassembled build ZIP is too large' })
+    }
     pending.processing = true
     pending.publication.state = 'publishing'
-    const project = await materializePublicProject({ owner: pending.owner, repo: pending.repo, sha: pending.sha, projectPath: pending.projectPath, sourceEntry: pending.sourceEntry, publicPath: pending.publicPath, manualMetadata: pending.manualMetadata, baseHost, gamesDir, store, requestFetch: publicGithubFetch, archiveBuffer: req.body, buildRunId: String(req.headers['x-omgithub-build-run'] || '') })
+    const project = await materializePublicProject({ owner: pending.owner, repo: pending.repo, sha: pending.sha, projectPath: pending.projectPath, sourceEntry: pending.sourceEntry, publicPath: pending.publicPath, manualMetadata: pending.manualMetadata, baseHost, gamesDir, store, requestFetch: publicGithubFetch, archiveBuffer, buildRunId: String(req.headers['x-omgithub-build-run'] || '') })
     pendingBuilds.delete(token)
     res.status(201).json({ ok: true, commit: project.commit, screenshots: project.screenshots })
   } catch (e) {
