@@ -8,18 +8,17 @@
       </span>
       <span class="play-stat" :aria-label="playLabel" :title="playLabel"><span aria-hidden="true">▶</span> {{ compact(playCount) }} {{ playCount === 1 ? 'play' : 'plays' }}</span>
     </div>
-    <p v-if="compactView && project.runtime_flops" class="runtime-estimate" :title="project.runtime_flops.assumptions">≈ {{ formatFlops(project.runtime_flops.flops) }} · OC estimate (60 FPS, 1080p)</p>
-    <details v-else-if="project.runtime_flops" class="runtime-estimate">
-      <summary>≈ {{ formatFlops(project.runtime_flops.flops) }} · OC estimate</summary>
-      <p>Rough CPU + GPU work at 60 FPS, 1920 × 1080. Not a measured benchmark or hardware requirement.</p>
-      <p>{{ project.runtime_flops.assumptions }}</p>
+    <p v-if="compactView && project.graphics_demand" class="graphics-demand" :title="project.graphics_demand.assumptions">Graphics demand: {{ demandLabel(project.graphics_demand.level) }} · OC estimate</p>
+    <details v-else-if="project.graphics_demand" class="graphics-demand">
+      <summary>Graphics demand: {{ demandLabel(project.graphics_demand.level) }} · OC estimate</summary>
+      <p>Estimated GPU requirement for typical active gameplay. This is not a measured benchmark.</p>
+      <p>{{ project.graphics_demand.assumptions }}</p>
     </details>
-    <p v-else class="runtime-estimate">FLOPS: not estimated</p>
+    <p v-else class="graphics-demand">Graphics demand: not rated</p>
   </div>
 </template>
 <script setup>
 import { computed } from 'vue'
-import { formatFlops } from '../lib/runtime-flops.mjs'
 const props = defineProps({ project: { type: Object, required: true }, compactView: Boolean })
 const tags = computed(() => [...new Set((props.project.tags || []).filter(tag => typeof tag === 'string').map(tag => tag.trim().toLowerCase()).filter(Boolean))])
 const rating = computed(() => props.project.rating != null && Number(props.project.rating) >= 1 && Number(props.project.rating) <= 10 ? Number(props.project.rating) : null)
@@ -31,10 +30,13 @@ const playLabel = computed(() => `${playCount.value.toLocaleString()} ${playCoun
 function compact(value) {
   return Intl.NumberFormat(undefined, { notation: value >= 1000 ? 'compact' : 'standard', maximumFractionDigits: 1 }).format(value)
 }
+function demandLabel(level) {
+  return ({ light: 'Light', moderate: 'Moderate', heavy: 'Heavy', extreme: 'Extreme', ultra: 'Ultra', godlike: 'Godlike' })[level] || 'Not rated'
+}
 </script>
 
 <style scoped>
-.runtime-estimate { margin: 0.65rem 0 0; font-size: 0.8rem; line-height: 1.5; color: var(--muted, #94a3b8); }
-.runtime-estimate summary { cursor: pointer; }
-.runtime-estimate p { margin: 0.4rem 0 0; }
+.graphics-demand { margin: 0.65rem 0 0; font-size: 0.8rem; line-height: 1.5; color: var(--muted, #94a3b8); }
+.graphics-demand summary { cursor: pointer; }
+.graphics-demand p { margin: 0.4rem 0 0; }
 </style>

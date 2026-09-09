@@ -69,15 +69,14 @@ Merge OpenCode tags with GitHub repository topics. Store the evidence and
 complexity score privately. Seed the public rating from complexity, then let
 signed-in user ratings control the average as votes accumulate.
 
-Generate `runtime_flops` with OpenCode during metadata extraction. Estimate
-combined CPU and GPU floating-point operations per second at 60 FPS and
-1920 × 1080 for typical gameplay. Store `flops`, `target_fps`, `width`,
-`height`, `source: "opencode"`, and `assumptions`. Require source-line evidence
-for `runtime_flops`. Describe per-frame work, scene load, and uncertainty in
-`assumptions`. Show the scaled FLOPS value and assumptions on cards and game
-pages. Label the value as a rough OC estimate, not a benchmark or hardware
-requirement. Show “not estimated” for old metadata. Regenerate metadata through
-the publishing workflow to add estimates to existing games.
+Generate `graphics_demand` with OpenCode during metadata extraction. Rate the
+GPU requirement for typical gameplay at 1920 × 1080 as `light`, `moderate`,
+`heavy`, `extreme`, `ultra`, or `godlike`. Store `level`, `source: "opencode"`,
+and `assumptions`. Require source-line evidence for `graphics_demand`. Describe
+the main GPU costs, scene load, and uncertainty in `assumptions`. Show the label
+and assumptions on cards and game pages. Label the value as an OC estimate, not
+a measured benchmark. Show “not rated” for old metadata. Regenerate metadata
+through the publishing workflow to add ratings to existing games.
 
 Count one play per project and visitor in a rolling 24-hour period. Let each
 signed-in GitHub user keep one editable review and one editable rating per
