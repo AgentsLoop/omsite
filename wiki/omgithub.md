@@ -101,7 +101,8 @@ deployable ZIP directly to `/api/builds`. Merge common static directories such
 as `assets/`, `models/`, `textures/`, `images/`, `audio/`, and `media/` from
 the selected source path into the build output so arbitrary Vite roots keep
 their runtime files. Use the temporary upload token and
-matching source headers. Retain no GitHub Actions artifact.
+matching source headers. Give the headless capture up to ten seconds for
+asynchronous glTF and texture loading. Retain no GitHub Actions artifact.
 Sign the short-lived upload token so a public request can finish on any
 healthy OmGithub process. Continue to validate the source commit, selected
 path, archive size, and `index.html` before publishing.

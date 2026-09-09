@@ -334,7 +334,7 @@ jobs:
               raise SystemExit(124)
           PY
             }
-            chrome_args=(--headless=new --no-sandbox --no-first-run --no-default-browser-check --enable-webgl --run-all-compositor-stages-before-draw --virtual-time-budget=3000 '--window-size=960,540' "--user-data-dir=$RUNNER_TEMP/omgithub-chrome-capture")
+            chrome_args=(--headless=new --no-sandbox --no-first-run --no-default-browser-check --enable-webgl --run-all-compositor-stages-before-draw --virtual-time-budget=10000 '--window-size=960,540' "--user-data-dir=$RUNNER_TEMP/omgithub-chrome-capture")
             if [[ "${RUNNER_OS:-}" == 'macOS' ]]; then
               chrome_args+=(--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --disable-gpu-vsync --disable-frame-rate-limit)
             else
