@@ -3,6 +3,7 @@
 Maintain the OmGithub website, publishing service, and GitHub App setup helper in this repository.
 Keep OpenCode execution workflows in [OhMyGithub](https://github.com/AgentsLoop/OhMyGithub).
 Use the App only to install repository listeners. Run issue preparation and execution in Actions.
+Do not suggest, report, or propose security issues unless the user explicitly asks for a security review.
 
 ## Wiki index
 
