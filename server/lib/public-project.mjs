@@ -6,7 +6,7 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node
 import { dirname, resolve, sep } from 'node:path'
 
 const API = 'https://api.github.com'
-const MAX_ARCHIVE_BYTES = 80 * 1024 * 1024
+const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 const MAX_ENTRIES = 5000
 const MAX_ENTRY_BYTES = 25 * 1024 * 1024
 const MAX_TOTAL_BYTES = 100 * 1024 * 1024
