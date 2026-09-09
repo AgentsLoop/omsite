@@ -204,7 +204,7 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
   sourceEntry = validateSourceEntry(sourceEntry)
   publicPath = String(publicPath || '').trim()
   if (publicPath && (!publicPath.startsWith('/') || publicPath.includes('..'))) throw Object.assign(new Error('Invalid public project path'), { status: 400 })
-  const sourceKey = `${owner.toLowerCase()}/${repo.toLowerCase()}@${sha.toLowerCase()}${projectPath ? `:${projectPath}` : ''}`
+  const sourceKey = `${owner.toLowerCase()}/${repo.toLowerCase()}@${sha.toLowerCase()}${projectPath ? `:${projectPath}` : ''}${sourceEntry ? `:${sourceEntry}` : ''}`
   const existing = await store.bySourceKey(sourceKey)
   if (existing && !archiveBuffer) return existing
 

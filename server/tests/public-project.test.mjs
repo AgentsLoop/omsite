@@ -212,4 +212,34 @@ test('materializes a selected HTML entry file as index.html', async () => {
   assert.equal(project.store_path, publicPath)
   assert.equal(project.legacy_store_path, `/owner/repo/blob/${sha}/mosswing/mosswing.html`)
   assert.equal(project.github_url, `https://github.com/owner/repo/blob/${sha}/mosswing/mosswing.html`)
+  assert.equal(project.source_key, `owner/repo@${sha}:mosswing:mosswing.html`)
+})
+
+test('keeps root-level HTML entries distinct within one commit', async () => {
+  const sha = '8'.repeat(40)
+  const zip = new AdmZip()
+  zip.addFile('owner-repo-h/first.html', Buffer.from('<title>First Game</title>'))
+  zip.addFile('owner-repo-h/second.html', Buffer.from('<title>Second Game</title>'))
+  const rows = []
+  const store = {
+    bySourceKey: async key => rows.find(row => row.source_key === key) || null,
+    put: async project => { rows.push(project); return project }
+  }
+  const requestFetch = async url => {
+    if (url.endsWith('/repos/owner/repo')) return response({ name: 'repo', private: false, owner: { login: 'owner' } })
+    if (url.endsWith(`/commits/${sha}`)) return response({ sha, commit: { message: 'Two HTML games' } })
+    if (url.endsWith(`/zipball/${sha}`)) return response(zip.toBuffer())
+    return response({ message: 'not found' }, { status: 404 })
+  }
+  const gamesDir = join(mkdtempSync(join(tmpdir(), 'omgithub-root-entries-')), 'games')
+
+  const first = await materializePublicProject({ owner: 'owner', repo: 'repo', sha, sourceEntry: 'first.html', baseHost: 'omgithub.com', gamesDir, store, requestFetch })
+  const second = await materializePublicProject({ owner: 'owner', repo: 'repo', sha, sourceEntry: 'second.html', baseHost: 'omgithub.com', gamesDir, store, requestFetch })
+
+  assert.equal(first.title, 'First Game')
+  assert.equal(second.title, 'Second Game')
+  assert.notEqual(first.id, second.id)
+  assert.notEqual(first.slug, second.slug)
+  assert.notEqual(first.source_key, second.source_key)
+  assert.equal(rows.length, 2)
 })
