@@ -61,6 +61,7 @@ const sessions = new Map()
 const pendingBuilds = new Map()
 const publications = new Map()
 const routePublications = new Map()
+const routeInitializations = new Map()
 const rate = new Map()
 const app = express()
 app.set('trust proxy', true)
@@ -162,47 +163,56 @@ async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha, pro
 }
 async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref = '', projectPath = '', sourceEntry = '', publicPath, latest = false, manualMetadata = {}, refresh = false }) {
   projectPath = validateProjectPath(projectPath)
-  const cached = await store.byPublicPath(publicPath)
-  if (cached && !refresh) {
-    const project = Object.keys(manualMetadata).length ? await store.put(withManualMetadata(cached, manualMetadata)) : cached
-    return { state: 'published', project, error: '', runId: '', promise: Promise.resolve(project) }
-  }
-  const legacyCached = await store.byRepositoryPath(sourceOwner, sourceRepo, projectPath, sourceEntry)
-  if (legacyCached && !refresh) {
-    let namedProject = legacyCached.public_path === publicPath && legacyCached.store_path === publicPath
-      ? legacyCached
-      : await store.put({ ...legacyCached, public_path: publicPath, store_path: publicPath })
-    if (Object.keys(manualMetadata).length) namedProject = await store.put(withManualMetadata(namedProject, manualMetadata))
-    return { state: 'published', project: namedProject, error: '', runId: '', promise: Promise.resolve(namedProject) }
-  }
   const existingPublication = routePublications.get(publicPath)
-  if ((refresh && existingPublication?.state === 'published') || existingPublication?.state === 'failed') routePublications.delete(publicPath)
-  else if (existingPublication) return existingPublication
+  if (existingPublication && !(refresh && existingPublication.state === 'published') && existingPublication.state !== 'failed') return existingPublication
+  if (existingPublication) routePublications.delete(publicPath)
+  const initializing = routeInitializations.get(publicPath)
+  if (initializing) return initializing
 
-  const publication = { publicPath, state: 'checking', project: null, error: '', runId: '' }
-  publication.promise = (async () => {
-    const resolved = latest
-      ? await resolveLatestPublicCommit({ owner: sourceOwner, repo: sourceRepo, requestFetch: publicGithubFetch })
-      : await resolvePublicCommit({ owner: sourceOwner, repo: sourceRepo, ref, requestFetch: publicGithubFetch })
-    publication.sha = resolved.sha.toLowerCase()
-    publication.sourcePublication = await startPublication({ owner: sourceOwner, repo: sourceRepo, sha: resolved.sha, projectPath, sourceEntry, publicPath, manualMetadata, refresh })
-    const project = await publication.sourcePublication.promise
-    const namedProject = project.public_path === publicPath && project.store_path === publicPath
-      ? project
-      : await store.put({ ...project, public_path: publicPath, store_path: publicPath })
-    publication.project = namedProject
-    publication.state = 'published'
-    return namedProject
-  })().catch(error => {
-    publication.error = error.message || 'Publication failed.'
-    publication.state = 'failed'
-    throw error
-  }).finally(() => setTimeout(() => {
-    if (routePublications.get(publicPath) === publication) routePublications.delete(publicPath)
-  }, 60 * 1000))
-  publication.promise.catch(() => {})
-  routePublications.set(publicPath, publication)
-  return publication
+  const initialization = (async () => {
+    const cached = await store.byPublicPath(publicPath)
+    if (cached && !refresh) {
+      const project = Object.keys(manualMetadata).length ? await store.put(withManualMetadata(cached, manualMetadata)) : cached
+      return { state: 'published', project, error: '', runId: '', promise: Promise.resolve(project) }
+    }
+    const legacyCached = await store.byRepositoryPath(sourceOwner, sourceRepo, projectPath, sourceEntry)
+    if (legacyCached && !refresh) {
+      let namedProject = legacyCached.public_path === publicPath && legacyCached.store_path === publicPath
+        ? legacyCached
+        : await store.put({ ...legacyCached, public_path: publicPath, store_path: publicPath })
+      if (Object.keys(manualMetadata).length) namedProject = await store.put(withManualMetadata(namedProject, manualMetadata))
+      return { state: 'published', project: namedProject, error: '', runId: '', promise: Promise.resolve(namedProject) }
+    }
+
+    const publication = { publicPath, state: 'checking', project: null, error: '', runId: '' }
+    publication.promise = (async () => {
+      const resolved = latest
+        ? await resolveLatestPublicCommit({ owner: sourceOwner, repo: sourceRepo, requestFetch: publicGithubFetch })
+        : await resolvePublicCommit({ owner: sourceOwner, repo: sourceRepo, ref, requestFetch: publicGithubFetch })
+      publication.sha = resolved.sha.toLowerCase()
+      publication.sourcePublication = await startPublication({ owner: sourceOwner, repo: sourceRepo, sha: resolved.sha, projectPath, sourceEntry, publicPath, manualMetadata, refresh })
+      const project = await publication.sourcePublication.promise
+      const namedProject = project.public_path === publicPath && project.store_path === publicPath
+        ? project
+        : await store.put({ ...project, public_path: publicPath, store_path: publicPath })
+      publication.project = namedProject
+      publication.state = 'published'
+      return namedProject
+    })().catch(error => {
+      publication.error = error.message || 'Publication failed.'
+      publication.state = 'failed'
+      throw error
+    }).finally(() => setTimeout(() => {
+      if (routePublications.get(publicPath) === publication) routePublications.delete(publicPath)
+    }, 60 * 1000))
+    publication.promise.catch(() => {})
+    routePublications.set(publicPath, publication)
+    return publication
+  })()
+  routeInitializations.set(publicPath, initialization)
+  try { return await initialization } finally {
+    if (routeInitializations.get(publicPath) === initialization) routeInitializations.delete(publicPath)
+  }
 }
 async function materializeForPublication({ owner: sourceOwner, repo: sourceRepo, sha, projectPath = '', sourceEntry = '', publicPath = '' }) {
   return (await startPublication({ owner: sourceOwner, repo: sourceRepo, sha, projectPath, sourceEntry, publicPath })).promise
