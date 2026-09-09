@@ -201,9 +201,7 @@ jobs:
             done
             curl --fail --silent http://127.0.0.1:4173/ > /dev/null
             google-chrome --version
-            if ! timeout 75s npx --yes playwright@1.55.0 screenshot --channel chrome --wait-for-timeout 3000 --viewport-size '1440,900' http://127.0.0.1:4173/ "$build_root/screenshots/final-build.png"; then
-              timeout 45s google-chrome --headless --no-sandbox --disable-gpu --run-all-compositor-stages-before-draw --virtual-time-budget=5000 --window-size=1440,900 --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/
-            fi
+            timeout --foreground -s KILL 45s google-chrome --headless --no-sandbox --disable-gpu --run-all-compositor-stages-before-draw --virtual-time-budget=5000 --window-size=1440,900 --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/
             test -s "$build_root/screenshots/final-build.png"
           fi
 
