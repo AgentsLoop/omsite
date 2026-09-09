@@ -39,7 +39,7 @@ the authenticated `GITHUB_TOKEN`.
   to use Firebase. Persist execution approvals and claims there too. Otherwise,
   keep the local catalog and `opencode-executions/` under persistent `DATA_DIR`.
 - Set repository variable `OMG_APP_ORIGIN` when the preparation endpoint uses
-  a different HTTPS origin. Match its OIDC audience to `/api/opencode/prepare`.
+  a different HTTPS origin. Keep GitHub's default repository-owner OIDC audience.
 - Set `PUBLIC_ORIGIN=https://omgithub.com` in production. Set
   `PUBLIC_ALIASES` to a comma-separated list of additional public domains.
 - Set `OMGHITHUB_BUILD_OWNER`, `OMGHITHUB_BUILD_REPO`,

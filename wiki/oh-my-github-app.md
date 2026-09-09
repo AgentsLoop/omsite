@@ -26,9 +26,10 @@ site submissions. Create the issue with an installation token. Store approval
 for its exact title, body, label names, target branch, and authenticated human.
 Apply mode labels before `OpenCode`.
 
-Call `/api/opencode/prepare` with an Actions OIDC token whose audience matches
-the endpoint URL. Set repository variable `OMG_APP_ORIGIN` when using another
-App origin. Verify the caller, Actions run, label event, and issue permissions.
+Call `/api/opencode/prepare` with an Actions OIDC token that uses GitHub's
+default repository-owner audience. Set repository variable `OMG_APP_ORIGIN`
+when using another App origin. Verify the caller, Actions run, label event,
+repository owner, and issue permissions.
 Require the stored approval for App-created issues. Reject modified snapshots.
 Keep approval and request claims in the persistent data store; use Firestore
 transactions when configured. Preserve the data volume across service updates.

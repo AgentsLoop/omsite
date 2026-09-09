@@ -8,7 +8,7 @@ import { createExecutionStore, approveExecution, prepareExecution, verifyActions
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
 const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'test-key', alg: 'RS256' }
-const claims = extra => ({ iss: 'https://token.actions.githubusercontent.com', aud: 'https://omgithub.com/api/opencode/prepare', nbf: Math.floor(Date.now() / 1000) - 10, exp: Math.floor(Date.now() / 1000) + 300, repository: 'owner/repo', repository_id: '22', workflow_ref: 'owner/repo/.github/workflows/opencode.yml@refs/heads/main', ref: 'refs/heads/main', run_id: '100', run_attempt: '1', event_name: 'issues', ...extra })
+const claims = extra => ({ iss: 'https://token.actions.githubusercontent.com', aud: 'https://github.com/owner', nbf: Math.floor(Date.now() / 1000) - 10, exp: Math.floor(Date.now() / 1000) + 300, repository: 'owner/repo', repository_owner: 'owner', repository_id: '22', workflow_ref: 'owner/repo/.github/workflows/opencode.yml@refs/heads/main', ref: 'refs/heads/main', run_id: '100', run_attempt: '1', event_name: 'issues', ...extra })
 function token(extra = {}) {
   const unsigned = [ { alg: 'RS256', kid: 'test-key' }, claims(extra) ].map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.')
   return `${unsigned}.${createSign('RSA-SHA256').update(unsigned).sign(privateKey, 'base64url')}`
@@ -41,7 +41,7 @@ function fixture(t, options = {}) {
 
 test('verify real RSA signature and reject wrong audience, expiry and workflow identity', async t => {
   const f = fixture(t)
-  await assert.rejects(verifyActionsToken(token({ aud: 'other' }), 'https://omgithub.com/api/opencode/prepare', f.fetcher), /scoped/)
+  await assert.rejects(verifyActionsToken(token({ aud: 'other' }), 'https://github.com/owner', f.fetcher), /scoped/)
   await assert.rejects(f.prepare({ exp: 1 }), /Expired/)
   await assert.rejects(f.prepare({ workflow_ref: 'owner/repo/.github/workflows/other.yml@refs/heads/main' }), /default branch/)
   const signed = token().split('.')

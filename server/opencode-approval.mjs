@@ -77,10 +77,16 @@ export async function verifyActionsToken(token, audience, requestFetch = fetch, 
 }
 
 export async function prepareExecution({ token, event }, config, requestFetch = fetch) {
-  const audience = `${(config.publicOrigin || 'https://omgithub.com').replace(/\/$/, '')}/api/opencode/prepare`
+  let assertedOwner
+  try {
+    const unverified = JSON.parse(Buffer.from(String(token || '').split('.')[1], 'base64url'))
+    assertedOwner = unverified.repository_owner
+  } catch { deny('Invalid Actions identity token.') }
+  if (!/^[\w.-]+$/.test(assertedOwner || '')) deny('Invalid Actions repository owner.')
+  const audience = `https://github.com/${assertedOwner}`
   const identity = await verifyActionsToken(token, audience, requestFetch)
   const repository = identity.repository
-  if (!/^[\w.-]+\/[\w.-]+$/.test(repository || '') || event?.repository?.full_name !== repository || String(event.repository.id) !== identity.repository_id) deny('Repository identity mismatch.')
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repository || '') || repository.split('/')[0] !== identity.repository_owner || event?.repository?.full_name !== repository || String(event.repository.id) !== identity.repository_id) deny('Repository identity mismatch.')
   if (identity.event_name !== 'issues' || event.action !== 'labeled' || event.label?.name !== 'OpenCode' || event.issue?.pull_request || !labels(event.issue || {}).includes('OpenCode')) deny('Only OpenCode issue label events can execute.')
   if (!Number.isSafeInteger(event.issue.number) || event.issue.number < 1 || !/^\d+$/.test(identity.run_id || '') || !/^\d+$/.test(identity.run_attempt || '')) deny('Invalid issue or Actions run identity.')
   const common = { accept: 'application/vnd.github+json', 'user-agent': 'OmGithub', 'x-github-api-version': '2022-11-28' }
