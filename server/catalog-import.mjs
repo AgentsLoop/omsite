@@ -8,7 +8,7 @@ export const HELP = `Import explicit GitHub game directories or HTML files witho
 
 Run: node server/catalog-import.mjs [options]
   --dry-run                 Scan and save a report (default; no DB or publish writes)
-  --publish                 Submit named public progress routes and resume pending builds
+  --publish                 Disabled. Submit reviewed game links manually in OmGithub.
   --prompts                 Upsert extracted prompts through createStore
   --manifest FILE           Source manifest (default: scripts/catalog-sources.json)
   --report FILE             Resumable report (default: DATA_DIR/catalog-import-report.json)
@@ -28,6 +28,8 @@ for Firestore in --prompts mode. Otherwise use the local DATA_DIR store, as in b
 Keep the report and cache under DATA_DIR. Reuse the report to resume or change modes.
 Use a new report or --refresh to scan again. Add only direct GitHub tree directory
 or HTML blob links with kind game. Repository roots and catalog/list links are rejected.
+Do not use this command to submit games. Review source code first, then submit
+the exact reviewed link manually in OmGithub.
 --publish and --prompts may be combined. --dry-run cannot be combined with either.
 `
 
@@ -54,7 +56,8 @@ export function parseArgs(argv, env = process.env) {
     if (!Number.isSafeInteger(value) || value < (['depth', 'linkDepth', 'pollMs'].includes(name) ? 0 : 1)) throw new Error(`Invalid bound: ${name}`)
   }
   if (options.pollMs > 60000) throw new Error('--poll-ms must not exceed 60000')
-  if (explicitDry && (options.publish || options.prompts)) throw new Error('--dry-run cannot be combined with write modes')
+  if (options.publish) throw new Error('Automatic catalog publication is disabled. Review source code and submit the exact game link manually.')
+  if (explicitDry && options.prompts) throw new Error('--dry-run cannot be combined with write modes')
   const origin = new URL(options.origin)
   if (!['https:', 'http:'].includes(origin.protocol) || origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash) throw new Error('--origin must be an HTTP(S) origin')
   options.origin = origin.origin

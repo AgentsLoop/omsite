@@ -8,7 +8,7 @@ Preserve the existing immutable publication model. Keep repository paths and gam
 
 ## Publication boundary
 
-Accept only a reviewed direct GitHub `tree` directory link or `blob` HTML-file link for automatic publication. Reject repository-root links, catalog repositories, and list pages. Publish only that selected directory or file. Keep list-derived prompts as pending evidence until an exact already-published game path matches. Do not discover or queue child HTML files automatically.
+Accept only a reviewed direct GitHub `tree` directory link or `blob` HTML-file link for manual publication. Reject repository-root links, catalog repositories, and list pages. Do not use the importer to submit a game. Review source code first, then submit only the selected directory or file manually. Keep list-derived prompts as pending evidence until an exact already-published game path matches. Do not discover or queue child HTML files automatically.
 
 ## Store metadata
 

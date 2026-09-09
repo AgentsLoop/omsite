@@ -10,7 +10,6 @@
     "test": "node --test server/*.test.mjs",
     "backfill:github-stars": "node server/backfill-github-stars.mjs",
     "catalog:scan": "node server/catalog-import.mjs --dry-run",
-    "catalog:publish": "node server/catalog-import.mjs --publish",
     "catalog:prompts": "node server/catalog-import.mjs --prompts",
     "metadata:extract": "node scripts/extract-catalog-metadata.mjs"
   },

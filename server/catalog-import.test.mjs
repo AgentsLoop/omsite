@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { canonicalKey, discoverGames, extractPrompts, isDirectGameSource, normalizeSource, publishCandidate } from './catalog-import-lib.mjs'
+import { parseArgs } from './catalog-import.mjs'
 
 test('catalog source identities ignore refs and retain selected HTML files', () => {
   const named = normalizeSource('https://github.com/Owner/Repo/tree/main/games/demo')
@@ -11,6 +12,10 @@ test('catalog source identities ignore refs and retain selected HTML files', () 
   assert.notEqual(canonicalKey(named), canonicalKey(blob))
   assert.equal(isDirectGameSource({ ...named, kind: 'game' }), true)
   assert.equal(isDirectGameSource({ ...normalizeSource('owner/repo'), kind: 'game' }), false)
+})
+
+test('automatic catalog publication is disabled', () => {
+  assert.throws(() => parseArgs(['--publish']), /Automatic catalog publication is disabled/)
 })
 
 test('catalog discovery keeps game directories distinct and imports only explicit prompts', () => {

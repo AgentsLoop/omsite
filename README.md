@@ -32,8 +32,9 @@ or lists to this manifest. The importer publishes only the exact selected game.
 GITHUB_TOKEN=... npm run catalog:scan
 ```
 
-Review `DATA_DIR/catalog-import-report.json`. Run `npm run catalog:publish` to
-submit the exact selected games to OmGithub. Run `npm run catalog:prompts` with Firebase
+Review source code before any submission. Do not use the importer to submit games.
+Submit the exact reviewed game directory or HTML file manually in OmGithub. Run
+`npm run catalog:prompts` with Firebase
 credentials to apply exact prompts to matching published project records.
 Reuse the report and disk cache when a run is interrupted.
 
