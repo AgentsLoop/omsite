@@ -40,7 +40,7 @@ deployable ZIP directly to `/api/builds` with the temporary upload token and
 matching source headers. Retain no GitHub Actions artifact.
 
 Require `index.html` in the deployment. Enforce the archive entry and size
-limits in [public-project.mjs](../site/server/public-project.mjs). Read the
+limits in [public-project.mjs](../server/public-project.mjs). Read the
 replacement metadata before removing an existing deployment. Serve the
 published files on their project subdomain.
 
@@ -73,7 +73,7 @@ for OpenCode execution and delivery.
 
 ## Configure and deploy
 
-Use [the site setup guide](../site/README.md) for configuration. Deploy the
+Use [the site setup guide](../README.md) for configuration. Deploy the
 `omgithub` Docker Compose service to A1 with
 `bash scripts/deploy-omgithub-a1.sh`. Route `omgithub.com` and
 `*.omgithub.com` through host Caddy to `127.0.0.1:8794`.

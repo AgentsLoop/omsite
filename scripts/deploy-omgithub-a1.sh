@@ -33,8 +33,8 @@ export DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain
 docker compose up -d --build --wait
 docker compose ps"
 
-  env COPYFILE_DISABLE=1 LC_ALL=C tar --no-xattrs --no-mac-metadata -C "$ROOT/site" -czf - \
-    --exclude=node_modules --exclude=dist --exclude=data --exclude=.env . |
+  env COPYFILE_DISABLE=1 LC_ALL=C tar --no-xattrs --no-mac-metadata -C "$ROOT" -czf - \
+    --exclude=.git --exclude=node_modules --exclude=dist --exclude=data --exclude=.env . |
     ssh "$REMOTE" "$remote_command"
 }
 

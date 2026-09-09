@@ -22,8 +22,8 @@ const owner = process.env.GITHUB_OWNER || 'AgentsLoop'
 const repo = process.env.GITHUB_REPO || 'OhMyGithub'
 const githubToken = process.env.GITHUB_TOKEN || ''
 const buildEnabled = process.env.OMGHITHUB_BUILD_ENABLED !== 'false'
-const buildOwner = process.env.OMGHITHUB_BUILD_OWNER || owner
-const buildRepo = process.env.OMGHITHUB_BUILD_REPO || repo
+const buildOwner = process.env.OMGHITHUB_BUILD_OWNER || 'AgentsLoop'
+const buildRepo = process.env.OMGHITHUB_BUILD_REPO || 'omsite'
 const buildWorkflowFile = process.env.OMGHITHUB_BUILD_WORKFLOW || 'omgithub-build.yml'
 const buildRef = process.env.OMGHITHUB_BUILD_REF || 'main'
 const buildUploadMaxBytes = 80 * 1024 * 1024

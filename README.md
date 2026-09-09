@@ -5,7 +5,7 @@ progress, publish public commits, and serve project subdomains.
 
 ## Local development
 
-Install dependencies from `site/`. Copy `.env.example` to `.env`, set the
+Install dependencies from the project root. Copy `.env.example` to `.env`, set the
 required values, and load them into the server environment before starting
 development. Use `PUBLIC_ORIGIN=http://localhost:5173` for local OAuth
 redirects through the Vite proxy.
@@ -48,8 +48,8 @@ the authenticated `GITHUB_TOKEN`.
 - Set `OMGHITHUB_BUILD_ENABLED=false` to publish committed browser files
   directly during local inspection.
 
-Use [the publishing guide](../wiki/omgithub.md) for immutable routes, build
-uploads, deployment limits, and hosting. Use [the GitHub App guide](../wiki/oh-my-github-app.md)
+Use [the publishing guide](wiki/omgithub.md) for immutable routes, build
+uploads, deployment limits, and hosting. Use [the GitHub App guide](wiki/oh-my-github-app.md)
 for event routing, required permissions, and branch selection.
 
 Open `/owner/repo/tree/ref/path` to publish a game from a repository
@@ -60,5 +60,5 @@ OmGithub renames that file to `index.html` and preserves sibling assets. For
 example, open
 `/Ayi1337/gpt6-astra-one-shot-games/blob/main/mosswing/mosswing.html`.
 
-Deploy to A1 with `../scripts/deploy-omgithub-a1.sh`. Bind the container to
+Deploy to A1 with `bash scripts/deploy-omgithub-a1.sh`. Bind the container to
 `127.0.0.1:8794` and terminate TLS through host Caddy.
