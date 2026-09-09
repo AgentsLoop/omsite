@@ -77,6 +77,13 @@ jobs:
         with:
           node-version: 22
 
+      - name: Set up Chrome for Testing on macOS
+        if: runner.os == 'macOS'
+        id: chrome_for_testing
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+
       - name: Install OpenCode
         shell: bash
         run: /usr/bin/time -p npm install --global opencode-ai
@@ -190,9 +197,18 @@ jobs:
           fi
           test -f "$build_root/index.html"
 
+      - name: Verify WebGL2 before macOS capture
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          OMGHITHUB_CHROME_BIN: ${{ steps.chrome_for_testing.outputs.chrome-path }}
+        run: /usr/bin/time -p node metadata-runtime/scripts/check-webgl2.mjs
+
       - name: Capture a screenshot when none was committed
         working-directory: source
         shell: bash
+        env:
+          OMGHITHUB_MACOS_CHROME_BIN: ${{ steps.chrome_for_testing.outputs.chrome-path }}
         run: |
           set -euo pipefail
           build_root="$GITHUB_WORKSPACE/source/omgithub-build"
@@ -227,7 +243,10 @@ jobs:
               sleep 1
             done
             curl --fail --silent http://127.0.0.1:4173/ > /dev/null
-            if command -v google-chrome > /dev/null; then
+            if [[ "${RUNNER_OS:-}" == 'macOS' ]]; then
+              chrome_bin="$OMGHITHUB_MACOS_CHROME_BIN"
+              [[ -x "$chrome_bin" ]] || { echo 'Chrome for Testing is unavailable on this macOS runner.' >&2; exit 1; }
+            elif command -v google-chrome > /dev/null; then
               chrome_bin="$(command -v google-chrome)"
             elif [[ -x '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' ]]; then
               chrome_bin='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
@@ -253,15 +272,14 @@ jobs:
               raise SystemExit(124)
           PY
             }
-            "$chrome_bin" --version
-            chrome_args=(--headless=new --no-sandbox --ignore-gpu-blocklist --enable-webgl --run-all-compositor-stages-before-draw --virtual-time-budget=3000 '--window-size=960,540')
+            chrome_args=(--headless=new --no-sandbox --no-first-run --no-default-browser-check --enable-webgl --run-all-compositor-stages-before-draw --virtual-time-budget=3000 '--window-size=960,540' "--user-data-dir=$RUNNER_TEMP/omgithub-chrome-capture")
             if [[ "${RUNNER_OS:-}" == 'macOS' ]]; then
-              chrome_args+=(--enable-gpu --use-gl=angle --use-angle=metal)
+              chrome_args+=(--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --disable-gpu-vsync --disable-frame-rate-limit)
             else
               chrome_args+=(--disable-gpu-sandbox --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader)
             fi
             if ! run_with_timeout 45 "$chrome_bin" "${chrome_args[@]}" --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/; then
-              run_with_timeout 15 "$chrome_bin" --headless=new --no-sandbox --window-size=960,540 --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/ || true
+              run_with_timeout 15 "$chrome_bin" "${chrome_args[@]}" --virtual-time-budget=1000 --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/ || true
             fi
             if command -v firefox > /dev/null && test -s "$build_root/screenshots/final-build.png" && (( $(wc -c < "$build_root/screenshots/final-build.png") < 10000 )); then
               firefox_capture="$build_root/screenshots/final-firefox.png"
