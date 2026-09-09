@@ -91,5 +91,5 @@ OmGithub renames that file to `index.html` and preserves sibling assets. For
 example, open
 `/Ayi1337/gpt6-astra-one-shot-games/blob/main/mosswing/mosswing.html`.
 
-Deploy to A1 with `bash scripts/deploy-omgithub-a1.sh`. Bind the container to
+Deploy to a2 with `bash scripts/deploy-omgithub-a2.sh`. Bind the container to
 `127.0.0.1:8794` and terminate TLS through host Caddy.

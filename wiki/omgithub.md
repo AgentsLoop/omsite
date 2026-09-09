@@ -143,8 +143,8 @@ for OpenCode execution and delivery.
 ## Configure and deploy
 
 Use [the site setup guide](../README.md) for configuration. Deploy the
-`omgithub` Docker Compose service to A1 with
-`bash scripts/deploy-omgithub-a1.sh`. Route `omgithub.com` and
+`omgithub` Docker Compose service to a2 with
+`bash scripts/deploy-omgithub-a2.sh`. Route `omgithub.com` and
 `*.omgithub.com` through host Caddy to `127.0.0.1:8794`.
 
 Keep `DATA_DIR` on persistent storage. Configure Firebase for the project

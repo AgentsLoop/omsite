@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REMOTE="${OMGHITHUB_DEPLOY_HOST:-ubuntu@100.127.77.25}"
+REMOTE="${OMGHITHUB_DEPLOY_HOST:-a2}"
 DEST="${OMGHITHUB_DEPLOY_DIR:-/home/ubuntu/projects/omgithub}"
 
 run_timed() {
@@ -18,11 +18,11 @@ run_timed() {
   printf '[%s] complete\n' "$label"
 }
 
-# shellcheck disable=SC2029 # The command is intentionally parsed on A1.
+# shellcheck disable=SC2029 # Parse the command on a2.
 stream_and_deploy() {
   local remote_dest remote_command
 
-  # %q keeps custom deploy paths safe when the command is parsed by A1's shell.
+  # Keep custom deploy paths safe when the command is parsed on a2.
   printf -v remote_dest '%q' "$DEST"
   remote_command="set -e
 DEST=$remote_dest

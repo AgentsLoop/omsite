@@ -1,7 +1,18 @@
-omgithub.com, www.omgithub.com {
+omgithub.com {
 	encode gzip zstd
 	tls internal
 	reverse_proxy 127.0.0.1:8794
+}
+
+www.omgithub.com {
+	tls internal
+	redir https://omgithub.com{uri} permanent
+}
+
+hello-world-mention-bot.omgithub.com {
+	encode gzip zstd
+	tls internal
+	respond "This legacy webhook service has been removed." 410
 }
 
 *.omgithub.com {

@@ -7,6 +7,6 @@ Read the 80 imported commits with `git log`. Use `history/commit-map` to map ori
 
 Keep `OMG_FALLBACK_REPO=OhMyGithub` for App-installed execution workflows.
 Set `OMGHITHUB_BUILD_OWNER=AgentsLoop` and `OMGHITHUB_BUILD_REPO=omsite` for publication builds. Grant the deployment GitHub token access to dispatch and read Actions runs in omsite.
-Keep the existing production Compose project directory and data volume when deploying the split. Run `bash scripts/deploy-omgithub-a1.sh` from this project.
+Keep the existing production Compose project directory and data volume when deploying the split. Run `bash scripts/deploy-omgithub-a2.sh` from this project.
 
 Keep the issue parser in `server/lib/issue-request.mjs` for App compatibility. Maintain the independent Actions parser in `scripts/issue-request.mjs` in OhMyGithub when changing the issue request format.
