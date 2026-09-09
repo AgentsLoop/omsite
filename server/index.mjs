@@ -31,7 +31,7 @@ const buildOwner = process.env.OMGHITHUB_BUILD_OWNER || 'AgentsLoop'
 const buildRepo = process.env.OMGHITHUB_BUILD_REPO || 'omsite'
 const buildWorkflowFile = process.env.OMGHITHUB_BUILD_WORKFLOW || 'omgithub-build.yml'
 const buildRef = process.env.OMGHITHUB_BUILD_REF || 'main'
-const buildUploadMaxBytes = 2 * 1024 * 1024 * 1024
+const buildUploadMaxBytes = 512 * 1024 * 1024
 const githubApp = {
   appId: process.env.GITHUB_APP_ID || '',
   privateKey: String(process.env.GITHUB_APP_PRIVATE_KEY || '').replaceAll('\\n', '\n'),
