@@ -385,6 +385,10 @@ app.get('/api/github/:owner/:repo/blob/:ref/*path', async (req, res, next) => {
 app.get('/api/github/:owner/:repo/progress', async (req, res, next) => {
   try {
     const publicPath = namedPublicPath(req.params.owner, req.params.repo)
+    const cached = await store.byRepositoryPath(req.params.owner, req.params.repo, '', '')
+    if (cached?.status === 'published') {
+      return res.status(200).json({ commit: cached.commit || null, ...publicationPayload({ state: 'published', project: cached, error: '', runId: '' }) })
+    }
     const publication = await startNamedPublication({ owner: req.params.owner, repo: req.params.repo, publicPath, latest: true })
     res.status(publication.state === 'published' ? 200 : publication.state === 'failed' ? 502 : 202).json({ commit: publication.sha || publication.project?.commit || null, ...publicationPayload(publication) })
   } catch (e) { next(e) }
