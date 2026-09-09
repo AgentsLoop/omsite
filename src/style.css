@@ -812,7 +812,8 @@ h3 {
 .social-section button, .catalog-filters button { cursor: pointer; }
 .social-section button:disabled, .social-section fieldset:disabled { opacity: .55; cursor: default; }
 .tag-list { gap: 6px; }
-.tag { padding: 5px 9px; border-radius: 6px; background: #2b2420; color: #ffc49f; font-size: 12px; overflow-wrap: anywhere; }
+.game-card-copy .tag-list { max-height: 62px; overflow: hidden; }
+.tag { padding: 5px 9px; border-radius: 6px; background: #2b2420; color: #ffc49f; font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
 .catalog-stats { margin-top: 12px; color: #c0c0c2; font-size: 13px; gap: 16px; }
 .star-summary, .play-stat { display: inline-flex; align-items: center; gap: 7px; }
 .star-meter { position: relative; display: inline-block; color: #515156; font-size: 18px; line-height: 1; letter-spacing: 2px; white-space: nowrap; }
