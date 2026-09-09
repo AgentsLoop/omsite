@@ -8,36 +8,35 @@
       <p role="status">{{ copyStatus }}</p>
     </details>
     <p v-if="promptSource" class="source-note"><a :href="promptSource" target="_blank" rel="noopener noreferrer">Prompt source</a></p>
-    <h2>Ratings and reviews</h2>
+    <h2>Player reviews</h2>
     <p v-if="loading" role="status">Loading reviews…</p>
     <p v-if="error" class="form-error" role="alert">{{ error }} <button v-if="!loaded" type="button" @click="load">Retry</button></p>
     <template v-if="loaded">
-      <p v-if="!me"><a class="review-login" href="/auth/github">Sign in with GitHub</a> to rate this game or write a review.</p>
+      <a v-if="!me" class="review-login" href="/auth/github">Write a review</a>
       <form v-else class="review-form" @submit.prevent="save">
-        <h3>{{ ownComment ? 'Edit your review' : 'Your review' }}</h3>
-        <p>Keep one review per game. You can update it at any time.</p>
+        <h3>{{ ownComment ? 'Update your review' : 'What did you think?' }}</h3>
         <fieldset :disabled="busy">
-          <label for="review-rating">Your rating</label>
-          <select id="review-rating" v-model="rating"><option value="">No new rating</option><option v-for="n in 10" :key="n" :value="n">{{ n }} / 10</option></select>
-          <button type="button" :disabled="!rating" @click="mutate('rating', 'PUT', { rating: Number(rating) })">Save rating</button>
-          <label for="review-body">Comment (optional when saving a rating)</label>
-          <textarea id="review-body" v-model="body" rows="5" placeholder="Share your experience with this game"></textarea>
+          <div class="rating-picker" role="radiogroup" aria-label="Your rating">
+            <button v-for="star in 5" :key="star" type="button" class="rating-star" :class="{ selected: star <= selectedStars }" role="radio" :aria-checked="star === selectedStars" :aria-label="`${star} ${star === 1 ? 'star' : 'stars'}`" @click="rating = star * 2">★</button>
+          </div>
+          <button class="save-rating" type="button" :disabled="!rating" @click="mutate('rating', 'PUT', { rating: Number(rating) })">Save rating</button>
+          <label for="review-body">Share your thoughts</label>
+          <textarea id="review-body" v-model="body" rows="4" placeholder="What did you enjoy?"></textarea>
           <div class="review-actions">
             <button type="submit" :disabled="!body.trim()">{{ ownComment ? 'Update review' : 'Post review' }}</button>
             <button v-if="ownComment" type="button" @click="mutate('comment', 'DELETE')">Delete comment</button>
           </div>
         </fieldset>
-        <p v-if="ownComment">Deleting your comment keeps your rating.</p>
       </form>
       <p role="status">{{ busy ? 'Saving…' : status }}</p>
       <div class="review-list">
         <article v-for="comment in comments" :key="comment.id" class="review">
-          <header><img v-if="comment.avatar_url" :src="comment.avatar_url" alt="" loading="lazy" /><strong>{{ comment.login }}</strong><span v-if="comment.rating != null">{{ comment.rating }} / 10</span></header>
+          <header><img v-if="comment.avatar_url" :src="comment.avatar_url" alt="" loading="lazy" /><strong>{{ comment.login }}</strong><span v-if="comment.rating != null" class="review-stars" :aria-label="`${(Number(comment.rating) / 2).toFixed(1)} out of 5 stars`"><span aria-hidden="true">{{ reviewStars(comment.rating) }}</span></span></header>
           <p class="review-body">{{ comment.body }}</p>
           <small>{{ date(comment.created_at) }}<template v-if="comment.updated_at && comment.updated_at !== comment.created_at"> · Edited {{ date(comment.updated_at) }}</template></small>
           <button v-if="isOwn(comment)" type="button" :disabled="busy" @click="edit">Edit your review</button>
         </article>
-        <p v-if="!comments.length">No reviews yet.</p>
+        <p v-if="!comments.length" class="empty-reviews">Be the first to share a review.</p>
       </div>
     </template>
   </section>
@@ -49,6 +48,7 @@ const props = defineProps({ project: { type: Object, required: true }, me: Objec
 const social = ref({}), loading = ref(false), loaded = ref(false), busy = ref(false), error = ref(''), status = ref(''), body = ref(''), rating = ref(''), copyStatus = ref('')
 let generation = 0, controller
 const comments = computed(() => [...(social.value.comments || [])].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))))
+const selectedStars = computed(() => rating.value === '' ? 0 : Math.round(Number(rating.value) / 2))
 const isOwn = comment => Boolean(props.me?.login && comment.login?.toLowerCase() === props.me.login.toLowerCase())
 const ownComment = computed(() => comments.value.find(isOwn))
 const promptSource = computed(() => {
@@ -90,6 +90,7 @@ async function copyPrompt() {
   catch { if (current === generation) copyStatus.value = 'Could not copy. Select the prompt text and copy it.' }
 }
 function date(value) { const parsed = new Date(value); return Number.isNaN(parsed.getTime()) ? '' : parsed.toLocaleString() }
+function reviewStars(value) { const filled = Math.round(Number(value) / 2); return '★'.repeat(filled) + '☆'.repeat(5 - filled) }
 watch(() => [props.project.id, props.me?.login], load, { immediate: true, flush: 'sync' })
 onBeforeUnmount(() => { generation++; controller?.abort() })
 </script>
