@@ -7,11 +7,11 @@ import { dirname, resolve, sep } from 'node:path'
 
 const API = 'https://api.github.com'
 export const OPENCODE_TRANSCRIPT_FILE = '.omgithub-opencode-log.jsonl'
-const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
+const MAX_ARCHIVE_BYTES = 1024 * 1024 * 1024
 const MAX_TRANSCRIPT_BYTES = 16 * 1024 * 1024
 const MAX_ENTRIES = 5000
-const MAX_ENTRY_BYTES = 512 * 1024 * 1024
-const MAX_TOTAL_BYTES = 512 * 1024 * 1024
+const MAX_ENTRY_BYTES = 1024 * 1024 * 1024
+const MAX_TOTAL_BYTES = 1024 * 1024 * 1024
 
 function apiHeaders() {
   return {
