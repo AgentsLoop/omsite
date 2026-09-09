@@ -114,7 +114,7 @@ function withManualMetadata(project, metadata = {}) {
 }
 function namedPublicPath(owner, repo, ref = '', projectPath = '', routeKind = 'tree', sourceEntry = '') {
   const routePath = ref ? `/${routeKind}/${ref}` : ''
-  return `/${owner}/${repo}${routePath}${projectPath ? `/${projectPath}` : ''}${sourceEntry ? `/${sourceEntry}` : ''}`
+  return `/${String(owner).toLowerCase()}/${String(repo).toLowerCase()}${routePath}${projectPath ? `/${projectPath}` : ''}${sourceEntry ? `/${sourceEntry}` : ''}`
 }
 function isCommitRef(ref) { return /^[0-9a-f]{40}$/i.test(String(ref || '')) }
 const publicationCopy = {
