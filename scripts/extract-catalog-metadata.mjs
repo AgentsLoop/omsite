@@ -97,7 +97,7 @@ export async function extractCatalogMetadata(env = process.env, { repository: ca
           files[name] = execFileSync('git', ['show', `HEAD:${name}`], { cwd: source, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
         }
       }
-      return validateSourceEvidence(input, files, sourceBase)
+      return validateSourceEvidenceOrDropPrompt(input, files, sourceBase)
     }
     let metadata
     try { metadata = validateAnswer(run('Return the catalog JSON requested by the attachment.')) }
