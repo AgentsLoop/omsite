@@ -37,6 +37,7 @@ test('dispatches a repository build for direct ZIP upload', async () => {
 
   assert.equal(result.run.id, 42)
   assert.equal(calls[0].options.headers.authorization, 'Bearer secret')
+  assert.equal(calls.find(call => call.url.includes('/runs?')).options.cache, 'no-store')
   assert.deepEqual(statuses, [{ phase: 'queued' }, { phase: 'publishing', runId: '42' }])
 })
 
