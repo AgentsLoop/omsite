@@ -2,7 +2,7 @@ import express from 'express'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { basename, dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cookies, nonce, sign, verify } from './lib/auth.mjs'
@@ -275,6 +275,15 @@ app.use(express.json({ limit: '2mb' }))
 app.get('/api/me', (req, res) => { const user = userFor(req); res.json({ user: user ? { login: user.login, name: user.name, avatar_url: user.avatar_url, html_url: user.html_url } : null }) })
 app.use('/api/projects', createSocialRouter({ store, social, userFor, origin, sessionSecret }))
 app.get('/api/projects', async (req, res, next) => { try { const user = userFor(req); let rows = await store.all(); if (req.query.mine === '1') rows = user ? rows.filter(row => row.owner_login?.toLowerCase() === user.login.toLowerCase()) : []; res.json({ projects: await Promise.all(rows.map(async row => ({ ...card(row), ...await social.summary(row) }))) }) } catch (e) { next(e) } })
+app.get('/api/projects/:id/opencode-log', async (req, res, next) => {
+  try {
+    const project = await store.byId(req.params.id)
+    if (!project?.slug) return res.status(404).json({ error: 'Project not found' })
+    const transcriptPath = resolve(dataDir, 'opencode-logs', `${project.slug}.jsonl`)
+    if (!transcriptPath.startsWith(`${resolve(dataDir, 'opencode-logs')}${sep}`) || !existsSync(transcriptPath)) return res.status(404).json({ error: 'OpenCode log not found' })
+    res.type('application/x-ndjson').send(readFileSync(transcriptPath, 'utf8'))
+  } catch (e) { next(e) }
+})
 app.get('/api/profiles/:login', async (req, res, next) => { try { const profile = await github(`/users/${encodeURIComponent(req.params.login)}`, githubToken); const rows = (await store.all()).filter(row => row.owner_login?.toLowerCase() === req.params.login.toLowerCase()); res.json({ profile, projects: rows.map(card) }) } catch (e) { next(e) } })
 
 app.post('/api/issues', async (req, res, next) => {

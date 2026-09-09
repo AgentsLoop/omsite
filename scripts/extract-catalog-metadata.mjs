@@ -57,9 +57,21 @@ export async function extractCatalogMetadata(env = process.env, { repository: ca
       writeFileSync(join(authDir, 'auth.json'), env.OPENCODE_AUTH_CONTENT, { mode: 0o600 })
     }
     const commandEnv = { PATH: env.PATH, HOME: scratch, XDG_DATA_HOME: join(scratch, 'data'), XDG_CONFIG_HOME: join(scratch, 'config'), OPENCODE_API_KEY: env.OPENCODE_API_KEY || '' }
-    const run = instruction => execFileSync(env.OPENCODE_BIN || 'opencode', ['run', `${prompt}\n\n${instruction}`, '--format', 'json', '--model', env.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'], {
-      cwd: source, encoding: 'utf8', timeout: 240000, maxBuffer: 16 * 1024 * 1024, env: commandEnv
-    })
+    const transcript = []
+    const run = instruction => {
+      const input = `${prompt}\n\n${instruction}`
+      transcript.push(JSON.stringify({ type: 'input', part: { text: input } }))
+      try {
+        const output = execFileSync(env.OPENCODE_BIN || 'opencode', ['run', input, '--format', 'json', '--model', env.OPENCODE_MODEL || 'opencode/muse-spark-1.3-contributor-free'], {
+          cwd: source, encoding: 'utf8', timeout: 240000, maxBuffer: 16 * 1024 * 1024, env: commandEnv
+        })
+        transcript.push(output.trim())
+        return output
+      } catch (error) {
+        if (typeof error.stdout === 'string' && error.stdout.trim()) transcript.push(error.stdout.trim())
+        throw error
+      }
+    }
     const answer = output => output.split('\n').filter(Boolean).map(line => JSON.parse(line)).filter(event => event.type === 'text').map(event => event.part?.text || '').join('')
     const json = text => JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1))
     const validateAnswer = output => {
@@ -87,6 +99,7 @@ export async function extractCatalogMetadata(env = process.env, { repository: ca
     catch (error) { metadata = validateAnswer(run(`The prior response was invalid: ${error.message}. Investigate the repository again and return corrected strict JSON with valid repository-relative evidence paths.`)) }
     metadata.tags = normalizeTags(repository.topics || [], metadata.tags)
     writeFileSync(env.OMGHITHUB_METADATA_OUTPUT, JSON.stringify(metadata, null, 2) + '\n', { mode: 0o600 })
+    if (env.OMGHITHUB_TRANSCRIPT_OUTPUT) writeFileSync(env.OMGHITHUB_TRANSCRIPT_OUTPUT, transcript.filter(Boolean).join('\n') + '\n', { mode: 0o600 })
     return metadata
   } finally { rmSync(scratch, { recursive: true, force: true }) }
 }

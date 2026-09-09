@@ -87,6 +87,7 @@ jobs:
           OMGHITHUB_SOURCE_PATH: ${{ inputs.source_path }}
           OMGHITHUB_SOURCE_ENTRY: ${{ inputs.source_entry }}
           OMGHITHUB_METADATA_OUTPUT: ${{ runner.temp }}/omgithub-catalog-metadata.json
+          OMGHITHUB_TRANSCRIPT_OUTPUT: ${{ runner.temp }}/omgithub-opencode-log.jsonl
         run: /usr/bin/time -p node metadata-runtime/scripts/extract-catalog-metadata.mjs
 
       - name: Install dependencies
@@ -222,6 +223,7 @@ jobs:
         run: |
           set -euo pipefail
           /usr/bin/time -p cp "$RUNNER_TEMP/omgithub-catalog-metadata.json" omgithub-build/.omgithub-metadata.json
+          /usr/bin/time -p cp "$RUNNER_TEMP/omgithub-opencode-log.jsonl" omgithub-build/.omgithub-opencode-log.jsonl
           (cd omgithub-build && zip -qr ../omgithub-build.zip .)
           test -s omgithub-build.zip
           upload_part() {

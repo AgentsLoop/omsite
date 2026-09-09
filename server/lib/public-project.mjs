@@ -6,7 +6,9 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node
 import { dirname, resolve, sep } from 'node:path'
 
 const API = 'https://api.github.com'
+export const OPENCODE_TRANSCRIPT_FILE = '.omgithub-opencode-log.jsonl'
 const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
+const MAX_TRANSCRIPT_BYTES = 16 * 1024 * 1024
 const MAX_ENTRIES = 5000
 const MAX_ENTRY_BYTES = 512 * 1024 * 1024
 const MAX_TOTAL_BYTES = 512 * 1024 * 1024
@@ -114,11 +116,22 @@ function deploymentOutputName(entry, root, archiveRootPath, includeScreenshots =
   if (!relative.startsWith(root)) return ''
   const outputName = relative.slice(root.length)
   if (!outputName) return ''
-  if (outputName.split('/').includes(CATALOG_METADATA_FILE)) return ''
+  if (outputName.split('/').some(part => part === CATALOG_METADATA_FILE || part === OPENCODE_TRANSCRIPT_FILE)) return ''
   const first = outputName.split('/')[0]
   if (first.startsWith('.') || first === 'node_modules') return ''
   if (!includeScreenshots && first === 'screenshots') return ''
   return outputName
+}
+
+function readOpenCodeTranscript(entries, root = '') {
+  const matches = entries.filter(entry => !entry.isDirectory && normalizedEntryName(entry.entryName) === `${root}${OPENCODE_TRANSCRIPT_FILE}`)
+  if (!matches.length) return ''
+  if (matches.length !== 1 || matches[0].header.size > MAX_TRANSCRIPT_BYTES) throw Object.assign(new Error('OpenCode transcript is duplicate or too large'), { status: 422 })
+  const text = matches[0].getData().toString('utf8')
+  for (const line of text.split('\n').filter(Boolean)) {
+    try { JSON.parse(line) } catch { throw Object.assign(new Error('OpenCode transcript must contain JSONL'), { status: 422 }) }
+  }
+  return text
 }
 
 function extractDeployment(zip, destination, includeScreenshots = false, projectPath = '', sourceEntry = '') {
@@ -218,6 +231,7 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
   const entries = zip.getEntries()
   const slug = projectSlug(owner, repo, sha, projectPath, sourceEntry)
   const catalogMetadata = archiveBuffer ? readCatalogMetadata(entries, archiveRoot(entries)) : null
+  const openCodeTranscript = archiveBuffer ? readOpenCodeTranscript(entries, archiveRoot(entries)) : ''
   const destination = resolve(gamesDir, slug)
   if (!destination.startsWith(`${resolve(gamesDir)}${sep}`)) throw new Error('Unsafe project destination')
   const extracted = extractDeployment(zip, destination, Boolean(archiveBuffer), archiveBuffer ? '' : projectPath, archiveBuffer ? '' : sourceEntry)
@@ -255,6 +269,11 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
     }
     rmSync(destination, { recursive: true, force: true })
     await rename(extracted.staging, destination)
+    if (openCodeTranscript) {
+      const logsDir = resolve(gamesDir, '..', 'opencode-logs')
+      mkdirSync(logsDir, { recursive: true })
+      writeFileSync(resolve(logsDir, `${slug}.jsonl`), openCodeTranscript)
+    }
     await store.put(project)
     return project
   } catch (error) {
