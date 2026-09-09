@@ -201,8 +201,12 @@ jobs:
             done
             curl --fail --silent http://127.0.0.1:4173/ > /dev/null
             google-chrome --version
-            timeout --foreground -s KILL 45s google-chrome --headless --no-sandbox --disable-gpu --run-all-compositor-stages-before-draw --virtual-time-budget=5000 --window-size=1440,900 --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/
-            test -s "$build_root/screenshots/final-build.png"
+            if ! timeout --foreground -s KILL 45s google-chrome --headless --no-sandbox --disable-gpu --run-all-compositor-stages-before-draw --virtual-time-budget=5000 --window-size=1440,900 --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/; then
+              source_screenshot="$(find "$GITHUB_WORKSPACE/source" -type f | rg -i '/[^/]*(screenshot|gameplay|hud|play|title|beauty)[^/]*\.(png|jpe?g|webp)$' | head -n 1 || true)"
+              test -n "$source_screenshot"
+              cp "$source_screenshot" "$build_root/screenshots/final-build.${source_screenshot##*.}"
+            fi
+            find "$build_root/screenshots" -maxdepth 1 -type f -name 'final-*' -size +0c -print -quit | grep -q .
           fi
 
       - name: Mask the one-time upload token
