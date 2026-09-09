@@ -123,8 +123,8 @@ jobs:
           [[ -d "$project_dir" ]] || { echo "Source path does not exist: $project_dir" >&2; exit 1; }
           build_dir="$project_dir"
           while [[ "$build_dir" != '.' && ! -f "$build_dir/package.json" ]]; do
-            build_dir="${build_dir%/*}"
-            [[ -n "$build_dir" ]] || build_dir='.'
+            next_build_dir="${build_dir%/*}"
+            if [[ "$next_build_dir" == "$build_dir" || -z "$next_build_dir" ]]; then build_dir='.'; else build_dir="$next_build_dir"; fi
           done
           if [[ ! -f "$build_dir/package.json" ]]; then
             echo 'No package.json found; treating the repository as a static site.'
@@ -151,8 +151,8 @@ jobs:
           if [[ -z "$project_dir" ]]; then project_dir='.'; fi
           build_dir="$project_dir"
           while [[ "$build_dir" != '.' && ! -f "$build_dir/package.json" ]]; do
-            build_dir="${build_dir%/*}"
-            [[ -n "$build_dir" ]] || build_dir='.'
+            next_build_dir="${build_dir%/*}"
+            if [[ "$next_build_dir" == "$build_dir" || -z "$next_build_dir" ]]; then build_dir='.'; else build_dir="$next_build_dir"; fi
           done
           has_vite='false'
           if [[ -f "$build_dir/package.json" ]] && node -e "const p=require('./$build_dir/package.json'); process.exit((p.dependencies?.vite || p.devDependencies?.vite || String(p.scripts?.build || '').includes('vite')) ? 0 : 1)"; then
@@ -209,8 +209,8 @@ jobs:
           [[ "$source_entry" != /* && "$source_entry" != *'..'* ]] || { echo 'Invalid source entry.' >&2; exit 1; }
           build_dir="$project_dir"
           while [[ "$build_dir" != '.' && ! -f "$build_dir/package.json" ]]; do
-            build_dir="${build_dir%/*}"
-            [[ -n "$build_dir" ]] || build_dir='.'
+            next_build_dir="${build_dir%/*}"
+            if [[ "$next_build_dir" == "$build_dir" || -z "$next_build_dir" ]]; then build_dir='.'; else build_dir="$next_build_dir"; fi
           done
           parent_dist=''
           if [[ "$build_dir" != "$project_dir" && -d "$build_dir/dist" ]]; then
