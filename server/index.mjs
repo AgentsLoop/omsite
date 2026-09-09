@@ -7,10 +7,9 @@ import { basename, dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cookies, nonce, sign, verify } from './auth.mjs'
 import { dispatchPublicBuild } from './github-build.mjs'
-import { ensureIssueWorkflow, handleOmgRequest, parseIssueRequest, extractUrls, github, omgRequest, verifyWebhookSignature } from './github.mjs'
+import { ensureIssueWorkflow, parseIssueRequest, extractUrls, github, setupRepositories, verifyWebhookSignature } from './github.mjs'
 import { materializePublicProject, resolveLatestPublicCommit, resolvePublicCommit, validateProjectPath, validateSource, validateSourceEntry } from './public-project.mjs'
 import { createStore } from './store.mjs'
-import { createExecutionStore, approveExecution, prepareExecution } from './opencode-approval.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const port = Number(process.env.PORT || 8787)
@@ -56,7 +55,6 @@ if (firebaseCredential) {
   } catch (error) { console.warn(`Firebase unavailable, using local persistence: ${error.message}`) }
 }
 const store = createStore(dataDir, firestore)
-const executionStore = createExecutionStore(dataDir, firestore)
 const sessions = new Map()
 const pendingBuilds = new Map()
 const publications = new Map()
@@ -238,28 +236,21 @@ app.post('/api/github/webhooks', express.raw({ type: 'application/json', limit: 
       return res.status(401).json({ error: 'Invalid webhook signature' })
     }
     const payload = JSON.parse(req.body.toString('utf8'))
-    const request = omgRequest(String(req.headers['x-github-event'] || ''), payload)
-    if (!request) return res.status(202).json({ accepted: false })
+    const repositories = setupRepositories(String(req.headers['x-github-event'] || ''), payload)
+    if (!repositories.length) return res.status(202).json({ accepted: false })
     if (!githubApp.appId || !githubApp.privateKey) {
       return res.status(503).json({ error: 'GitHub App is not configured' })
     }
-    const dispatched = await handleOmgRequest(request, githubApp)
-    console.log(`OMG webhook routed ${request.repository}#${request.issueNumber} through ${dispatched.route}`)
-    const accepted = !['missing-opencode-label', 'permissions-missing', 'invalid-branch'].includes(dispatched.route)
-    res.status(202).json({ accepted, route: dispatched.route, missing_permissions: dispatched.missingPermissions || [], commented: dispatched.commented })
+    const results = []
+    for (const repository of repositories) {
+      const result = await ensureIssueWorkflow(repository, githubApp)
+      results.push({ repository: result.repository.full_name, installed: result.installed })
+    }
+    res.status(202).json({ accepted: true, repositories: results })
   } catch (error) { next(error) }
 })
 
 app.use(express.json({ limit: '2mb' }))
-app.post('/api/opencode/prepare', async (req, res, next) => {
-  try {
-    const token = String(req.headers.authorization || '').replace(/^Bearer /, '')
-    const result = await prepareExecution({ token, event: req.body?.event }, {
-      store: executionStore, ...githubApp, publicOrigin: origin
-    })
-    res.json(result)
-  } catch (error) { next(error) }
-})
 app.get('/api/me', (req, res) => { const user = userFor(req); res.json({ user: user ? { login: user.login, name: user.name, avatar_url: user.avatar_url, html_url: user.html_url } : null }) })
 app.get('/api/projects', async (req, res, next) => { try { const user = userFor(req); let rows = await store.all(); if (req.query.mine === '1') rows = user ? rows.filter(row => row.owner_login?.toLowerCase() === user.login.toLowerCase()) : []; res.json({ projects: rows.map(card) }) } catch (e) { next(e) } })
 app.get('/api/profiles/:login', async (req, res, next) => { try { const profile = await github(`/users/${encodeURIComponent(req.params.login)}`, githubToken); const rows = (await store.all()).filter(row => row.owner_login?.toLowerCase() === req.params.login.toLowerCase()); res.json({ profile, projects: rows.map(card) }) } catch (e) { next(e) } })
@@ -270,36 +261,18 @@ app.post('/api/issues', async (req, res, next) => {
     const prompt = String(req.body?.prompt || '').trim(); if (prompt.length < 8 || prompt.length > 12000) return res.status(400).json({ error: 'Prompt must be between 8 and 12,000 characters.' })
     const user = userFor(req)
     if (!user) return res.status(401).json({ error: 'Sign in with GitHub to create a game.' })
-    const access = await github(`/repos/${owner}/${repo}/collaborators/${encodeURIComponent(user.login)}/permission`, user.token)
-    if (!['write', 'maintain', 'admin'].includes(access.permission)) {
-      return res.status(403).json({ error: 'Write, maintain, or admin repository access is required.' })
-    }
-    const first = prompt.split('\n')[0].slice(0, 110)
+    const token = user.token
+    const first = `/OpenCode ${prompt.split('\n')[0].slice(0, 110)}`
     const body = `${prompt}\n\n---\nCreated with [OmGithub](${origin}) by @${user.login}.`
     const parsed = parseIssueRequest({ title: first, body })
     if (parsed.branchError) return res.status(400).json({ error: parsed.branchError })
-    const { installationToken: token, repository } = await ensureIssueWorkflow({ owner, repo }, githubApp)
+    const repository = await github(`/repos/${owner}/${repo}`, token)
     const targetRef = parsed.branchSpecified ? parsed.targetRef : repository.default_branch
     await github(`/repos/${owner}/${repo}/branches/${encodeURIComponent(targetRef)}`, token)
     const issue = await github(`/repos/${owner}/${repo}/issues`, token, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: first, body })
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: first, body, labels: ['Goal', 'OpenCode'] })
     })
-    await approveExecution(executionStore, {
-      repository: `${owner}/${repo}`, issue: { ...issue, labels: [{ name: 'Goal' }, { name: 'OpenCode' }] },
-      defaultBranch: repository.default_branch, sender: user.login
-    })
-    try {
-      // Set mode labels before the execution event to freeze the complete request.
-      for (const label of ['Goal', 'OpenCode']) {
-        await github(`/repos/${owner}/${repo}/issues/${issue.number}/labels`, token, {
-          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ labels: [label] })
-        })
-      }
-    } catch (error) {
-      return res.status(201).json({ number: issue.number, github_url: issue.html_url,
-        omgithub_path: `/${owner}/${repo}/issues/${issue.number}`, started: false, warning: error.message })
-    }
-    res.status(201).json({ number: issue.number, github_url: issue.html_url, omgithub_path: `/${owner}/${repo}/issues/${issue.number}`, started: true })
+    res.status(201).json({ number: issue.number, github_url: issue.html_url, omgithub_path: `/${owner}/${repo}/issues/${issue.number}`, requested: true })
   } catch (e) { next(e) }
 })
 

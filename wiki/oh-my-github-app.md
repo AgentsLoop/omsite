@@ -1,53 +1,41 @@
 # Oh My Github App
 
-## Installation
+## Install the listener
 
-Use the public [Oh My Github App](https://github.com/apps/oh-my-github-app).
-Keep the webhook endpoint at `https://omgithub.com/api/github/webhooks` and
-verify its signature. Grant Issues and Contents write access and Workflows
-write access for listener installation. Retain Actions read access for run
-verification and request claims.
+Use the public [Oh My Github App](https://github.com/apps/oh-my-github-app)
+as a repository setup helper. Handle installation creation and repositories
+added to an installation. Verify webhook signatures at the setup service.
 
-Install `.github/workflows/opencode.yml` on the repository default branch
-before applying `OpenCode`. Generate a wrapper that calls central preparation
-and execution workflows at one resolved commit SHA. Preserve the local caller
-in the central repository. Verify the installed content before creating an
-App-submitted issue. Use `OMG_FALLBACK_OWNER`, `OMG_FALLBACK_REPO`, and
-`OMG_FALLBACK_REF` to select the central revision.
+Grant Contents, Issues, and Workflows write access for setup. Create the
+`OpenCode` label and install `.github/workflows/opencode.yml` on the default
+branch. Pin central preparation and execution workflows to a resolved commit
+SHA. Use `OMG_FALLBACK_OWNER`, `OMG_FALLBACK_REPO`, and `OMG_FALLBACK_REF`
+to choose that revision. Keep repository workflow changes reviewable.
 
-## Request handling
+Install the generated caller manually when preferred. Configure the usual
+model and optional tunnel secrets in the repository. Run preparation and
+execution entirely through GitHub Actions after setup.
 
-Create human issues with mode labels first. Wait for listener installation,
-then apply `OpenCode`. Use the native `issues.labeled` event for execution.
-Let the App install the listener and post a reminder for unlabeled human issues.
+## Configure access
 
-Require a GitHub session and write, maintain, or admin repository access for
-site submissions. Create the issue with an installation token. Store approval
-for its exact title, body, label names, target branch, and authenticated human.
-Apply mode labels before `OpenCode`.
+Set repository variable `OPENCODE_ACCESS` in Settings → Secrets and variables
+→ Actions → Variables. Use `writers`, or leave it unset, to require repository
+write, maintain, or admin access for the issue author.
 
-Call `/api/opencode/prepare` with an Actions OIDC token that uses GitHub's
-default repository-owner audience. Set repository variable `OMG_APP_ORIGIN`
-when using another App origin. Verify the caller, Actions run, label event,
-repository owner, and issue permissions.
-Require the stored approval for App-created issues. Reject modified snapshots.
-Keep approval and request claims in the persistent data store; use Firestore
-transactions when configured. Preserve the data volume across service updates.
+Set it to `everyone` to accept any author. Let visitors create an issue titled
+`/OpenCode Build a maze game`. Use the exact `/OpenCode` word in the title.
+Let the workflow add `OpenCode` and execute within that opened-issue run.
+Use ordinary execution-label requests in either access mode.
 
-Resolve `branch: <existing-branch>` during preparation. Pass its frozen commit
-as `target_sha` and branch name as `target_ref`. Keep workflow code on the
-default branch. Pass only validated inputs to execution and keep model and
-tunnel secrets out of preparation.
+## Prepare and execute
 
-## Migration and retries
+Validate the request on the Actions runner with the repository token. Store
+request records as GitHub Actions bot comments on the issue. Keep these
+comments for duplicate detection and explicit failed-run retries.
 
-Pause submissions and drain active runs before replacing each listener.
-Deploy the App service and install the native listener before resuming requests.
-Keep one execution owner per repository during migration. Reapply `OpenCode`
-only after the listener is ready and the request is authorized.
+Append `branch: <existing-branch>` to select project checkout. Freeze its
+commit during preparation and use the branch as the result base. Load the
+caller from the default branch and central workflow code from its pinned SHA.
 
-Use durable label-event claims to reject duplicate execution. Check the prior
-Actions result before retrying a failed request. Treat removal and reapplication
-of `OpenCode` as a new request and validate it again.
-
-Keep the webhook secret, installation tokens, and model credentials private.
+Create site submissions with the signed-in user's GitHub token. Let the
+repository's Actions access variable control execution.

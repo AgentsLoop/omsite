@@ -26,20 +26,20 @@ the authenticated `GITHUB_TOKEN`.
 ## Configuration
 
 - Set `GITHUB_TOKEN` for public repository builds and reads.
-- Require GitHub login and repository write access for issue submission. Apply
-  execution labels with the App installation token after storing approval.
+- Require GitHub login for site issue submission. Create issues with the user's
+  GitHub token and `/OpenCode` in the title. Request labels through GitHub.
 - Set `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_WEBHOOK_SECRET`
-  to authenticate App webhooks and installation requests.
+  to install listeners through installation webhooks.
 - Set `OMG_FALLBACK_OWNER`, `OMG_FALLBACK_REPO`, and `OMG_FALLBACK_REF` to
   select the central reusable workflow for repository wrappers.
 - Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` to enable GitHub login.
 - Set a stable `SESSION_SECRET`. Expect a server restart to end sessions;
   keep one server process for the in-memory session and build registries.
 - Set `FIREBASE_SERVICE_ACCOUNT_BASE64` or `FIREBASE_SERVICE_ACCOUNT_JSON`
-  to use Firebase. Persist execution approvals and claims there too. Otherwise,
-  keep the local catalog and `opencode-executions/` under persistent `DATA_DIR`.
-- Set repository variable `OMG_APP_ORIGIN` when the preparation endpoint uses
-  a different HTTPS origin. Keep GitHub's default repository-owner OIDC audience.
+  to use Firebase. Otherwise, keep the local catalog under persistent `DATA_DIR`.
+- Set repository variable `OPENCODE_ACCESS=everyone` to let any issue author
+  execute a labeled request or open an issue with `/OpenCode` in its title.
+  Leave it unset to require repository write, maintain, or admin access.
 - Set `PUBLIC_ORIGIN=https://omgithub.com` in production. Set
   `PUBLIC_ALIASES` to a comma-separated list of additional public domains.
 - Set `OMGHITHUB_BUILD_OWNER`, `OMGHITHUB_BUILD_REPO`,

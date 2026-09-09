@@ -1,8 +1,8 @@
 import { createHmac, createSign, timingSafeEqual } from 'node:crypto'
+export { parseIssueRequest } from './issue-request.mjs'
 
 const API = 'https://api.github.com'
 const REQUIRED_INSTALLATION_PERMISSIONS = {
-  actions: 'read',
   contents: 'write',
   issues: 'write',
   workflows: 'write'
@@ -35,27 +35,6 @@ export function extractUrls(issue, comments = []) {
   const project = [...urls].reverse().find(url => /omgithub\.com\/[^/]+\/[^/]+\/tree\/[0-9a-f]{40}/i.test(url)) || ''
   return { opencode, preview, screenshots, project }
 }
-export function parseIssueRequest(issue, defaultBranch = 'main') {
-  const body = String(issue?.body || '')
-  const title = String(issue?.title || '').trim()
-  const directive = title.match(/(?:^|\s)branch:\s*(.*?)\s*$/i)
-  const requestTitle = directive ? title.slice(0, directive.index).trim() : title
-  if (!directive) return { request: body.trim() || requestTitle, title: requestTitle, targetRef: defaultBranch, branchSpecified: false, branchError: '' }
-  const targetRef = directive[1].trim()
-  const invalid = !targetRef || targetRef.length > 255 || targetRef === '@' || targetRef.startsWith('-') ||
-    targetRef.startsWith('/') || targetRef.endsWith('/') || targetRef.endsWith('.') || targetRef.endsWith('.lock') ||
-    targetRef.includes('..') || targetRef.includes('@{') || targetRef.includes('//') ||
-    targetRef.split('/').some(part => part.startsWith('.')) || /[\u0000-\u0020\u007f~^:?*[\]\\]/.test(targetRef)
-  const request = body.trim() || requestTitle
-  return {
-    request,
-    title: requestTitle,
-    targetRef: invalid ? defaultBranch : targetRef,
-    branchSpecified: true,
-    branchError: invalid ? 'Invalid branch directive. End the issue title with `branch: <existing-branch>`.' : ''
-  }
-}
-
 function base64url(value) {
   return Buffer.from(value).toString('base64url')
 }
@@ -82,22 +61,21 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '',
     'on:',
     '  issues:',
-    '    types: [labeled]',
+    '    types: [opened, labeled]',
     '',
     'permissions: {}',
     '',
     'concurrency:',
-    "  group: ${{ github.event.label.name == 'OpenCode' && format('opencode-issue-{0}-{1}', github.repository, github.event.issue.number) || format('opencode-skipped-{0}', github.run_id) }}",
+    "  group: ${{ (github.event.label.name == 'OpenCode' || (github.event.action == 'opened' && vars.OPENCODE_ACCESS == 'everyone' && contains(github.event.issue.title, '/OpenCode') && !contains(github.event.issue.labels.*.name, 'OpenCode'))) && format('opencode-issue-{0}-{1}', github.repository, github.event.issue.number) || format('opencode-skipped-{0}', github.run_id) }}",
     '  cancel-in-progress: false',
     '',
     'jobs:',
     '  prepare:',
-    "    if: github.event.label.name == 'OpenCode'",
+    "    if: github.event.label.name == 'OpenCode' || (github.event.action == 'opened' && vars.OPENCODE_ACCESS == 'everyone' && contains(github.event.issue.title, '/OpenCode') && !contains(github.event.issue.labels.*.name, 'OpenCode'))",
     '    permissions:',
     '      contents: read',
     '      issues: write',
     '      actions: read',
-    '      id-token: write',
     `    uses: ${owner}/${repo}/.github/workflows/opencode-prepare.yml@${ref}`,
     '    with:',
     `      runtime_ref: ${ref}`,
@@ -121,36 +99,15 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
   ].join('\n')
 }
 
-export function omgRequest(event, payload) {
-  if (event !== 'issues') return null
-  if (payload.issue?.pull_request) return null
-  const automatedOpenCodeLabel = payload.sender?.type === 'Bot' && payload.action === 'labeled' && payload.label?.name === 'OpenCode'
-  if (payload.sender?.type === 'Bot' && !automatedOpenCodeLabel) return null
-  const labels = (payload.issue?.labels || []).map(label => typeof label === 'string' ? label : label.name).filter(Boolean)
-  const openedWithoutOpenCode = payload.action === 'opened' && !labels.includes('OpenCode')
-  const openCodeAdded = payload.action === 'labeled' && payload.label?.name === 'OpenCode' && labels.includes('OpenCode')
-  if (!openedWithoutOpenCode && !openCodeAdded) return null
-  if (!payload.installation?.id || !payload.repository?.full_name || !payload.issue?.number) return null
-  const [owner, repo] = payload.repository.full_name.split('/')
-  const parsed = parseIssueRequest(payload.issue, payload.repository.default_branch || 'main')
-  return {
-    owner,
-    repo,
-    repository: payload.repository.full_name,
-    defaultBranch: payload.repository.default_branch || 'main',
-    installationId: payload.installation.id,
-    issueNumber: payload.issue.number,
-    issueTitle: parsed.title,
-    request: parsed.request,
-    targetRef: parsed.targetRef,
-    branchSpecified: parsed.branchSpecified,
-    branchError: parsed.branchError,
-    deliveryEvent: event,
-    deliveryAction: payload.action,
-    sender: automatedOpenCodeLabel ? payload.issue?.user?.login || '' : payload.sender?.login || '',
-    labels,
-    missingOpenCodeLabel: openedWithoutOpenCode
-  }
+export function setupRepositories(event, payload) {
+  if (!payload.installation?.id) return []
+  const repositories = event === 'installation' && payload.action === 'created'
+    ? payload.repositories
+    : event === 'installation_repositories' && payload.action === 'added' ? payload.repositories_added : []
+  return (repositories || []).map(repository => {
+    const [owner, repo] = String(repository.full_name || '').split('/')
+    return { owner, repo }
+  }).filter(({ owner, repo }) => owner && repo)
 }
 
 async function ensureRepositoryLabel(owner, repo, token, api, commonHeaders, requestFetch) {
@@ -201,6 +158,7 @@ export async function ensureIssueWorkflow({ owner, repo }, config, requestFetch 
   const missingPermissions = missingInstallationPermissions(tokenData.permissions)
   if (missingPermissions.length) throw new Error(`Approve required App installation permissions: ${missingPermissions.join(', ')}`)
   const repository = await call(repositoryPath, installationToken)
+  await ensureRepositoryLabel(owner, repo, installationToken, api, commonHeaders, requestFetch)
   const centralOwner = config.fallbackOwner || 'AgentsLoop'
   const centralRepo = config.fallbackRepo || 'OhMyGithub'
   const centralRef = config.fallbackRef || 'main'
@@ -221,7 +179,7 @@ export async function ensureIssueWorkflow({ owner, repo }, config, requestFetch 
   if (content === workflow) return { installationToken, repository, workflowSha, installed: false }
   // Preserve the central repository's reviewed local caller.
   if (owner.toLowerCase() === centralOwner.toLowerCase() && repo.toLowerCase() === centralRepo.toLowerCase()) {
-    if (!content.includes('types: [labeled]') || !content.includes('uses: ./.github/workflows/opencode-prepare.yml') || !content.includes('uses: ./.github/workflows/opencode-reusable.yml')) {
+    if (!content.includes('types: [opened, labeled]') || !content.includes('uses: ./.github/workflows/opencode-prepare.yml') || !content.includes('uses: ./.github/workflows/opencode-reusable.yml')) {
       throw new Error('Install and review the central repository issue listener before accepting requests')
     }
     return { installationToken, repository, workflowSha, installed: false }
@@ -233,18 +191,4 @@ export async function ensureIssueWorkflow({ owner, repo }, config, requestFetch 
   const verified = await call(readUrl, installationToken)
   if (Buffer.from(verified.content || '', 'base64').toString() !== workflow) throw new Error('Installed issue listener verification failed')
   return { installationToken, repository, workflowSha, installed: true }
-}
-
-export async function handleOmgRequest(request, config, requestFetch = fetch) {
-  if (!request.missingOpenCodeLabel) return { route: 'issue-listener', repository: request.repository }
-  const { installationToken, installed } = await ensureIssueWorkflow(request, config, requestFetch)
-  const api = config.api || API
-  const labelCreated = await ensureRepositoryLabel(request.owner, request.repo, installationToken, api, commonHeaders, requestFetch)
-  const commentUrl = `${api}/repos/${encodeURIComponent(request.owner)}/${encodeURIComponent(request.repo)}/issues/${request.issueNumber}/comments`
-  const response = await requestFetch(commentUrl, {
-    method: 'POST', headers: { ...commonHeaders, authorization: `Bearer ${installationToken}` },
-    body: JSON.stringify({ body: 'Please add the `OpenCode` label to this issue to execute it.' })
-  })
-  if (!response.ok) throw new Error(`Issue reminder returned ${response.status}`)
-  return { route: 'missing-opencode-label', repository: request.repository, labelCreated, installed, commented: true }
 }

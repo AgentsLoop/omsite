@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { generateKeyPairSync } from 'node:crypto'
-import { ensureIssueWorkflow, handleOmgRequest, extractUrls, repositoryWorkflow } from './github.mjs'
+import { ensureIssueWorkflow, setupRepositories, extractUrls, repositoryWorkflow } from './github.mjs'
 
 test('extractUrls separates OpenCode, screenshots, preview, and immutable project URL', () => {
   const sha = 'a'.repeat(40)
@@ -56,12 +56,13 @@ function repositoryMock(existing = null) {
 
 test('native wrapper isolates validation and passes every validated execution input', () => {
   const workflow = repositoryWorkflow('central', 'runtime', sha)
-  assert.match(workflow, /types: \[labeled\]/)
+  assert.match(workflow, /types: \[opened, labeled\]/)
   assert.match(workflow, /if: github.event.label.name == 'OpenCode'/)
   assert.doesNotMatch(workflow, /workflow_dispatch|dispatches|secrets: inherit/)
   const prepare = workflow.split('  prepare:')[1].split('  opencode:')[0]
   assert.doesNotMatch(prepare, /secrets/)
-  assert.match(prepare, /id-token: write/)
+  assert.match(prepare, /OPENCODE_ACCESS == 'everyone'/)
+  assert.match(prepare, /\/OpenCode/)
   assert.match(prepare, new RegExp(`runtime_ref: ${sha}`))
   assert.match(workflow, /if: needs.prepare.outputs.approved == 'true'/)
   for (const input of ['issue_number', 'request', 'issue_title', 'sender', 'labels_json', 'target_ref', 'target_sha']) {
@@ -95,15 +96,17 @@ test('migrate existing caller with file SHA to prevent overwriting concurrent up
   assert.equal(JSON.parse(mock.calls.find(call => call.method === 'PUT').body).sha, 'old-file-sha')
 })
 
-test('label webhook never starts another execution', async () => {
-  const result = await handleOmgRequest({ repository: 'user/project', missingOpenCodeLabel: false }, config, () => { throw new Error('Unexpected API call') })
-  assert.equal(result.route, 'issue-listener')
+test('only installation events request setup', () => {
+  const payload = { installation: { id: 9 }, action: 'created', repositories: [{ full_name: 'user/project' }] }
+  assert.deepEqual(setupRepositories('installation', payload), [{ owner: 'user', repo: 'project' }])
+  assert.deepEqual(setupRepositories('installation_repositories', { ...payload, action: 'added', repositories_added: payload.repositories }), [{ owner: 'user', repo: 'project' }])
+  assert.deepEqual(setupRepositories('issues', { ...payload, action: 'opened' }), [])
+  assert.deepEqual(setupRepositories('issues', { ...payload, action: 'labeled' }), [])
 })
 
-test('unlabeled human issue installs listener before posting the label reminder', async () => {
+test('setup creates the execution label without any issue interaction', async () => {
   const mock = repositoryMock()
-  const result = await handleOmgRequest({ owner: 'user', repo: 'project', repository: 'user/project', issueNumber: 1, missingOpenCodeLabel: true }, config, mock.requestFetch)
-  assert.equal(result.commented, true)
-  assert.equal(mock.calls.at(-1).path, '/repos/user/project/issues/1/comments')
-  assert.equal(mock.calls.some(call => call.path.endsWith('/dispatches')), false)
+  await ensureIssueWorkflow({ owner: 'user', repo: 'project' }, config, mock.requestFetch)
+  assert.equal(mock.calls.some(call => call.path.endsWith('/labels/OpenCode')), true)
+  assert.equal(mock.calls.some(call => call.path.includes('/issues/')), false)
 })
