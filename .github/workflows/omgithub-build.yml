@@ -209,7 +209,7 @@ jobs:
             fi
             if test -s "$build_root/screenshots/final-build.png" && (( $(wc -c < "$build_root/screenshots/final-build.png") < 10000 )); then rm "$build_root/screenshots/final-build.png"; fi
             if ! test -s "$build_root/screenshots/final-build.png"; then
-              source_screenshot="$(find "$GITHUB_WORKSPACE/source" -type f | grep -Ei '/[^/]*(screenshot|gameplay|hud|play|title|beauty|pause|combat)[^/]*\.(png|jpe?g|webp)$' | head -n 1 || true)"
+              source_screenshot="$(find "$GITHUB_WORKSPACE/source" -type f | grep -Eiv '/(reference|assets|public)/' | grep -Ei '/[^/]*(screenshot|gameplay|hud|title|beauty|pause|combat|game_)[^/]*\.(png|jpe?g|webp)$' | head -n 1 || true)"
               test -n "$source_screenshot"
               cp "$source_screenshot" "$build_root/screenshots/final-build.${source_screenshot##*.}"
             fi
