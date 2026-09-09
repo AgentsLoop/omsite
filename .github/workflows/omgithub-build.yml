@@ -257,6 +257,16 @@ jobs:
               rsync -a "$static_dir/" "$build_root/$static_dir/"
             fi
           done
+          python3 - "$build_root/index.html" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          path = Path(sys.argv[1])
+          html = path.read_text()
+          html = re.sub(r'(["\'])/[^"\']+/assets/', r'\1/assets/', html)
+          path.write_text(html)
+          PY
           test -f "$build_root/index.html"
 
       - name: Verify WebGL2 before macOS capture
