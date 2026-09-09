@@ -53,7 +53,16 @@ responses when GitHub returns a rate-limit or temporary server error.
 
 Run OpenCode in the trusted build workflow. Generate a factual description
 when source metadata has none. Extract only prompts that match cited committed
-text. Merge OpenCode tags with GitHub repository topics. Store the evidence and
+text. When no recorded prompt exists, instruct OpenCode to reverse engineer an
+actionable creation prompt from the game source. Describe implemented rules,
+controls, mechanics, visuals, UI, and technical constraints. Cite implementation
+lines and set `prompt_source` to `opencode-reconstructed`. Label reconstructed
+prompts in the UI and link to the cited game source. Require a nonempty original
+or reconstructed prompt from each new extraction. Retry invalid original-prompt
+claims instead of silently dropping the prompt. Preserve existing recorded
+prompts during publication; replace old reconstructed prompts with fresh
+extraction results. Regenerate metadata to fill missing prompts on older games.
+Merge OpenCode tags with GitHub repository topics. Store the evidence and
 complexity score privately. Seed the public rating from complexity, then let
 signed-in user ratings control the average as votes accumulate.
 

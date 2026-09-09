@@ -1,7 +1,7 @@
 export const CATALOG_METADATA_FILE = '.omgithub-metadata.json'
 export const MAX_METADATA_BYTES = 256 * 1024
 const descriptionSources = new Set(['github', 'html', 'opencode', 'manual'])
-const promptSources = new Set(['github-file', 'github-list', 'issue', 'workflow', 'manual'])
+const promptSources = new Set(['github-file', 'github-list', 'issue', 'workflow', 'manual', 'opencode-reconstructed'])
 const aliases = { threejs: 'three.js', 'three-js': 'three.js', 'three.js': 'three.js', 'godot-engine': 'godot', 'play-canvas': 'playcanvas', 'gpt-6-astra': 'astra' }
 const fail = message => { throw Object.assign(new Error(`Invalid catalog metadata: ${message}`), { status: 422 }) }
 
@@ -111,8 +111,11 @@ export function readCatalogMetadata(entries, root = '') {
 export function mergeCatalogMetadata({ existing = {}, extracted = {}, manual = {}, htmlDescription = '', repositoryDescription = '', topics = [] } = {}) {
   const result = { ...extracted }
   // Retain imported and manual source values on a repeat publication.
-  for (const field of ['description', 'description_source', 'prompt', 'prompt_source', 'prompt_source_url', 'source', 'screenshot_embeddings']) {
+  for (const field of ['description', 'description_source', 'source', 'screenshot_embeddings']) {
     if (existing[field]) result[field] = existing[field]
+  }
+  if (existing.prompt && (existing.prompt_source !== 'opencode-reconstructed' || !extracted.prompt)) {
+    for (const field of ['prompt', 'prompt_source', 'prompt_source_url']) result[field] = existing[field] || ''
   }
   if (!existing.description && htmlDescription) Object.assign(result, { description: htmlDescription, description_source: 'html' })
   else if (!existing.description && repositoryDescription) Object.assign(result, { description: repositoryDescription, description_source: 'github' })

@@ -2,12 +2,13 @@
   <section class="social-section" aria-label="Game ratings and reviews">
     <ProjectMetadata :project="{ ...project, ...social }" />
     <details v-if="project.prompt" class="prompt-details">
-      <summary>Creation prompt</summary>
+      <summary>{{ project.prompt_source === 'opencode-reconstructed' ? 'Reconstructed creation prompt' : 'Creation prompt' }}</summary>
+      <p v-if="project.prompt_source === 'opencode-reconstructed'" class="source-note">Reverse engineered by OC from the game source. The original creation prompt was not found.</p>
       <pre>{{ project.prompt }}</pre>
       <button type="button" @click="copyPrompt">Copy prompt</button>
       <p role="status">{{ copyStatus }}</p>
     </details>
-    <p v-if="promptSource" class="source-note"><a :href="promptSource" target="_blank" rel="noopener noreferrer">Prompt source</a></p>
+    <p v-if="promptSource" class="source-note"><a :href="promptSource" target="_blank" rel="noopener noreferrer">{{ project.prompt_source === 'opencode-reconstructed' ? 'Game source used for reconstruction' : 'Prompt source' }}</a></p>
     <h2>Player reviews</h2>
     <p v-if="loading" role="status">Loading reviews…</p>
     <p v-if="error" class="form-error" role="alert">{{ error }} <button v-if="!loaded" type="button" @click="load">Retry</button></p>

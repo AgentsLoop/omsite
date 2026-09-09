@@ -89,3 +89,27 @@ test('formats runtime work with explicit FLOPS units', async () => {
   assert.equal(formatFlops(500), '500 FLOPS')
   assert.equal(formatFlops(null), 'not estimated')
 })
+
+test('accepts reconstructed prompts with source evidence without claiming an exact quotation', () => {
+  const input = { ...metadata(), prompt: 'Build a maze game with arrow-key movement.', prompt_source: 'opencode-reconstructed', prompt_source_url: 'https://github.com/o/r', metadata_evidence: [...metadata().metadata_evidence, { field: 'prompt', file: 'game.js', line_start: 1, line_end: 1 }] }
+  const result = validateSourceEvidence(input, { 'game.js': 'function movePlayer() {}' }, 'https://github.com/o/r/blob/sha')
+  assert.equal(result.prompt, input.prompt)
+  assert.equal(result.prompt_source, 'opencode-reconstructed')
+  assert.equal(result.prompt_source_url, 'https://github.com/o/r/blob/sha/game.js#L1-L1')
+  assert.equal(result.metadata_incomplete, false)
+  assert.equal(publicCatalogMetadata(result).prompt_source, 'opencode-reconstructed')
+  assert.throws(() => validateSourceEvidence(input, { 'game.js': undefined }, 'https://github.com/o/r'), /outside/)
+  assert.throws(() => validateCatalogMetadata({ ...input, metadata_evidence: metadata().metadata_evidence }), /missing prompt evidence/)
+})
+
+test('preserves recorded prompts but refreshes reconstructed prompts as one provenance group', () => {
+  const reconstructed = { prompt: 'Recreate the maze.', prompt_source: 'opencode-reconstructed', prompt_source_url: 'https://github.com/o/r/blob/old/game.js' }
+  const original = { prompt: 'Make my maze.', prompt_source: 'github-file', prompt_source_url: 'https://github.com/o/r/blob/new/PROMPT.md' }
+  assert.equal(mergeCatalogMetadata({ existing: original, extracted: reconstructed }).prompt, original.prompt)
+  const replaced = mergeCatalogMetadata({ existing: reconstructed, extracted: original })
+  for (const field of ['prompt', 'prompt_source', 'prompt_source_url']) assert.equal(replaced[field], original[field])
+  assert.equal(mergeCatalogMetadata({ existing: reconstructed }).prompt, reconstructed.prompt)
+  const filled = mergeCatalogMetadata({ existing: { prompt: '', prompt_source: 'manual', prompt_source_url: 'https://example.com/stale' }, extracted: reconstructed })
+  assert.equal(filled.prompt_source, 'opencode-reconstructed')
+  assert.equal(filled.prompt_source_url, reconstructed.prompt_source_url)
+})
