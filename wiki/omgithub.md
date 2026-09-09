@@ -28,6 +28,9 @@ path. For example, use
 
 Review source code before publication. Submit one direct `tree` or `blob` link
 with `POST /api/publish` from the OmGithub site. Do not require GitHub sign-in.
+Set `build_runner` to `macos-latest` to build and capture a game on a GitHub-hosted
+Mac. Use `ubuntu-latest` by default. Accept `mac-latest` as an alias. Set `refresh`
+to `true` when recapturing an existing publication.
 Require the OmGithub origin and validate the direct game source before starting
 a build. Do not apply an IP-based publication limit. Send `source_url`
 and optional `metadata`. Support `title`, `description`, `tags`, `prompt`,

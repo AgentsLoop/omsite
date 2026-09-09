@@ -27,6 +27,14 @@ on:
         required: false
         default: ''
         type: string
+      build_runner:
+        description: GitHub-hosted runner used to build and capture the game
+        required: true
+        default: ubuntu-latest
+        type: choice
+        options:
+          - ubuntu-latest
+          - macos-latest
       request_id:
         description: Unique OmGithub build request identifier
         required: true
@@ -45,7 +53,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.build_runner }}
     timeout-minutes: 15
     steps:
       - name: Check out the requested public commit
@@ -194,13 +202,24 @@ jobs:
             mkdir -p "$build_root/screenshots"
             capture_index="$RUNNER_TEMP/omgithub-index.html"
             cp "$build_root/index.html" "$capture_index"
-            sed -i "s/powerPreference: *'high-performance'/powerPreference: 'low-power'/g; s/powerPreference: *\"high-performance\"/powerPreference: 'low-power'/g" "$build_root/index.html"
-            if [[ -d "$build_root/assets" ]]; then
-              find "$build_root/assets" -type f -name '*.js' -exec sed -i "s/powerPreference: *'high-performance'/powerPreference: 'low-power'/g; s/powerPreference: *\"high-performance\"/powerPreference: 'low-power'/g" {} +
-              find "$build_root/assets" -type f -name '*.js' -exec perl -0pi -e 's/powerPreference:\x60high-performance\x60/powerPreference:\x60low-power\x60/g' {} +
-            fi
+            python3 - "$build_root" <<'PY'
+          from pathlib import Path
+          import sys
+
+          root = Path(sys.argv[1])
+          paths = [root / 'index.html']
+          assets = root / 'assets'
+          if assets.is_dir():
+              paths.extend(assets.rglob('*.js'))
+          for path in paths:
+              text = path.read_text(errors='ignore')
+              for quote in ("'", '"', '`'):
+                  text = text.replace(f'powerPreference: {quote}high-performance{quote}', f'powerPreference: {quote}low-power{quote}')
+              path.write_text(text)
+          PY
             python3 -c 'from pathlib import Path; import sys; p=Path(sys.argv[1]); h=p.read_text(); s="""<script>addEventListener("load",()=>setTimeout(()=>document.querySelector("#start,[data-game-start]")?.click(),150))</script>"""; p.write_text(h.replace("</body>", s+"</body>"))' "$build_root/index.html"
-            python3 -m http.server 4173 --directory "$build_root" > /tmp/omgithub-preview.log 2>&1 &
+            preview_log="$RUNNER_TEMP/omgithub-preview.log"
+            python3 -m http.server 4173 --directory "$build_root" > "$preview_log" 2>&1 &
             server_pid=$!
             trap 'kill "$server_pid" 2>/dev/null || true' EXIT
             for _ in {1..30}; do
@@ -208,13 +227,41 @@ jobs:
               sleep 1
             done
             curl --fail --silent http://127.0.0.1:4173/ > /dev/null
-            google-chrome --version
-            if ! timeout --foreground -s KILL 45s google-chrome --headless --no-sandbox --disable-gpu-sandbox --ignore-gpu-blocklist --enable-webgl --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader --run-all-compositor-stages-before-draw --virtual-time-budget=3000 --window-size=960,540 --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/; then
-              timeout --foreground -s KILL 15s google-chrome --headless --no-sandbox --disable-gpu --disable-software-rasterizer --window-size=960,540 --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/ || true
+            if command -v google-chrome > /dev/null; then
+              chrome_bin="$(command -v google-chrome)"
+            elif [[ -x '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' ]]; then
+              chrome_bin='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+            else
+              echo 'Google Chrome is not installed on this runner.' >&2
+              exit 1
             fi
-            if test -s "$build_root/screenshots/final-build.png" && (( $(wc -c < "$build_root/screenshots/final-build.png") < 10000 )); then
+            run_with_timeout() {
+              local seconds="$1"
+              shift
+              python3 - "$seconds" "$@" <<'PY'
+          import subprocess
+          import sys
+
+          try:
+              result = subprocess.run(sys.argv[2:], timeout=float(sys.argv[1]))
+              raise SystemExit(result.returncode)
+          except subprocess.TimeoutExpired:
+              raise SystemExit(124)
+          PY
+            }
+            "$chrome_bin" --version
+            chrome_args=(--headless=new --no-sandbox --ignore-gpu-blocklist --enable-webgl --run-all-compositor-stages-before-draw --virtual-time-budget=3000 '--window-size=960,540')
+            if [[ "${RUNNER_OS:-}" == 'macOS' ]]; then
+              chrome_args+=(--enable-gpu --use-gl=angle --use-angle=metal)
+            else
+              chrome_args+=(--disable-gpu-sandbox --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader)
+            fi
+            if ! run_with_timeout 45 "$chrome_bin" "${chrome_args[@]}" --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/; then
+              run_with_timeout 15 "$chrome_bin" --headless=new --no-sandbox --window-size=960,540 --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/ || true
+            fi
+            if command -v firefox > /dev/null && test -s "$build_root/screenshots/final-build.png" && (( $(wc -c < "$build_root/screenshots/final-build.png") < 10000 )); then
               firefox_capture="$build_root/screenshots/final-firefox.png"
-              timeout --foreground -s KILL 30s firefox --headless --window-size 960,540 --screenshot "$firefox_capture" http://127.0.0.1:4173/ || true
+              run_with_timeout 30 firefox --headless --window-size 960,540 --screenshot "$firefox_capture" http://127.0.0.1:4173/ || true
               if test -s "$firefox_capture"; then mv "$firefox_capture" "$build_root/screenshots/final-build.png"; fi
             fi
             if test -s "$build_root/screenshots/final-build.png" && (( $(wc -c < "$build_root/screenshots/final-build.png") < 1000 )); then rm "$build_root/screenshots/final-build.png"; fi
@@ -270,7 +317,16 @@ jobs:
           if (( zip_size <= upload_size )); then
             upload_part omgithub-build.zip 0 1
           else
-            split -b "$upload_size" -d -a 4 omgithub-build.zip omgithub-build.part.
+            python3 - omgithub-build.zip "$upload_size" <<'PY'
+          from pathlib import Path
+          import sys
+
+          source = Path(sys.argv[1])
+          size = int(sys.argv[2])
+          with source.open('rb') as stream:
+              for index, chunk in enumerate(iter(lambda: stream.read(size), b'')):
+                  Path(f'omgithub-build.part.{index:04d}').write_bytes(chunk)
+          PY
             parts=(omgithub-build.part.*)
             for index in "${!parts[@]}"; do upload_part "${parts[$index]}" "$index" "${#parts[@]}"; done
           fi

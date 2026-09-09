@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { dispatchPublicBuild } from '../lib/github-build.mjs'
+import { dispatchPublicBuild, normalizeBuildRunner } from '../lib/github-build.mjs'
 
 function response(data, { status = 200 } = {}) {
   const body = typeof data === 'string' || Buffer.isBuffer(data) ? data : JSON.stringify(data)
@@ -23,6 +23,7 @@ test('dispatches a repository build for direct ZIP upload', async () => {
       requestId = inputs.request_id
       assert.equal(inputs.source_path, '')
       assert.equal(inputs.source_entry, '')
+      assert.equal(inputs.build_runner, 'ubuntu-latest')
       assert.equal(inputs.upload_url, 'https://omgithub.com/api/builds')
       assert.equal(inputs.upload_token, 'upload-secret')
       return response('', { status: 204 })
@@ -36,6 +37,26 @@ test('dispatches a repository build for direct ZIP upload', async () => {
   assert.equal(result.run.id, 42)
   assert.equal(calls[0].options.headers.authorization, 'Bearer secret')
   assert.deepEqual(statuses, [{ phase: 'queued' }, { phase: 'publishing', runId: '42' }])
+})
+
+test('dispatches a build on the selected macOS runner', async () => {
+  let requestId = ''
+  const requestFetch = async (url, options = {}) => {
+    if (url.endsWith('/dispatches')) {
+      const inputs = JSON.parse(options.body).inputs
+      requestId = inputs.request_id
+      assert.equal(inputs.build_runner, 'macos-latest')
+      return response('', { status: 204 })
+    }
+    if (url.includes('/runs?')) return response({ workflow_runs: [{ id: 45, status: 'completed', conclusion: 'success', display_title: `OmGithub build ${requestId}` }] })
+    return response({ message: 'not found' }, { status: 404 })
+  }
+
+  const result = await dispatchPublicBuild({ sourceOwner: 'owner', sourceRepo: 'repo', sourceSha: 'd'.repeat(40), buildRunner: 'mac-latest', workflowOwner: 'AgentsLoop', workflowRepo: 'OhMyGithub', token: 'secret', uploadUrl: 'https://omgithub.com/api/builds', uploadToken: 'upload-secret', requestFetch, pollMs: 0 })
+
+  assert.equal(result.run.id, 45)
+  assert.equal(normalizeBuildRunner('mac-latest'), 'macos-latest')
+  assert.throws(() => normalizeBuildRunner('self-hosted'), /must be/)
 })
 
 test('dispatches a selected repository subdirectory to the build workflow', async () => {

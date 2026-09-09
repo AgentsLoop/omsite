@@ -3,6 +3,14 @@ import { randomUUID } from 'node:crypto'
 const API = 'https://api.github.com'
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000
 const DEFAULT_POLL_MS = 3000
+const BUILD_RUNNERS = new Set(['ubuntu-latest', 'macos-latest'])
+
+export function normalizeBuildRunner(value = 'ubuntu-latest') {
+  const runner = String(value || 'ubuntu-latest').trim().toLowerCase()
+  const normalized = runner === 'mac-latest' ? 'macos-latest' : runner
+  if (!BUILD_RUNNERS.has(normalized)) throw Object.assign(new Error('Build runner must be ubuntu-latest or macos-latest'), { status: 400 })
+  return normalized
+}
 
 function headers(token) {
   return {
@@ -34,6 +42,7 @@ export async function dispatchPublicBuild({
   sourceSha,
   sourcePath = '',
   sourceEntry = '',
+  buildRunner = 'ubuntu-latest',
   workflowOwner,
   workflowRepo,
   workflowFile = 'omgithub-build.yml',
@@ -47,6 +56,7 @@ export async function dispatchPublicBuild({
   pollMs = DEFAULT_POLL_MS
 }) {
   if (!token) throw Object.assign(new Error('GitHub Actions build requires GITHUB_TOKEN'), { status: 503 })
+  buildRunner = normalizeBuildRunner(buildRunner)
   const requestId = randomUUID()
   const workflow = workflowPath(workflowOwner, workflowRepo, workflowFile)
   const startedAt = Date.now()
@@ -55,7 +65,7 @@ export async function dispatchPublicBuild({
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       ref: workflowRef,
-      inputs: { source_owner: sourceOwner, source_repo: sourceRepo, source_sha: sourceSha, source_path: sourcePath, source_entry: sourceEntry, request_id: requestId, upload_url: uploadUrl, upload_token: uploadToken }
+      inputs: { source_owner: sourceOwner, source_repo: sourceRepo, source_sha: sourceSha, source_path: sourcePath, source_entry: sourceEntry, build_runner: buildRunner, request_id: requestId, upload_url: uploadUrl, upload_token: uploadToken }
     })
   })
   onStatus({ phase: 'queued' })

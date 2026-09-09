@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { basename, dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cookies, nonce, sign, verify } from './lib/auth.mjs'
-import { dispatchPublicBuild } from './lib/github-build.mjs'
+import { dispatchPublicBuild, normalizeBuildRunner } from './lib/github-build.mjs'
 import { ensureIssueWorkflow, parseIssueRequest, extractUrls, github, setupRepositories, verifyWebhookSignature } from './lib/github.mjs'
 import { materializePublicProject, resolveLatestPublicCommit, resolvePublicCommit, validateProjectPath, validateSource, validateSourceEntry } from './lib/public-project.mjs'
 import { createStore } from './lib/store.mjs'
@@ -134,7 +134,7 @@ function publicationPayload(publication) {
     project: current.project ? storePayload(current.project) : null
   }
 }
-async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha, projectPath = '', sourceEntry = '', publicPath = '', manualMetadata = {}, refresh = false }) {
+async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha, projectPath = '', sourceEntry = '', publicPath = '', manualMetadata = {}, buildRunner = 'ubuntu-latest', refresh = false }) {
   validateSource(sourceOwner, sourceRepo, sha)
   projectPath = validateProjectPath(projectPath)
   sourceEntry = validateSourceEntry(sourceEntry)
@@ -143,7 +143,7 @@ async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha, pro
   if ((refresh && existingPublication?.state === 'published') || existingPublication?.state === 'failed') publications.delete(sourceKey)
   else if (existingPublication) return existingPublication
   const publication = { sourceKey, sha: sha.toLowerCase(), publicPath, state: 'checking', project: null, error: '', runId: '' }
-  publication.promise = publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, sourceEntry, publicPath, manualMetadata, publication, refresh })
+  publication.promise = publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, sourceEntry, publicPath, manualMetadata, buildRunner, publication, refresh })
     .then(project => {
       publication.project = project
       publication.state = 'published'
@@ -161,7 +161,7 @@ async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha, pro
   publications.set(sourceKey, publication)
   return publication
 }
-async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref = '', projectPath = '', sourceEntry = '', publicPath, latest = false, manualMetadata = {}, refresh = false }) {
+async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref = '', projectPath = '', sourceEntry = '', publicPath, latest = false, manualMetadata = {}, buildRunner = 'ubuntu-latest', refresh = false }) {
   projectPath = validateProjectPath(projectPath)
   const existingPublication = routePublications.get(publicPath)
   if (existingPublication && !(refresh && existingPublication.state === 'published') && existingPublication.state !== 'failed') return existingPublication
@@ -190,7 +190,7 @@ async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref
         ? await resolveLatestPublicCommit({ owner: sourceOwner, repo: sourceRepo, requestFetch: publicGithubFetch })
         : await resolvePublicCommit({ owner: sourceOwner, repo: sourceRepo, ref, requestFetch: publicGithubFetch })
       publication.sha = resolved.sha.toLowerCase()
-      publication.sourcePublication = await startPublication({ owner: sourceOwner, repo: sourceRepo, sha: resolved.sha, projectPath, sourceEntry, publicPath, manualMetadata, refresh })
+      publication.sourcePublication = await startPublication({ owner: sourceOwner, repo: sourceRepo, sha: resolved.sha, projectPath, sourceEntry, publicPath, manualMetadata, buildRunner, refresh })
       const project = await publication.sourcePublication.promise
       const namedProject = project.public_path === publicPath && project.store_path === publicPath
         ? project
@@ -218,7 +218,7 @@ async function materializeForPublication({ owner: sourceOwner, repo: sourceRepo,
   return (await startPublication({ owner: sourceOwner, repo: sourceRepo, sha, projectPath, sourceEntry, publicPath })).promise
 }
 
-async function publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, sourceEntry = '', publicPath, manualMetadata = {}, publication, refresh = false }) {
+async function publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, sourceEntry = '', publicPath, manualMetadata = {}, buildRunner = 'ubuntu-latest', publication, refresh = false }) {
   const existing = await store.bySourceKey(sourceKey)
   if (!refresh && existing?.status === 'published' && existing.url) {
     if ((publicPath && (existing.public_path !== publicPath || existing.store_path !== publicPath)) || Object.keys(manualMetadata).length) return store.put({ ...withManualMetadata(existing, manualMetadata), public_path: publicPath || existing.public_path, store_path: publicPath || existing.store_path })
@@ -236,11 +236,12 @@ async function publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectP
     sourceEntry,
     publicPath,
     manualMetadata,
+    buildRunner,
     expiresAt: Date.now() + 20 * 60 * 1000
   }, sessionSecret)
-  pendingBuilds.set(uploadToken, { owner: sourceOwner, repo: sourceRepo, sha: sha.toLowerCase(), projectPath, sourceEntry, publicPath, manualMetadata, expiresAt: Date.now() + 20 * 60 * 1000, processing: false, publication })
+  pendingBuilds.set(uploadToken, { owner: sourceOwner, repo: sourceRepo, sha: sha.toLowerCase(), projectPath, sourceEntry, publicPath, manualMetadata, buildRunner, expiresAt: Date.now() + 20 * 60 * 1000, processing: false, publication })
   try {
-    const build = await dispatchPublicBuild({ sourceOwner, sourceRepo, sourceSha: sha, sourcePath: projectPath, sourceEntry, workflowOwner: buildOwner, workflowRepo: buildRepo, workflowFile: buildWorkflowFile, workflowRef: buildRef, token: githubToken, uploadUrl: `${origin}/api/builds`, uploadToken, onStatus: ({ phase, runId }) => { publication.state = phase; if (runId) publication.runId = runId } })
+    const build = await dispatchPublicBuild({ sourceOwner, sourceRepo, sourceSha: sha, sourcePath: projectPath, sourceEntry, buildRunner, workflowOwner: buildOwner, workflowRepo: buildRepo, workflowFile: buildWorkflowFile, workflowRef: buildRef, token: githubToken, uploadUrl: `${origin}/api/builds`, uploadToken, onStatus: ({ phase, runId }) => { publication.state = phase; if (runId) publication.runId = runId } })
     const project = await store.bySourceKey(sourceKey)
     if (!project || project.build_run_id !== String(build.run.id)) throw Object.assign(new Error('GitHub Actions build finished without publishing its ZIP'), { status: 502 })
     return project
@@ -335,10 +336,11 @@ app.post('/api/publish', async (req, res, next) => {
     const source = normalizeSource(String(req.body?.source_url || ''))
     if (!isDirectGameSource({ ...source, kind: 'game' })) return res.status(400).json({ error: 'Use a direct GitHub tree directory or HTML file URL.' })
     const manualMetadata = validateManualPublishMetadata(req.body?.metadata, { sourceUrl: source.url })
+    const buildRunner = normalizeBuildRunner(req.body?.build_runner)
     const routeKind = source.entry ? 'blob' : 'tree'
     const publicPath = namedPublicPath(source.owner, source.repo, source.ref, source.path, routeKind, source.entry)
     const refresh = req.body?.refresh === true
-    const publication = await startNamedPublication({ owner: source.owner, repo: source.repo, ref: source.ref, projectPath: source.path, sourceEntry: source.entry, publicPath, manualMetadata, refresh })
+    const publication = await startNamedPublication({ owner: source.owner, repo: source.repo, ref: source.ref, projectPath: source.path, sourceEntry: source.entry, publicPath, manualMetadata, buildRunner, refresh })
     res.status(publication.state === 'published' ? 200 : 202).json({ source_url: source.url, ...publicationPayload(publication) })
   } catch (error) { next(error) }
 })
@@ -359,6 +361,7 @@ app.post('/api/builds', express.raw({ type: ['application/zip', 'application/oct
           sourceEntry: claims.sourceEntry || '',
           publicPath: claims.publicPath || '',
           manualMetadata: claims.manualMetadata || {},
+          buildRunner: claims.buildRunner || 'ubuntu-latest',
           expiresAt: Number(claims.expiresAt),
           processing: false,
           publication: { state: 'publishing', project: null, error: '', runId: '' }
