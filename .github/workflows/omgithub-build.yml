@@ -192,6 +192,9 @@ jobs:
             echo 'Using committed final screenshot(s).'
           else
             mkdir -p "$build_root/screenshots"
+            capture_index="$RUNNER_TEMP/omgithub-index.html"
+            cp "$build_root/index.html" "$capture_index"
+            python3 -c 'from pathlib import Path; import sys; p=Path(sys.argv[1]); h=p.read_text(); s="""<script>addEventListener("load",()=>setTimeout(()=>document.querySelector("#start,[data-game-start]")?.click(),150))</script>"""; p.write_text(h.replace("</body>", s+"</body>"))' "$build_root/index.html"
             python3 -m http.server 4173 --directory "$build_root" > /tmp/omgithub-preview.log 2>&1 &
             server_pid=$!
             trap 'kill "$server_pid" 2>/dev/null || true' EXIT
@@ -210,6 +213,7 @@ jobs:
               test -n "$source_screenshot"
               cp "$source_screenshot" "$build_root/screenshots/final-build.${source_screenshot##*.}"
             fi
+            mv "$capture_index" "$build_root/index.html"
             find "$build_root/screenshots" -maxdepth 1 -type f -name 'final-*' -size +0c -print -quit | grep -q .
           fi
 
