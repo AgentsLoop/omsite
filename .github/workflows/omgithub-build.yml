@@ -150,7 +150,17 @@ jobs:
             build_dir="${build_dir%/*}"
             [[ -n "$build_dir" ]] || build_dir='.'
           done
-          if [[ -f "$build_dir/package.json" ]] && node -e "const p=require('./$build_dir/package.json'); process.exit(p.scripts?.build ? 0 : 1)"; then
+          has_vite='false'
+          if [[ -f "$build_dir/package.json" ]] && node -e "const p=require('./$build_dir/package.json'); process.exit((p.dependencies?.vite || p.devDependencies?.vite || String(p.scripts?.build || '').includes('vite')) ? 0 : 1)"; then
+            has_vite='true'
+          fi
+          if [[ "$build_dir" != "$project_dir" && "$has_vite" == 'true' ]]; then
+            relative_project="${project_dir#"$build_dir"/}"
+            vite_config="$RUNNER_TEMP/omgithub-vite.config.mjs"
+            printf '%s\n' "import { defineConfig } from 'vite';" 'export default defineConfig({});' > "$vite_config"
+            cd "$build_dir"
+            npx vite build --root "$relative_project" --config "$vite_config"
+          elif [[ -f "$build_dir/package.json" ]] && node -e "const p=require('./$build_dir/package.json'); process.exit(p.scripts?.build ? 0 : 1)"; then
             cd "$build_dir"
             if ! npm run build; then
               if node -e "const p=require('./package.json'); process.exit(String(p.scripts?.build || '').includes('vite') ? 0 : 1)"; then
