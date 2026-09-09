@@ -1,10 +1,10 @@
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createStore } from './store.mjs'
-import { DEFAULT_LIMITS, applyPromptRecords, canonicalKey, createGithubCache, normalizeSource, publishCandidate, readJson, recordKey, scanSource, writeJson } from './catalog-import-lib.mjs'
+import { DEFAULT_LIMITS, applyPromptRecords, canonicalKey, createGithubCache, isDirectGameSource, normalizeSource, publishCandidate, readJson, recordKey, scanSource, writeJson } from './catalog-import-lib.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-export const HELP = `Import GitHub game catalogs without creating GitHub artifacts.
+export const HELP = `Import explicit GitHub game directories or HTML files without creating GitHub artifacts.
 
 Run: node server/catalog-import.mjs [options]
   --dry-run                 Scan and save a report (default; no DB or publish writes)
@@ -18,9 +18,6 @@ Run: node server/catalog-import.mjs [options]
   --max-sources N           Total sources per report (default: 120)
   --max-files N             Metadata files per source (default: 16)
   --max-depth N             File depth under each selected path (default: 6)
-  --max-links N             GitHub links per catalog (default: 40)
-  --link-depth N            Linked repository traversal depth (default: 0; review links first)
-  --max-games N             HTML candidates per source (default: 80)
   --attempts N              Progress requests per candidate per run (default: 6)
   --poll-ms N               Wait between progress requests (default: 5000; max: 60000)
   --refresh                 Rescan completed sources; keep valid cached GitHub responses
@@ -29,9 +26,8 @@ Run: node server/catalog-import.mjs [options]
 Set GITHUB_TOKEN. Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_BASE64
 for Firestore in --prompts mode. Otherwise use the local DATA_DIR store, as in backfill.
 Keep the report and cache under DATA_DIR. Reuse the report to resume or change modes.
-Use a new report or --refresh to scan again. Add manifest entries with url, kind
-(game, catalog, related), and optional ref/path/entry for refs that contain slashes.
-Related sources supply metadata only. Review HTML candidates before --publish.
+Use a new report or --refresh to scan again. Add only direct GitHub tree directory
+or HTML blob links with kind game. Repository roots and catalog/list links are rejected.
 --publish and --prompts may be combined. --dry-run cannot be combined with either.
 `
 
@@ -100,7 +96,7 @@ export async function runImport(options, { env = process.env, requestFetch = fet
   // Validate all supplied sources before a write or network request.
   const sources = manifest.sources.map(input => {
     const source = normalizeSource(input)
-    if (!['game', 'catalog', 'related'].includes(source.kind)) throw new Error(`Invalid source kind: ${source.kind}`)
+    if (!isDirectGameSource(source)) throw new Error('Use a direct GitHub tree directory or HTML blob link')
     return source
   })
   const report = await readJson(options.report, { version: 1, created_at: new Date().toISOString(), sources: {}, candidates: {}, prompts: [], pending: [], runs: [] })
@@ -123,6 +119,7 @@ export async function runImport(options, { env = process.env, requestFetch = fet
     published.push(...(await database.all()).filter(row => row.status === 'published'))
   }
   const publishedKeys = new Set(published.map(recordKey).filter(Boolean))
+  const allowedCandidateKeys = new Set(sources.map(canonicalKey))
   const github = createGithubCache({ token: env.GITHUB_TOKEN, directory: options.cacheDir, ttlMs: options.ttlDays * 86400000, requestFetch })
   const queue = sources.map(source => ({ source, depth: 0 }))
   const visited = new Set()
@@ -137,7 +134,6 @@ export async function runImport(options, { env = process.env, requestFetch = fet
     const previous = report.sources[key]
     // Reuse scan results across dry-run, publish, and prompts modes. Requeue saved links too.
     if (previous?.scan && !options.refresh) {
-      if (depth < options.limits.linkDepth) queue.push(...previous.scan.links.map(link => ({ source: { ...link, kind: 'game' }, depth: depth + 1 })))
       run.counts.skipped++
       continue
     }
@@ -152,7 +148,6 @@ export async function runImport(options, { env = process.env, requestFetch = fet
       const scan = await scanSource(source, { github, limits: options.limits })
       report.sources[key] = { source: scan.source, state: scan.errors.length ? 'partial' : 'scanned', scan }
       for (const candidate of scan.candidates) {
-        if (source.kind === 'related') continue
         const candidateKey = canonicalKey(candidate)
         if (report.candidates[candidateKey]) { run.counts.duplicate++; continue }
         report.candidates[candidateKey] = { source: candidate, state: publishedKeys.has(candidateKey) ? 'published' : candidate.review_required ? 'review' : 'discovered' }
@@ -164,13 +159,19 @@ export async function runImport(options, { env = process.env, requestFetch = fet
         report.prompts.push(prompt)
       }
       if (!scan.candidates.length && source.kind === 'game') report.sources[key].reason = 'No selected HTML or index.html found within scan bounds'
-      if (depth < options.limits.linkDepth) queue.push(...scan.links.map(link => ({ source: { ...link, kind: 'game' }, depth: depth + 1 })))
     } catch (error) { report.sources[key] = { source, state: 'failed', error: error.message }; run.errors.push({ source: source.url, error: error.message }) }
     await save()
   }
   run.source_limit_reached = processed >= options.limits.sources && queue.some(item => !visited.has(`${canonicalKey(item.source)}|${item.source.ref}|${item.source.kind}`))
   if (options.publish) {
     for (const [key, candidate] of Object.entries(report.candidates)) {
+      if (!allowedCandidateKeys.has(key) && candidate.state !== 'published') {
+        candidate.state = 'review'
+        candidate.reason = 'Only direct tree directory and HTML blob links can publish automatically.'
+        run.counts.skipped++
+        await save()
+        continue
+      }
       if (candidate.state === 'review') { run.counts.skipped++; continue }
       if (candidate.state === 'published' || publishedKeys.has(key)) { candidate.state = 'published'; run.counts.skipped++; continue }
       try {

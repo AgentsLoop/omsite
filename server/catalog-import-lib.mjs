@@ -35,6 +35,10 @@ export function canonicalKey(source) {
   return `${source.owner.toLowerCase()}/${source.repo.toLowerCase()}:${source.path || ''}:${source.entry === 'index.html' ? '' : source.entry || ''}`
 }
 
+export function isDirectGameSource(source) {
+  return source.kind === 'game' && Boolean(source.path || source.entry)
+}
+
 export function dedupeSources(sources) {
   const unique = new Map()
   for (const input of sources) {
@@ -238,12 +242,8 @@ export async function scanSource(input, { github, limits = DEFAULT_LIMITS }) {
     && !/(?:^|\/)(?:node_modules|vendor|\.git)(?:\/|$)|(?:package-lock|yarn.lock|pnpm-lock)/.test(item.path)
     && item.size <= limits.bytes)
     .sort((a, b) => Number(!/readme|prompt/i.test(a.path)) - Number(!/readme|prompt/i.test(b.path)) || a.path.localeCompare(b.path))
-  const discovered = discoverGames(source, entries, limits)
-  const primary = source.kind === 'game' ? { ...source, kind: 'game', review_required: false } : null
-  const candidates = [primary, ...discovered.map(candidate => ({ ...candidate, review_required: true }))]
-    .filter(Boolean)
-    .filter((candidate, index, rows) => rows.findIndex(other => canonicalKey(other) === canonicalKey(candidate)) === index)
-  const prompts = [], links = [], errors = []
+  const candidates = [{ ...source, kind: 'game', review_required: false }]
+  const prompts = [], errors = []
   for (const file of files.slice(0, limits.files)) {
     try {
       const blob = await github(`${api}/git/blobs/${file.sha}`)
@@ -252,12 +252,10 @@ export async function scanSource(input, { github, limits = DEFAULT_LIMITS }) {
       if (Buffer.byteLength(text) > limits.bytes) continue
       const sourceUrl = `https://github.com/${source.owner}/${source.repo}/blob/${tree.sha || encodeURIComponent(source.ref)}/${encodePath(file.path)}`
       const folder = posix.dirname(file.path) === '.' ? '' : posix.dirname(file.path)
-      const nearby = candidates.filter(candidate => candidate.path === folder)
-      const fallback = nearby.length === 1 ? nearby[0] : folder === source.path && source.kind === 'game' ? source : null
-      prompts.push(...extractPrompts(text, { sourceUrl, fallback, catalog: source.kind !== 'game', filename: file.path }).map(item => ({ ...item, extracted_at: new Date().toISOString() })))
-      if (source.kind === 'catalog') links.push(...githubLinks(text, limits.links))
+      const fallback = folder === source.path ? source : null
+      prompts.push(...extractPrompts(text, { sourceUrl, fallback, filename: file.path }).map(item => ({ ...item, extracted_at: new Date().toISOString() })))
     } catch (error) { errors.push({ file: file.path, error: error.message }) }
   }
-  return { source, candidates, prompts, links: dedupeSources(links).slice(0, limits.links), errors,
-    bounds: { truncated_tree: Boolean(tree.truncated) || (tree.tree?.length || 0) > limits.treeEntries, files_available: files.length, files_read: Math.min(files.length, limits.files), game_limit_reached: discovered.length >= limits.games } }
+  return { source, candidates, prompts, links: [], errors,
+    bounds: { truncated_tree: Boolean(tree.truncated) || (tree.tree?.length || 0) > limits.treeEntries, files_available: files.length, files_read: Math.min(files.length, limits.files), game_limit_reached: false } }
 }

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { canonicalKey, discoverGames, extractPrompts, normalizeSource, publishCandidate } from './catalog-import-lib.mjs'
+import { canonicalKey, discoverGames, extractPrompts, isDirectGameSource, normalizeSource, publishCandidate } from './catalog-import-lib.mjs'
 
 test('catalog source identities ignore refs and retain selected HTML files', () => {
   const named = normalizeSource('https://github.com/Owner/Repo/tree/main/games/demo')
@@ -9,6 +9,8 @@ test('catalog source identities ignore refs and retain selected HTML files', () 
   assert.equal(canonicalKey(named), canonicalKey(commit))
   assert.equal(blob.entry, 'play.html')
   assert.notEqual(canonicalKey(named), canonicalKey(blob))
+  assert.equal(isDirectGameSource({ ...named, kind: 'game' }), true)
+  assert.equal(isDirectGameSource({ ...normalizeSource('owner/repo'), kind: 'game' }), false)
 })
 
 test('catalog discovery keeps game directories distinct and imports only explicit prompts', () => {
@@ -26,15 +28,15 @@ test('catalog discovery keeps game directories distinct and imports only explici
   assert.deepEqual(extractPrompts('A nice game without a recorded prompt.', { sourceUrl: 'https://github.com/owner/repo/blob/main/README.md', fallback: source, filename: 'README.md' }), [])
 })
 
-test('a direct game source is publishable while additional HTML files require review', async () => {
-  const source = { url: 'https://github.com/owner/repo', kind: 'game' }
+test('a direct game source publishes only the explicitly selected directory', async () => {
+  const source = { url: 'https://github.com/owner/repo/tree/main/games/demo', kind: 'game' }
   const github = async url => url.endsWith('/repos/owner/repo')
     ? { default_branch: 'main' }
-    : { sha: 'a'.repeat(40), tree: [{ type: 'blob', path: 'tools/debug.html', size: 10 }] }
+    : { sha: 'a'.repeat(40), tree: [{ type: 'blob', path: 'games/demo/index.html', size: 10 }, { type: 'blob', path: 'tools/debug.html', size: 10 }] }
   const scan = await (await import('./catalog-import-lib.mjs')).scanSource(source, { github })
   assert.equal(scan.candidates[0].review_required, false)
-  assert.equal(canonicalKey(scan.candidates[0]), 'owner/repo::')
-  assert.equal(scan.candidates[1].review_required, true)
+  assert.equal(canonicalKey(scan.candidates[0]), 'owner/repo:games/demo:')
+  assert.equal(scan.candidates.length, 1)
 })
 
 test('publication polling returns the final project state without artifacts', async () => {

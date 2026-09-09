@@ -24,14 +24,16 @@ tag list, an evidence-backed description, an exact recorded prompt when one
 exists, and a private complexity score. Display the prompt, tags, public
 rating, review count, comments, and deduplicated play count on the store page.
 
-Scan the maintained source list before importing games:
+Scan only a reviewed manifest of direct GitHub `tree` directories or `blob`
+HTML files before importing games. Do not add repository roots, catalog pages,
+or lists to this manifest. The importer publishes only the exact selected game.
 
 ```sh
 GITHUB_TOKEN=... npm run catalog:scan
 ```
 
 Review `DATA_DIR/catalog-import-report.json`. Run `npm run catalog:publish` to
-submit missing games to OmGithub. Run `npm run catalog:prompts` with Firebase
+submit the exact selected games to OmGithub. Run `npm run catalog:prompts` with Firebase
 credentials to apply exact prompts to matching published project records.
 Reuse the report and disk cache when a run is interrupted.
 

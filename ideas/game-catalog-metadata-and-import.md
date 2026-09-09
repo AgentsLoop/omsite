@@ -6,6 +6,10 @@ Extend the OmGithub game catalog with searchable metadata and import the missing
 
 Preserve the existing immutable publication model. Keep repository paths and game paths as the preferred identity. Keep commit-based links only for backwards compatibility.
 
+## Publication boundary
+
+Accept only a reviewed direct GitHub `tree` directory link or `blob` HTML-file link for automatic publication. Reject repository-root links, catalog repositories, and list pages. Publish only that selected directory or file. Keep list-derived prompts as pending evidence until an exact already-published game path matches. Do not discover or queue child HTML files automatically.
+
 ## Store metadata
 
 Add these fields to every published game record:
