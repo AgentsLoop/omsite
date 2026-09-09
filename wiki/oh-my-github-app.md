@@ -25,13 +25,14 @@ write, maintain, or admin access for the issue author.
 Set it to `everyone` to accept any author. Let visitors create an issue titled
 `/OpenCode Build a maze game`. Use the exact `/OpenCode` word in the title.
 Let the workflow add `OpenCode` and execute within that opened-issue run.
-Use ordinary execution-label requests in either access mode.
+Attach the execution label when creating the issue in either access mode.
 
 ## Prepare and execute
 
-Validate the request on the Actions runner with the repository token. Store
-request records as GitHub Actions bot comments on the issue. Keep these
-comments for duplicate detection and explicit failed-run retries.
+Validate author access and resolve the target branch on the Actions runner.
+Use one `issues.opened` run per issue. Serialize jobs with Actions concurrency.
+Start an existing issue from Actions → OpenCode → Run workflow and enter its
+issue number. Read the current issue and branch on each manual start.
 
 Append `branch: <existing-branch>` to select project checkout. Freeze its
 commit during preparation and use the branch as the result base. Load the

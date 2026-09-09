@@ -56,12 +56,12 @@ function repositoryMock(existing = null) {
 
 test('native wrapper isolates validation and passes every validated execution input', () => {
   const workflow = repositoryWorkflow('central', 'runtime', sha)
-  assert.match(workflow, /types: \[opened, labeled\]/)
-  assert.match(workflow, /if: github.event.label.name == 'OpenCode'/)
-  assert.doesNotMatch(workflow, /workflow_dispatch|dispatches|secrets: inherit/)
+  assert.match(workflow, /types: \[opened\]/)
+  assert.match(workflow, /workflow_dispatch/)
+  assert.doesNotMatch(workflow, /dispatches|secrets: inherit/)
   const prepare = workflow.split('  prepare:')[1].split('  opencode:')[0]
   assert.doesNotMatch(prepare, /secrets/)
-  assert.match(prepare, /OPENCODE_ACCESS == 'everyone'/)
+  assert.match(prepare, /github.event.issue.labels/)
   assert.match(prepare, /\/OpenCode/)
   assert.match(prepare, new RegExp(`runtime_ref: ${sha}`))
   assert.match(workflow, /if: needs.prepare.outputs.approved == 'true'/)

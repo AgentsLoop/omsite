@@ -61,17 +61,23 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '',
     'on:',
     '  issues:',
-    '    types: [opened, labeled]',
+    '    types: [opened]',
+    '  workflow_dispatch:',
+    '    inputs:',
+    '      issue_number:',
+    '        description: Existing issue to run',
+    '        required: true',
+    '        type: string',
     '',
     'permissions: {}',
     '',
     'concurrency:',
-    "  group: ${{ (github.event.label.name == 'OpenCode' || (github.event.action == 'opened' && vars.OPENCODE_ACCESS == 'everyone' && contains(github.event.issue.title, '/OpenCode') && !contains(github.event.issue.labels.*.name, 'OpenCode'))) && format('opencode-issue-{0}-{1}', github.repository, github.event.issue.number) || format('opencode-skipped-{0}', github.run_id) }}",
+    '  group: opencode-issue-${{ github.repository }}-${{ github.event.issue.number || inputs.issue_number }}',
     '  cancel-in-progress: false',
     '',
     'jobs:',
     '  prepare:',
-    "    if: github.event.label.name == 'OpenCode' || (github.event.action == 'opened' && vars.OPENCODE_ACCESS == 'everyone' && contains(github.event.issue.title, '/OpenCode') && !contains(github.event.issue.labels.*.name, 'OpenCode'))",
+    "    if: github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'OpenCode') || contains(github.event.issue.title, '/OpenCode')",
     '    permissions:',
     '      contents: read',
     '      issues: write',
@@ -179,7 +185,7 @@ export async function ensureIssueWorkflow({ owner, repo }, config, requestFetch 
   if (content === workflow) return { installationToken, repository, workflowSha, installed: false }
   // Preserve the central repository's reviewed local caller.
   if (owner.toLowerCase() === centralOwner.toLowerCase() && repo.toLowerCase() === centralRepo.toLowerCase()) {
-    if (!content.includes('types: [opened, labeled]') || !content.includes('uses: ./.github/workflows/opencode-prepare.yml') || !content.includes('uses: ./.github/workflows/opencode-reusable.yml')) {
+    if (!content.includes('types: [opened]') || !content.includes('uses: ./.github/workflows/opencode-prepare.yml') || !content.includes('uses: ./.github/workflows/opencode-reusable.yml')) {
       throw new Error('Install and review the central repository issue listener before accepting requests')
     }
     return { installationToken, repository, workflowSha, installed: false }
