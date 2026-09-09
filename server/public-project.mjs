@@ -1,4 +1,5 @@
 import AdmZip from 'adm-zip'
+import { CATALOG_METADATA_FILE, readCatalogMetadata, mergeCatalogMetadata } from './catalog-metadata.mjs'
 import { createHash, randomUUID } from 'node:crypto'
 import { rename } from 'node:fs/promises'
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -113,6 +114,7 @@ function deploymentOutputName(entry, root, archiveRootPath, includeScreenshots =
   if (!relative.startsWith(root)) return ''
   const outputName = relative.slice(root.length)
   if (!outputName) return ''
+  if (outputName.split('/').includes(CATALOG_METADATA_FILE)) return ''
   const first = outputName.split('/')[0]
   if (first.startsWith('.') || first === 'node_modules') return ''
   if (!includeScreenshots && first === 'screenshots') return ''
@@ -215,6 +217,7 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
   const zip = new AdmZip(archive)
   const entries = zip.getEntries()
   const slug = projectSlug(owner, repo, sha, projectPath, sourceEntry)
+  const catalogMetadata = archiveBuffer ? readCatalogMetadata(entries, archiveRoot(entries)) : null
   const destination = resolve(gamesDir, slug)
   if (!destination.startsWith(`${resolve(gamesDir)}${sep}`)) throw new Error('Unsafe project destination')
   const extracted = extractDeployment(zip, destination, Boolean(archiveBuffer), archiveBuffer ? '' : projectPath, archiveBuffer ? '' : sourceEntry)
@@ -227,6 +230,7 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
       slug,
       title: String(metadata.title || repository.name).slice(0, 160),
       description: String(metadata.description || repository.description || commit.commit?.message?.split('\n')[0] || 'Published from a public GitHub commit.').slice(0, 500),
+      ...mergeCatalogMetadata({ existing: existing || {}, extracted: catalogMetadata || {}, htmlDescription: metadata.description, repositoryDescription: repository.description, topics: repository.topics || [] }),
       repo_owner: repository.owner?.login || owner,
       repo: repository.name || repo,
       commit: sha.toLowerCase(),

@@ -54,11 +54,40 @@ jobs:
           repository: ${{ inputs.source_owner }}/${{ inputs.source_repo }}
           ref: ${{ inputs.source_sha }}
           path: source
+          persist-credentials: false
+
+      - name: Check out trusted metadata extractor
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          path: metadata-runtime
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Install OpenCode
+        shell: bash
+        run: /usr/bin/time -p npm install --global opencode-ai
+
+      - name: Extract and validate committed catalog metadata
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          OPENCODE_AUTH_CONTENT: ${{ secrets.OPENCODE_AUTH_JSON }}
+          OPENCODE_MODEL: ${{ vars.OPENCODE_METADATA_MODEL || 'opencode/muse-spark-1.3-contributor-free' }}
+          OMGHITHUB_SOURCE_DIR: ${{ github.workspace }}/source
+          OMGHITHUB_SOURCE_OWNER: ${{ inputs.source_owner }}
+          OMGHITHUB_SOURCE_REPO: ${{ inputs.source_repo }}
+          OMGHITHUB_SOURCE_SHA: ${{ inputs.source_sha }}
+          OMGHITHUB_SOURCE_PATH: ${{ inputs.source_path }}
+          OMGHITHUB_SOURCE_ENTRY: ${{ inputs.source_entry }}
+          OMGHITHUB_METADATA_OUTPUT: ${{ runner.temp }}/omgithub-catalog-metadata.json
+        run: /usr/bin/time -p node metadata-runtime/scripts/extract-catalog-metadata.mjs
 
       - name: Install dependencies
         working-directory: source
@@ -192,6 +221,7 @@ jobs:
           OMGHITHUB_SOURCE_ENTRY: ${{ inputs.source_entry }}
         run: |
           set -euo pipefail
+          /usr/bin/time -p cp "$RUNNER_TEMP/omgithub-catalog-metadata.json" omgithub-build/.omgithub-metadata.json
           (cd omgithub-build && zip -qr ../omgithub-build.zip .)
           test -s omgithub-build.zip
           curl --fail --silent --show-error --retry 3 --retry-delay 2 \

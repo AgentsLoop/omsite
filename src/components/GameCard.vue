@@ -5,10 +5,11 @@
       <span class="status-chip">{{ project.status || 'Published' }}</span>
       <span v-if="project.github_stars !== null && project.github_stars !== undefined" class="stars-chip">★ {{ formatStars(project.github_stars) }}</span>
     </div>
-    <div class="game-card-copy"><h3>{{ project.title }}</h3><p>{{ project.description || 'Created with OmGithub' }}</p></div>
+    <div class="game-card-copy"><h3>{{ project.title }}</h3><p>{{ project.description || 'Created with OmGithub' }}</p><ProjectMetadata :project="project" /></div>
   </RouterLink>
 </template>
 <script setup>
+import ProjectMetadata from './ProjectMetadata.vue'
 defineProps({ project: { type: Object, required: true } })
 function formatStars(value) {
   const stars = Number(value || 0)

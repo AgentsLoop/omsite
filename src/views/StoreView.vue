@@ -1,9 +1,10 @@
 <template>
   <main v-if="project" class="store-page">
     <section class="store-hero">
-      <div><p class="eyebrow orange">OMGHITHUB STORE</p><h1>{{ project.title }}</h1><p class="store-description">{{ project.description }}</p><div class="store-buttons"><a class="play" :href="project.play_url" target="_blank">Play</a><a class="install" :href="project.install_url">Install</a><button @click="share">Share</button><RouterLink :to="`/${project.owner}`" class="creator"><img :src="project.owner_avatar" alt="" />By {{ project.owner }}</RouterLink></div><p class="source-note">Published from <a :href="project.store_path">{{ project.store_path }}</a> · <a :href="project.github_url" target="_blank">source commit</a></p></div><div class="store-icon">O</div>
+      <div><p class="eyebrow orange">OMGHITHUB STORE</p><h1>{{ project.title }}</h1><p class="store-description">{{ project.description }}</p><div class="store-buttons"><a class="play" :href="`/api/projects/${encodeURIComponent(project.id)}/play`" target="_blank" rel="noopener">Play</a><a class="install" :href="project.install_url">Install</a><button @click="share">Share</button><RouterLink :to="`/${project.owner}`" class="creator"><img :src="project.owner_avatar" alt="" />By {{ project.owner }}</RouterLink></div><p role="status">{{ shareStatus }}</p><p class="source-note">Published from <a :href="project.store_path">{{ project.store_path }}</a> · <a :href="project.github_url" target="_blank">source commit</a></p></div><div class="store-icon">O</div>
     </section>
-    <section class="screens-section"><h2>Screenshots</h2><div class="store-shots"><img v-for="shot in project.screenshots" :key="shot" :src="shot" alt="Project screenshot" @click="selected = shot" /></div><p v-if="!project.screenshots.length">No final screenshots were committed under a screenshots directory.</p></section>
+    <ProjectSocial :key="`${route.fullPath}:${project.id}`" :project="project" :me="me" />
+    <section class="screens-section"><h2>Screenshots</h2><div class="store-shots"><img v-for="shot in project.screenshots" :key="shot" :src="shot" alt="Project screenshot" @click="selected = shot" /></div><p v-if="!project.screenshots?.length">No final screenshots were committed under a screenshots directory.</p></section>
     <div v-if="selected" class="lightbox" @click="selected = ''"><img :src="selected" alt="Screenshot enlarged" /></div>
   </main>
   <main v-else-if="publication && publication.state !== 'failed'" class="publication-page">
@@ -20,9 +21,13 @@
   <main v-else class="studio-loading"><span v-if="loading" class="spinner large"></span><p v-else>{{ error || publication?.message || 'Project unavailable.' }}</p></main>
 </template>
 <script setup>
-import { computed, ref, watch } from 'vue'; import { useRoute } from 'vue-router'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'; import { useRoute } from 'vue-router'
+import ProjectSocial from '../components/ProjectSocial.vue'
 import { useJsonResource } from '../composables/useJsonResource'
 const route = useRoute(), selected = ref('')
+defineProps({ me: Object })
+const shareStatus = ref('')
+let shareGeneration = 0
 const { data: publication, loading, error } = useJsonResource(() => {
   const { owner, repo, sha } = route.params
   const base = `/api/github/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
@@ -39,6 +44,11 @@ const steps = [
   { index: 3, id: 'publishing', label: 'Validating and publishing ZIP' }
 ]
 const currentStep = computed(() => ({ checking: 0, queued: 1, building: 2, publishing: 3, published: 4 }[publication.value?.state] ?? 0))
-async function share() { await navigator.clipboard?.writeText(location.href) }
-watch(() => route.fullPath, () => { selected.value = '' })
+async function share() {
+  const current = ++shareGeneration
+  try { await navigator.clipboard.writeText(location.href); if (current === shareGeneration) shareStatus.value = 'Link copied.' }
+  catch { if (current === shareGeneration) shareStatus.value = 'Could not copy. Copy the link from the address bar.' }
+}
+watch(() => route.fullPath, () => { selected.value = ''; shareStatus.value = ''; shareGeneration++ }, { flush: 'sync' })
+onBeforeUnmount(() => { shareGeneration++ })
 </script>

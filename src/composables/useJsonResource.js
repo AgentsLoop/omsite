@@ -23,6 +23,6 @@ export function useJsonResource(source, { pollMs = 0, acceptStatuses = [], shoul
       }
     }
     load()
-  }, { immediate: true })
+  }, { immediate: true, flush: 'sync' })
   return { data, error, loading }
 }

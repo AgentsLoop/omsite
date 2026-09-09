@@ -10,6 +10,9 @@ import { dispatchPublicBuild } from './github-build.mjs'
 import { ensureIssueWorkflow, parseIssueRequest, extractUrls, github, setupRepositories, verifyWebhookSignature } from './github.mjs'
 import { materializePublicProject, resolveLatestPublicCommit, resolvePublicCommit, validateProjectPath, validateSource, validateSourceEntry } from './public-project.mjs'
 import { createStore } from './store.mjs'
+import { createProjectSocial } from './project-social.mjs'
+import { createSocialRouter } from './social-routes.mjs'
+import { createGithubCache } from './github-cache.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const port = Number(process.env.PORT || 8787)
@@ -38,11 +41,7 @@ const githubApp = {
 const sessionSecret = process.env.SESSION_SECRET || randomBytes(32).toString('hex')
 mkdirSync(gamesDir, { recursive: true })
 
-function publicGithubFetch(url, options = {}) {
-  const headers = { ...(options.headers || {}) }
-  if (githubToken) headers.authorization = `Bearer ${githubToken}`
-  return fetch(url, { ...options, headers })
-}
+const publicGithubFetch = createGithubCache(dataDir, { token: githubToken })
 
 let firestore = null
 const firebaseCredential = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 ? Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8') : '')
@@ -55,6 +54,7 @@ if (firebaseCredential) {
   } catch (error) { console.warn(`Firebase unavailable, using local persistence: ${error.message}`) }
 }
 const store = createStore(dataDir, firestore)
+const social = createProjectSocial(dataDir, firestore)
 const sessions = new Map()
 const pendingBuilds = new Map()
 const publications = new Map()
@@ -91,9 +91,12 @@ function hostSlug(req) {
   return /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(slug) ? slug : ''
 }
 function safeGamePath(slug) { const path = resolve(gamesDir, slug); if (!path.startsWith(`${resolve(gamesDir)}${sep}`)) throw new Error('Unsafe game path'); return path }
-function publicProject(project) { const { local_dir, ...safe } = project; return safe }
+function publicProject(project) {
+  const keys = ['id', 'slug', 'title', 'description', 'description_source', 'repo_owner', 'repo', 'commit', 'owner_login', 'owner_avatar', 'screenshots', 'status', 'url', 'install_url', 'public_path', 'store_path', 'legacy_store_path', 'github_url', 'published_at', 'github_stars', 'github_stars_updated_at', 'tags', 'prompt', 'prompt_source', 'prompt_source_url', 'metadata_updated_at']
+  return Object.fromEntries(keys.filter(key => project[key] !== undefined).map(key => [key, project[key]]))
+}
 function card(project) { return { ...publicProject(project), issue_path: project.issue ? `/${project.repo_owner}/${project.repo}/issues/${project.issue}` : '', store_path: project.public_path || project.store_path || (project.commit ? `/${project.repo_owner}/${project.repo}/tree/${project.commit}` : ''), screenshot: project.screenshots?.[0] || '', status: project.status || 'published' } }
-function storePayload(project) { return { title: project.title, description: project.description, commit: project.commit, status: project.status, github_url: project.github_url, owner: project.owner_login, owner_avatar: project.owner_avatar, screenshots: project.screenshots, play_url: project.url, install_url: project.install_url, public_path: project.public_path || '', store_path: project.public_path || project.store_path } }
+function storePayload(project) { return { ...publicProject(project), owner: project.owner_login, screenshots: project.screenshots || [], play_url: project.url, public_path: project.public_path || '', store_path: project.public_path || project.store_path } }
 function namedPublicPath(owner, repo, ref = '', projectPath = '', routeKind = 'tree', sourceEntry = '') {
   const routePath = ref ? `/${routeKind}/${ref}` : ''
   return `/${owner}/${repo}${routePath}${projectPath ? `/${projectPath}` : ''}${sourceEntry ? `/${sourceEntry}` : ''}`
@@ -146,7 +149,7 @@ async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref
   projectPath = validateProjectPath(projectPath)
   const cached = await store.byPublicPath(publicPath)
   if (cached) return { state: 'published', project: cached, error: '', runId: '', promise: Promise.resolve(cached) }
-  const legacyCached = await store.byRepositoryPath(sourceOwner, sourceRepo, projectPath)
+  const legacyCached = await store.byRepositoryPath(sourceOwner, sourceRepo, projectPath, sourceEntry)
   if (legacyCached) {
     const namedProject = legacyCached.public_path === publicPath && legacyCached.store_path === publicPath
       ? legacyCached
@@ -225,7 +228,7 @@ app.get('/auth/github/callback', async (req, res) => {
     res.append('set-cookie', `omgithub_oauth=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${origin.startsWith('https:') ? '; Secure' : ''}`)
     const tokenResponse = await fetch('https://github.com/login/oauth/access_token', { method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify({ client_id: process.env.GITHUB_CLIENT_ID, client_secret: process.env.GITHUB_CLIENT_SECRET, code: req.query.code, redirect_uri: `${origin}/auth/github/callback` }) })
     const tokenData = await tokenResponse.json(); if (!tokenData.access_token) throw new Error(tokenData.error_description || 'GitHub did not return a token')
-    const profile = await github('/user', tokenData.access_token); setSession(res, { login: profile.login, name: profile.name, avatar_url: profile.avatar_url, html_url: profile.html_url, token: tokenData.access_token })
+    const profile = await github('/user', tokenData.access_token); setSession(res, { id: profile.id, login: profile.login, name: profile.name, avatar_url: profile.avatar_url, html_url: profile.html_url, token: tokenData.access_token })
     res.redirect(`/${profile.login}`)
   } catch (error) { res.status(400).send(`GitHub sign-in failed: ${error.message}`) }
 })
@@ -252,7 +255,8 @@ app.post('/api/github/webhooks', express.raw({ type: 'application/json', limit: 
 
 app.use(express.json({ limit: '2mb' }))
 app.get('/api/me', (req, res) => { const user = userFor(req); res.json({ user: user ? { login: user.login, name: user.name, avatar_url: user.avatar_url, html_url: user.html_url } : null }) })
-app.get('/api/projects', async (req, res, next) => { try { const user = userFor(req); let rows = await store.all(); if (req.query.mine === '1') rows = user ? rows.filter(row => row.owner_login?.toLowerCase() === user.login.toLowerCase()) : []; res.json({ projects: rows.map(card) }) } catch (e) { next(e) } })
+app.use('/api/projects', createSocialRouter({ store, social, userFor, origin, sessionSecret }))
+app.get('/api/projects', async (req, res, next) => { try { const user = userFor(req); let rows = await store.all(); if (req.query.mine === '1') rows = user ? rows.filter(row => row.owner_login?.toLowerCase() === user.login.toLowerCase()) : []; res.json({ projects: await Promise.all(rows.map(async row => ({ ...card(row), ...await social.summary(row) }))) }) } catch (e) { next(e) } })
 app.get('/api/profiles/:login', async (req, res, next) => { try { const profile = await github(`/users/${encodeURIComponent(req.params.login)}`, githubToken); const rows = (await store.all()).filter(row => row.owner_login?.toLowerCase() === req.params.login.toLowerCase()); res.json({ profile, projects: rows.map(card) }) } catch (e) { next(e) } })
 
 app.post('/api/issues', async (req, res, next) => {

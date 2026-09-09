@@ -18,6 +18,23 @@ npm run dev
 Build the frontend with `npm run build` before using `npm start` to serve the
 production frontend.
 
+Publish repository builds with catalog metadata. Configure `OPENCODE_API_KEY`
+or `OPENCODE_AUTH_JSON` in GitHub Actions. Let the workflow extract one merged
+tag list, an evidence-backed description, an exact recorded prompt when one
+exists, and a private complexity score. Display the prompt, tags, public
+rating, review count, comments, and deduplicated play count on the store page.
+
+Scan the maintained source list before importing games:
+
+```sh
+GITHUB_TOKEN=... npm run catalog:scan
+```
+
+Review `DATA_DIR/catalog-import-report.json`. Run `npm run catalog:publish` to
+submit missing games to OmGithub. Run `npm run catalog:prompts` with Firebase
+credentials to apply exact prompts to matching published project records.
+Reuse the report and disk cache when a run is interrupted.
+
 The Discover section supports `Latest` and `GitHub stars` sorting. Read both
 values from the server-side project catalog. Backfill existing rows with
 `npm run backfill:github-stars` inside the production container after setting

@@ -13,6 +13,7 @@ COPY package*.json ./
 RUN npm install --omit=dev --ignore-scripts && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY server ./server
+COPY scripts ./scripts
 RUN mkdir -p /app/data && chown -R node:node /app
 USER node
 EXPOSE 8787

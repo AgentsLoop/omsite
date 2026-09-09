@@ -124,6 +124,8 @@ test('materializes a root-level GitHub Actions build ZIP', async () => {
   const sha = 'e'.repeat(40)
   const zip = new AdmZip()
   zip.addFile('index.html', Buffer.from('<title>Built App</title>'))
+  zip.addFile('.omgithub-metadata.json', Buffer.from(JSON.stringify({ schema_version: 1, description: 'A generated game description.', description_source: 'opencode', prompt: '', tags: ['ThreeJS'], complexity_score: 5, metadata_source: 'opencode', metadata_updated_at: '2026-09-09T00:00:00.000Z', metadata_evidence: ['description', 'tags', 'complexity_score'].map(field => ({ field, file: 'app.js', line_start: 1, line_end: 1 })) })))
+  zip.addFile('assets/.omgithub-metadata.json', Buffer.from('private nested metadata'))
   zip.addFile('assets/app.js', Buffer.from('console.log("built")'))
   zip.addFile('screenshots/final-build.png', Buffer.from('png'))
   const rows = []
@@ -143,6 +145,13 @@ test('materializes a root-level GitHub Actions build ZIP', async () => {
   assert.equal(project.build_method, 'github-actions')
   assert.equal(project.build_transport, 'omgithub-zip')
   assert.equal(project.build_run_id, '42')
+  assert.equal(project.description, 'A generated game description.')
+  assert.equal(project.description_source, 'opencode')
+  assert.equal(project.complexity_score, 5)
+  assert.deepEqual(project.tags, ['three.js'])
+  assert.equal(project.metadata_incomplete, true)
+  assert.equal(existsSync(join(project.local_dir, '.omgithub-metadata.json')), false)
+  assert.equal(existsSync(join(project.local_dir, 'assets/.omgithub-metadata.json')), false)
   assert.deepEqual(project.screenshots, [`https://owner-repo-${'e'.repeat(12)}.omgithub.com/screenshots/final-build.png`])
 })
 

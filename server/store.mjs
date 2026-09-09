@@ -14,6 +14,11 @@ export function createStore(dataDir, firestore = null) {
     } finally { rmSync(temporary, { force: true }) }
   }
   return {
+    async byId(id) {
+      if (!firestore) return read().find(row => row.id === id) || null
+      const snap = await firestore.collection('omgithub_projects').doc(id).get()
+      return snap.exists ? { ...snap.data(), id: snap.id } : null
+    },
     async all() {
       if (!firestore) return read()
       const snap = await firestore.collection('omgithub_projects').orderBy('published_at', 'desc').limit(200).get()
@@ -34,14 +39,16 @@ export function createStore(dataDir, firestore = null) {
       const snap = await firestore.collection('omgithub_projects').where('public_path', '==', publicPath).limit(1).get()
       return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() }
     },
-    async byRepositoryPath(owner, repo, projectPath = '') {
+    async byRepositoryPath(owner, repo, projectPath = '', sourceEntry = '') {
       const rows = firestore ? await this.all() : read()
       const prefix = `${String(owner).toLowerCase()}/${String(repo).toLowerCase()}@`
       return rows
         .filter(row => {
           if (row.status !== 'published' || !row.source_key?.startsWith(prefix)) return false
           const source = row.source_key.slice(prefix.length)
-          return projectPath ? source === `${source.match(/^[0-9a-f]{40}/i)?.[0] || ''}:${projectPath}` : /^[0-9a-f]{40}$/i.test(source)
+          const sha = source.match(/^[0-9a-f]{40}/i)?.[0]
+          if (!sha) return false
+          return source === `${sha}${projectPath ? `:${projectPath}` : ''}${sourceEntry ? `:${sourceEntry}` : ''}`
         })
         .sort((left, right) => String(right.published_at || '').localeCompare(String(left.published_at || '')))[0] || null
     },

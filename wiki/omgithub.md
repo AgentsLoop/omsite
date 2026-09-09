@@ -28,6 +28,19 @@ for every repeat visit and progress poll. Resolve a branch or tag only on the
 first uncached visit. Keep the full commit-SHA route available only as a
 backwards-compatible route.
 
+Cache GitHub repository and commit metadata on disk. Reuse stale successful
+responses when GitHub returns a rate-limit or temporary server error.
+
+Run OpenCode in the trusted build workflow. Generate a factual description
+when source metadata has none. Extract only prompts that match cited committed
+text. Merge OpenCode tags with GitHub repository topics. Store the evidence and
+complexity score privately. Seed the public rating from complexity, then let
+signed-in user ratings control the average as votes accumulate.
+
+Count one play per project and visitor in a rolling 24-hour period. Let each
+signed-in GitHub user keep one editable review and one editable rating per
+project. Keep the rating when the user deletes only the comment.
+
 Store `stargazers_count` as `github_stars` when publishing a project. Backfill
 older catalog rows once with the authenticated migration command. Sort the
 Discover cards from cached `github_stars` or `published_at` values. Do not call
