@@ -64,9 +64,9 @@ export async function dispatchPublicBuild({
   let run = null
   while (Date.now() < deadline) {
     if (run) {
-      run = await githubJson(`/repos/${encodeURIComponent(workflowOwner)}/${encodeURIComponent(workflowRepo)}/actions/runs/${run.id}`, token, requestFetch)
+      run = await githubJson(`/repos/${encodeURIComponent(workflowOwner)}/${encodeURIComponent(workflowRepo)}/actions/runs/${run.id}`, token, requestFetch, { cache: false })
     } else {
-    const data = await githubJson(`${workflow}/runs?event=workflow_dispatch&branch=${encodeURIComponent(workflowRef)}&per_page=50`, token, requestFetch)
+    const data = await githubJson(`${workflow}/runs?event=workflow_dispatch&branch=${encodeURIComponent(workflowRef)}&per_page=50`, token, requestFetch, { cache: false })
     run = (data.workflow_runs || []).find(candidate => String(candidate.display_title || '').includes(requestId))
     if (run) onStatus({ phase: run.status === 'completed' ? 'publishing' : 'building', runId: String(run.id) })
     }

@@ -19,3 +19,14 @@ test('GitHub cache persists metadata across instances and reuses stale data on r
   const expired = createGithubCache(directory, { ttlMs: -1, requestFetch: async () => new Response('Rate limited', { status: 429 }) })
   assert.deepEqual(await (await expired(url)).json(), { topics: ['game'] })
 })
+
+test('GitHub cache bypasses disk data for live workflow polling', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'omgithub-cache-live-'))
+  let calls = 0
+  const url = 'https://api.github.com/repos/owner/repo/actions/runs?event=workflow_dispatch'
+  const cached = createGithubCache(directory, { requestFetch: async () => { calls++; return Response.json({ calls }) } })
+
+  assert.deepEqual(await (await cached(url)).json(), { calls: 1 })
+  assert.deepEqual(await (await cached(url, { cache: false })).json(), { calls: 2 })
+  assert.equal(calls, 2)
+})

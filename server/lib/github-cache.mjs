@@ -10,8 +10,11 @@ export function createGithubCache(dataDir, { requestFetch = fetch, token = '', t
     const parsed = new URL(url)
     const headers = { ...(options.headers || {}) }
     if (parsed.hostname === 'api.github.com' && token) headers.authorization = `Bearer ${token}`
-    if (parsed.hostname !== 'api.github.com' || (options.method && options.method !== 'GET') || parsed.pathname.includes('/zipball/')) {
-      return requestFetch(url, { ...options, headers })
+    const bypassCache = options.cache === false
+    const requestOptions = { ...options, headers }
+    delete requestOptions.cache
+    if (parsed.hostname !== 'api.github.com' || (options.method && options.method !== 'GET') || parsed.pathname.includes('/zipball/') || bypassCache) {
+      return requestFetch(url, requestOptions)
     }
     const key = createHash('sha256').update(String(url)).digest('hex')
     const file = join(directory, `${key}.json`)

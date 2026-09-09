@@ -99,6 +99,8 @@ published files on their project subdomain.
 Reuse a stored Actions deployment for later visits. Share concurrent
 publication requests for the same named path and source commit within one
 server process. Use one server process for the in-memory build registry.
+Cache GitHub repository metadata on the server. Bypass that cache only while
+polling the live Actions run created by the current publication request.
 
 Set `OMGHITHUB_BUILD_ENABLED=false` only to publish committed browser files
 directly. In that mode, provide `dist/index.html` or root `index.html` in the
