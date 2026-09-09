@@ -195,6 +195,9 @@ jobs:
             capture_index="$RUNNER_TEMP/omgithub-index.html"
             cp "$build_root/index.html" "$capture_index"
             sed -i "s/powerPreference: *'high-performance'/powerPreference: 'low-power'/g; s/powerPreference: *\"high-performance\"/powerPreference: 'low-power'/g" "$build_root/index.html"
+            if [[ -d "$build_root/assets" ]]; then
+              find "$build_root/assets" -type f -name '*.js' -exec sed -i "s/powerPreference: *'high-performance'/powerPreference: 'low-power'/g; s/powerPreference: *\"high-performance\"/powerPreference: 'low-power'/g" {} +
+            fi
             python3 -c 'from pathlib import Path; import sys; p=Path(sys.argv[1]); h=p.read_text(); s="""<script>addEventListener("load",()=>setTimeout(()=>document.querySelector("#start,[data-game-start]")?.click(),150))</script>"""; p.write_text(h.replace("</body>", s+"</body>"))' "$build_root/index.html"
             python3 -m http.server 4173 --directory "$build_root" > /tmp/omgithub-preview.log 2>&1 &
             server_pid=$!
