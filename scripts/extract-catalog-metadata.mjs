@@ -21,6 +21,18 @@ export function validateSourceEvidence(metadata, files, sourceBase) {
   return validated
 }
 
+export function sourceFilePriority(name, selected = '') {
+  const inSelection = !selected || name === selected || name.startsWith(`${selected}/`)
+  const base = name.split('/').at(-1).toLowerCase()
+  let kind = 5
+  if (base === 'package.json') kind = 0
+  else if (/^index\.html?$/.test(base)) kind = 1
+  else if (/^readme[^/]*\.(?:md|txt|json)$/.test(base)) kind = 2
+  else if (/^prompt[^/]*\.(?:md|txt|json)$/.test(base)) kind = 3
+  else if (/\.(?:html?|[cm]?[jt]sx?)$/.test(base)) kind = 4
+  return Number(!inSelection) * 10 + kind
+}
+
 export async function extractCatalogMetadata(env = process.env, { repository: cachedRepository } = {}) {
   const source = resolve(env.OMGHITHUB_SOURCE_DIR || 'source')
   if (!/^[0-9a-f]{40}$/i.test(env.OMGHITHUB_SOURCE_SHA || '')) throw new Error('A full source commit SHA is required')
@@ -37,10 +49,7 @@ export async function extractCatalogMetadata(env = process.env, { repository: ca
   }
   const names = (snapshot ? snapshotFiles(source) : execFileSync('git', ['ls-files', '-z'], { cwd: source, encoding: 'utf8' }).split('\0').filter(Boolean))
     .filter(name => !/(?:^|\/)(?:package-lock\.json|composer\.lock|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|vendor|node_modules|dist|build|coverage)(?:\/|$)/i.test(name))
-    .sort((left, right) => {
-      const priority = name => Number(!(selected && name.startsWith(`${selected}/`))) * 4 + Number(!/(?:^|\/)(?:readme[^/]*|prompt[^/]*)\.(?:md|txt|json)$/i.test(name)) * 2 + Number(!/(?:package\.json|\.html?)$/i.test(name))
-      return priority(left) - priority(right) || left.localeCompare(right)
-    })
+    .sort((left, right) => sourceFilePriority(left, selected) - sourceFilePriority(right, selected) || left.localeCompare(right))
   const files = {}
   let bytes = 0
   for (const name of names) {
@@ -50,8 +59,8 @@ export async function extractCatalogMetadata(env = process.env, { repository: ca
     const size = snapshot ? lstatSync(join(source, name)).size : Number(execFileSync('git', ['cat-file', '-s', `HEAD:${name}`], { cwd: source, encoding: 'utf8' }))
     const content = snapshot ? readFileSync(join(source, name)).subarray(0, 200000) : execFileSync('git', ['show', `HEAD:${name}`], { cwd: source, maxBuffer: 4 * 1024 * 1024 }).subarray(0, 200000)
     if (content.includes(0)) continue
+    if (bytes + content.length > 1500000) continue
     bytes += content.length
-    if (bytes > 1500000) break
     files[name] = `${content.toString('utf8')}${size > content.length ? '\n<!-- Source truncated by OmGithub after 200000 bytes. -->' : ''}`
   }
   if (!Object.keys(files).length) throw new Error('No source text available for metadata extraction')
