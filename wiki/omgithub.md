@@ -18,6 +18,15 @@ selected HTML file to `index.html`, and preserve the `blob` URL as the store
 path. For example, use
 `https://omgithub.com/Ayi1337/gpt6-astra-one-shot-games/blob/main/mosswing/mosswing.html`.
 
+## Submit reviewed metadata
+
+Review source code before publication. Submit one direct `tree` or `blob` link
+with `POST /api/publish` from the signed-in OmGithub site. Send `source_url`
+and optional `metadata`. Support `title`, `description`, `tags`, `prompt`, and
+`prompt_source_url`. Store a prompt only when its source URL identifies the
+recorded prompt. Do not submit repository roots, list pages, or unreviewed
+links. Do not bulk-submit a list.
+
 Keep the source repository public. Supply no visitor credentials. Configure the
 server's `GITHUB_TOKEN` to dispatch
 [the build workflow](../.github/workflows/omgithub-build.yml).

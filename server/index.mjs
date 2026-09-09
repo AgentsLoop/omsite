@@ -13,6 +13,8 @@ import { createStore } from './store.mjs'
 import { createProjectSocial } from './project-social.mjs'
 import { createSocialRouter } from './social-routes.mjs'
 import { createGithubCache } from './github-cache.mjs'
+import { normalizeTags, validateManualPublishMetadata } from './catalog-metadata.mjs'
+import { isDirectGameSource, normalizeSource } from './catalog-import-lib.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const port = Number(process.env.PORT || 8787)
@@ -83,6 +85,10 @@ function limited(req) {
   const key = requestIp(req), now = Date.now(), entries = (rate.get(key) || []).filter(value => now - value < 3600000)
   if (entries.length >= 5) return true; entries.push(now); rate.set(key, entries); return false
 }
+function sameOrigin(req) {
+  const value = String(req.headers.origin || '')
+  try { return new URL(value).origin === origin } catch { return false }
+}
 function hostSlug(req) {
   const host = String(req.hostname || '').toLowerCase()
   const matchedHost = publicHosts.find(value => host.endsWith(`.${value}`))
@@ -119,7 +125,7 @@ function publicationPayload(publication) {
     project: current.project ? storePayload(current.project) : null
   }
 }
-async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha, projectPath = '', sourceEntry = '', publicPath = '' }) {
+async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha, projectPath = '', sourceEntry = '', publicPath = '', manualMetadata = {} }) {
   validateSource(sourceOwner, sourceRepo, sha)
   projectPath = validateProjectPath(projectPath)
   sourceEntry = validateSourceEntry(sourceEntry)
@@ -127,7 +133,7 @@ async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha, pro
   const existingPublication = publications.get(sourceKey)
   if (existingPublication) return existingPublication
   const publication = { sourceKey, sha: sha.toLowerCase(), publicPath, state: 'checking', project: null, error: '', runId: '' }
-  publication.promise = publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, sourceEntry, publicPath, publication })
+  publication.promise = publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, sourceEntry, publicPath, manualMetadata, publication })
     .then(project => {
       publication.project = project
       publication.state = 'published'
@@ -145,10 +151,13 @@ async function startPublication({ owner: sourceOwner, repo: sourceRepo, sha, pro
   publications.set(sourceKey, publication)
   return publication
 }
-async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref = '', projectPath = '', sourceEntry = '', publicPath, latest = false }) {
+async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref = '', projectPath = '', sourceEntry = '', publicPath, latest = false, manualMetadata = {} }) {
   projectPath = validateProjectPath(projectPath)
   const cached = await store.byPublicPath(publicPath)
-  if (cached) return { state: 'published', project: cached, error: '', runId: '', promise: Promise.resolve(cached) }
+  if (cached) {
+    const project = Object.keys(manualMetadata).length ? await store.put({ ...cached, ...manualMetadata, tags: normalizeTags(cached.tags || [], manualMetadata.tags || []) }) : cached
+    return { state: 'published', project, error: '', runId: '', promise: Promise.resolve(project) }
+  }
   const legacyCached = await store.byRepositoryPath(sourceOwner, sourceRepo, projectPath, sourceEntry)
   if (legacyCached) {
     const namedProject = legacyCached.public_path === publicPath && legacyCached.store_path === publicPath
@@ -165,7 +174,7 @@ async function startNamedPublication({ owner: sourceOwner, repo: sourceRepo, ref
       ? await resolveLatestPublicCommit({ owner: sourceOwner, repo: sourceRepo, requestFetch: publicGithubFetch })
       : await resolvePublicCommit({ owner: sourceOwner, repo: sourceRepo, ref, requestFetch: publicGithubFetch })
     publication.sha = resolved.sha.toLowerCase()
-    publication.sourcePublication = await startPublication({ owner: sourceOwner, repo: sourceRepo, sha: resolved.sha, projectPath, sourceEntry, publicPath })
+    publication.sourcePublication = await startPublication({ owner: sourceOwner, repo: sourceRepo, sha: resolved.sha, projectPath, sourceEntry, publicPath, manualMetadata })
     const project = await publication.sourcePublication.promise
     const namedProject = project.public_path === publicPath && project.store_path === publicPath
       ? project
@@ -188,17 +197,17 @@ async function materializeForPublication({ owner: sourceOwner, repo: sourceRepo,
   return (await startPublication({ owner: sourceOwner, repo: sourceRepo, sha, projectPath, sourceEntry, publicPath })).promise
 }
 
-async function publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, sourceEntry = '', publicPath, publication }) {
+async function publishCommit({ sourceOwner, sourceRepo, sha, sourceKey, projectPath, sourceEntry = '', publicPath, manualMetadata = {}, publication }) {
   const existing = await store.bySourceKey(sourceKey)
   if (existing?.status === 'published' && existing.url) {
-    if (publicPath && (existing.public_path !== publicPath || existing.store_path !== publicPath)) return store.put({ ...existing, public_path: publicPath, store_path: publicPath })
+    if ((publicPath && (existing.public_path !== publicPath || existing.store_path !== publicPath)) || Object.keys(manualMetadata).length) return store.put({ ...existing, ...manualMetadata, tags: normalizeTags(existing.tags || [], manualMetadata.tags || []), public_path: publicPath || existing.public_path, store_path: publicPath || existing.store_path })
     return existing
   }
   if (!buildEnabled) return materializePublicProject({ owner: sourceOwner, repo: sourceRepo, sha, projectPath, sourceEntry, publicPath, baseHost, gamesDir, store, requestFetch: publicGithubFetch })
 
   for (const [token, pending] of pendingBuilds) if (pending.expiresAt < Date.now()) pendingBuilds.delete(token)
   const uploadToken = randomBytes(32).toString('hex')
-  pendingBuilds.set(uploadToken, { owner: sourceOwner, repo: sourceRepo, sha: sha.toLowerCase(), projectPath, sourceEntry, publicPath, expiresAt: Date.now() + 20 * 60 * 1000, processing: false, publication })
+  pendingBuilds.set(uploadToken, { owner: sourceOwner, repo: sourceRepo, sha: sha.toLowerCase(), projectPath, sourceEntry, publicPath, manualMetadata, expiresAt: Date.now() + 20 * 60 * 1000, processing: false, publication })
   try {
     const build = await dispatchPublicBuild({ sourceOwner, sourceRepo, sourceSha: sha, sourcePath: projectPath, sourceEntry, workflowOwner: buildOwner, workflowRepo: buildRepo, workflowFile: buildWorkflowFile, workflowRef: buildRef, token: githubToken, uploadUrl: `${origin}/api/builds`, uploadToken, onStatus: ({ phase, runId }) => { publication.state = phase; if (runId) publication.runId = runId } })
     const project = await store.bySourceKey(sourceKey)
@@ -280,6 +289,22 @@ app.post('/api/issues', async (req, res, next) => {
   } catch (e) { next(e) }
 })
 
+app.post('/api/publish', async (req, res, next) => {
+  try {
+    if (!sameOrigin(req)) return res.status(403).json({ error: 'Use the OmGithub site to submit a reviewed game.' })
+    if (limited(req)) return res.status(429).json({ error: 'Publication limit reached. Try again later.' })
+    const user = userFor(req)
+    if (!user) return res.status(401).json({ error: 'Sign in with GitHub to submit a reviewed game.' })
+    const source = normalizeSource(String(req.body?.source_url || ''))
+    if (!isDirectGameSource({ ...source, kind: 'game' })) return res.status(400).json({ error: 'Use a direct GitHub tree directory or HTML file URL.' })
+    const manualMetadata = validateManualPublishMetadata(req.body?.metadata, { sourceUrl: source.url })
+    const routeKind = source.entry ? 'blob' : 'tree'
+    const publicPath = namedPublicPath(source.owner, source.repo, source.ref, source.path, routeKind, source.entry)
+    const publication = await startNamedPublication({ owner: source.owner, repo: source.repo, ref: source.ref, projectPath: source.path, sourceEntry: source.entry, publicPath, manualMetadata })
+    res.status(publication.state === 'published' ? 200 : 202).json({ source_url: source.url, ...publicationPayload(publication) })
+  } catch (error) { next(error) }
+})
+
 app.post('/api/builds', express.raw({ type: ['application/zip', 'application/octet-stream'], limit: `${buildUploadMaxBytes}b` }), async (req, res, next) => {
   let pending = null
   try {
@@ -296,7 +321,7 @@ app.post('/api/builds', express.raw({ type: ['application/zip', 'application/oct
     if (!Buffer.isBuffer(req.body) || req.body.length === 0 || req.body.length > buildUploadMaxBytes) return res.status(413).json({ error: 'Build ZIP is empty or too large' })
     pending.processing = true
     pending.publication.state = 'publishing'
-    const project = await materializePublicProject({ owner: pending.owner, repo: pending.repo, sha: pending.sha, projectPath: pending.projectPath, sourceEntry: pending.sourceEntry, publicPath: pending.publicPath, baseHost, gamesDir, store, requestFetch: publicGithubFetch, archiveBuffer: req.body, buildRunId: String(req.headers['x-omgithub-build-run'] || '') })
+    const project = await materializePublicProject({ owner: pending.owner, repo: pending.repo, sha: pending.sha, projectPath: pending.projectPath, sourceEntry: pending.sourceEntry, publicPath: pending.publicPath, manualMetadata: pending.manualMetadata, baseHost, gamesDir, store, requestFetch: publicGithubFetch, archiveBuffer: req.body, buildRunId: String(req.headers['x-omgithub-build-run'] || '') })
     pendingBuilds.delete(token)
     res.status(201).json({ ok: true, commit: project.commit, screenshots: project.screenshots })
   } catch (e) {

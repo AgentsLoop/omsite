@@ -185,7 +185,7 @@ function pageMetadata(indexPath) {
   return { title, description }
 }
 
-export async function materializePublicProject({ owner, repo, sha, baseHost, gamesDir, store, requestFetch = fetch, archiveBuffer = null, buildRunId = '', projectPath = '', sourceEntry = '', publicPath = '' }) {
+export async function materializePublicProject({ owner, repo, sha, baseHost, gamesDir, store, requestFetch = fetch, archiveBuffer = null, buildRunId = '', projectPath = '', sourceEntry = '', publicPath = '', manualMetadata = {} }) {
   validateSource(owner, repo, sha)
   projectPath = validateProjectPath(projectPath)
   sourceEntry = validateSourceEntry(sourceEntry)
@@ -230,7 +230,7 @@ export async function materializePublicProject({ owner, repo, sha, baseHost, gam
       slug,
       title: String(metadata.title || repository.name).slice(0, 160),
       description: String(metadata.description || repository.description || commit.commit?.message?.split('\n')[0] || 'Published from a public GitHub commit.').slice(0, 500),
-      ...mergeCatalogMetadata({ existing: existing || {}, extracted: catalogMetadata || {}, htmlDescription: metadata.description, repositoryDescription: repository.description, topics: repository.topics || [] }),
+      ...mergeCatalogMetadata({ existing: existing || {}, extracted: catalogMetadata || {}, manual: manualMetadata, htmlDescription: metadata.description, repositoryDescription: repository.description, topics: repository.topics || [] }),
       repo_owner: repository.owner?.login || owner,
       repo: repository.name || repo,
       commit: sha.toLowerCase(),

@@ -12,6 +12,37 @@ export function normalizeTags(...groups) {
   }).filter(tag => /^[a-z0-9][a-z0-9.+#-]{0,47}$/.test(tag)))].slice(0, 64)
 }
 
+export function validateManualPublishMetadata(input, { sourceUrl = '' } = {}) {
+  if (input === undefined || input === null) return {}
+  if (!input || typeof input !== 'object' || Array.isArray(input)) fail('manual publish metadata must be an object')
+  const metadata = {}
+  if (input.title !== undefined) {
+    if (typeof input.title !== 'string' || !input.title.trim() || input.title.length > 160) fail('title')
+    metadata.title = input.title.trim()
+  }
+  if (input.description !== undefined) {
+    if (typeof input.description !== 'string' || !input.description.trim() || input.description.length > 500) fail('description')
+    metadata.description = input.description.trim()
+    metadata.description_source = 'manual'
+  }
+  if (input.tags !== undefined) {
+    if (!Array.isArray(input.tags) || input.tags.length > 64 || input.tags.some(tag => typeof tag !== 'string' || tag.length > 100)) fail('tags')
+    metadata.tags = normalizeTags(input.tags)
+  }
+  if (input.prompt !== undefined) {
+    if (typeof input.prompt !== 'string' || input.prompt.length > 60000) fail('prompt')
+    if (input.prompt.trim()) {
+      const promptSourceUrl = String(input.prompt_source_url || sourceUrl).trim()
+      if (!/^https:\/\/[^\s]+$/.test(promptSourceUrl)) fail('prompt_source_url')
+      metadata.prompt = input.prompt.trim()
+      metadata.prompt_source = 'manual'
+      metadata.prompt_source_url = promptSourceUrl
+    }
+  }
+  if (Object.keys(metadata).length) Object.assign(metadata, { metadata_source: 'manual', metadata_updated_at: new Date().toISOString() })
+  return metadata
+}
+
 export function validateCatalogMetadata(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) fail('expected an object')
   if (input.schema_version !== 1) fail('unsupported schema version')
@@ -50,7 +81,7 @@ export function readCatalogMetadata(entries, root = '') {
   return validateCatalogMetadata(input)
 }
 
-export function mergeCatalogMetadata({ existing = {}, extracted = {}, htmlDescription = '', repositoryDescription = '', topics = [] } = {}) {
+export function mergeCatalogMetadata({ existing = {}, extracted = {}, manual = {}, htmlDescription = '', repositoryDescription = '', topics = [] } = {}) {
   const result = { ...extracted }
   // Retain imported and manual source values on a repeat publication.
   for (const field of ['description', 'description_source', 'prompt', 'prompt_source', 'prompt_source_url']) {
@@ -58,7 +89,8 @@ export function mergeCatalogMetadata({ existing = {}, extracted = {}, htmlDescri
   }
   if (!existing.description && htmlDescription) Object.assign(result, { description: htmlDescription, description_source: 'html' })
   else if (!existing.description && repositoryDescription) Object.assign(result, { description: repositoryDescription, description_source: 'github' })
-  result.tags = normalizeTags(topics, existing.tags || [], extracted.tags || [])
+  Object.assign(result, manual)
+  result.tags = normalizeTags(topics, existing.tags || [], extracted.tags || [], manual.tags || [])
   result.metadata_incomplete = !result.prompt
   return result
 }
