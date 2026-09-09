@@ -90,7 +90,13 @@ GitHub when the user changes the sort control.
 
 Let the workflow install dependencies, build the source, select `dist/`,
 `build/`, the static root, or a selected HTML entry file, and capture a
-screenshot when needed. Upload the
+screen capture when needed. If dependency installation or the normal build
+fails, give OpenCode the immutable direct game URL and the temporary checkout.
+Require OpenCode to diagnose the selected game, repair only the temporary
+checkout, produce a deployable build, verify its local assets, and attempt a
+real `screenshots/final-build.png` capture. Do not let OpenCode commit, push,
+upload, or include unrelated sibling games. Run the deterministic workflow
+screenshot step after recovery when OpenCode does not produce one. Upload the
 deployable ZIP directly to `/api/builds` with the temporary upload token and
 matching source headers. Retain no GitHub Actions artifact.
 Sign the short-lived upload token so a public request can finish on any
