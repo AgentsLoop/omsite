@@ -251,6 +251,12 @@ jobs:
           if [[ -d screenshots ]]; then
             cp -a screenshots "$build_root/"
           fi
+          for static_dir in assets public models textures images audio sounds media; do
+            if [[ -d "$project_dir/$static_dir" ]]; then
+              mkdir -p "$build_root/$static_dir"
+              rsync -a "$project_dir/$static_dir/" "$build_root/$static_dir/"
+            fi
+          done
           test -f "$build_root/index.html"
 
       - name: Verify WebGL2 before macOS capture

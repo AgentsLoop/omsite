@@ -97,7 +97,10 @@ checkout, produce a deployable build, verify its local assets, and attempt a
 real `screenshots/final-build.png` capture. Do not let OpenCode commit, push,
 upload, or include unrelated sibling games. Run the deterministic workflow
 screenshot step after recovery when OpenCode does not produce one. Upload the
-deployable ZIP directly to `/api/builds` with the temporary upload token and
+deployable ZIP directly to `/api/builds`. Merge common static directories such
+as `assets/`, `models/`, `textures/`, `images/`, `audio/`, and `media/` from
+the selected source path into the build output so arbitrary Vite roots keep
+their runtime files. Use the temporary upload token and
 matching source headers. Retain no GitHub Actions artifact.
 Sign the short-lived upload token so a public request can finish on any
 healthy OmGithub process. Continue to validate the source commit, selected
