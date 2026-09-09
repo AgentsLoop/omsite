@@ -44,7 +44,7 @@ try {
   const { port } = server.address()
   const child = spawn(chrome, [
     '--headless=new', '--no-sandbox', '--no-first-run', '--no-default-browser-check',
-    '--use-gl=angle', '--use-angle=swiftshader-webgl', '--enable-unsafe-swiftshader',
+    '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
     '--disable-gpu-vsync', '--disable-frame-rate-limit', `--user-data-dir=${profile}`,
     '--window-size=1,1', `--screenshot=${join(profile, 'preflight.png')}`, `http://127.0.0.1:${port}/`
   ], { detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] })

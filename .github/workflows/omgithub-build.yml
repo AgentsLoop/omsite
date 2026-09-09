@@ -310,9 +310,9 @@ jobs:
             }
             chrome_args=(--headless=new --no-sandbox --no-first-run --no-default-browser-check --enable-webgl --run-all-compositor-stages-before-draw --virtual-time-budget=3000 '--window-size=960,540' "--user-data-dir=$RUNNER_TEMP/omgithub-chrome-capture")
             if [[ "${RUNNER_OS:-}" == 'macOS' ]]; then
-              chrome_args+=(--use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader --disable-gpu-vsync --disable-frame-rate-limit)
+              chrome_args+=(--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --disable-gpu-vsync --disable-frame-rate-limit)
             else
-              chrome_args+=(--disable-gpu-sandbox --use-gl=angle --use-angle=swiftshader-webgl --enable-unsafe-swiftshader)
+              chrome_args+=(--disable-gpu-sandbox --use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader)
             fi
             if ! run_with_timeout 45 "$chrome_bin" "${chrome_args[@]}" --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/; then
               run_with_timeout 15 "$chrome_bin" "${chrome_args[@]}" --virtual-time-budget=1000 --screenshot="$build_root/screenshots/final-build.png" http://127.0.0.1:4173/ || true
