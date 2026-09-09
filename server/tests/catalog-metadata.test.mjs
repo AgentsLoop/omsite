@@ -69,3 +69,23 @@ test('reads reserved metadata and rejects invalid JSON before deployment', () =>
   zip.updateFile(CATALOG_METADATA_FILE, Buffer.from('{invalid'))
   assert.throws(() => readCatalogMetadata(zip.getEntries()), /JSON/)
 })
+
+test('validates OC runtime estimates, requires evidence, and exposes them publicly', () => {
+  const runtime_flops = { flops: 1.2e9, target_fps: 60, width: 1920, height: 1080, source: 'opencode', assumptions: 'About 20 million operations per frame; typical scene, uncertain shader load.' }
+  const input = { ...metadata(), runtime_flops, metadata_evidence: [...metadata().metadata_evidence, { field: 'runtime_flops', file: 'game.js', line_start: 1, line_end: 1 }] }
+  const result = validateSourceEvidence(input, { 'game.js': 'render()' }, 'https://github.com/o/r')
+  assert.deepEqual(publicCatalogMetadata(result).runtime_flops, runtime_flops)
+  assert.equal(validateCatalogMetadata(metadata()).runtime_flops, null)
+  assert.throws(() => validateCatalogMetadata({ ...input, metadata_evidence: metadata().metadata_evidence }), /missing runtime_flops evidence/)
+  for (const patch of [{ flops: 0 }, { flops: -1 }, { flops: Infinity }, { flops: '1000' }, { target_fps: 30 }, { width: 800 }, { height: 600 }, { source: 'manual' }, { assumptions: '' }]) {
+    assert.throws(() => validateCatalogMetadata({ ...input, runtime_flops: { ...runtime_flops, ...patch } }), /runtime_flops/)
+  }
+})
+
+test('formats runtime work with explicit FLOPS units', async () => {
+  const { formatFlops } = await import('../../src/lib/runtime-flops.mjs')
+  assert.equal(formatFlops(1.2e9), '1.2 GFLOPS')
+  assert.equal(formatFlops(2e12), '2 TFLOPS')
+  assert.equal(formatFlops(500), '500 FLOPS')
+  assert.equal(formatFlops(null), 'not estimated')
+})

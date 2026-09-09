@@ -5,7 +5,7 @@
       <span class="status-chip">{{ project.status || 'Published' }}</span>
       <span v-if="project.github_stars !== null && project.github_stars !== undefined" class="stars-chip">★ {{ formatStars(project.github_stars) }}</span>
     </div>
-    <div class="game-card-copy"><h3>{{ project.title }}</h3><p>{{ project.description || 'Created with OmGithub' }}</p><ProjectMetadata :project="project" /></div>
+    <div class="game-card-copy"><h3>{{ project.title }}</h3><p>{{ project.description || 'Created with OmGithub' }}</p><ProjectMetadata :project="project" compact-view /></div>
   </RouterLink>
 </template>
 <script setup>
