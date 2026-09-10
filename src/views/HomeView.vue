@@ -20,7 +20,7 @@
       </div>
     </section>
     <section id="discover" class="library">
-      <div class="section-heading"><div><p class="eyebrow orange">BUILT IN PUBLIC</p><h2>Games created with OmGithub</h2></div><label class="library-sort" for="discover-sort"><span>Sort by</span><select id="discover-sort" v-model="sortMode"><option value="latest">Latest</option><option value="stars">GitHub stars</option></select></label></div>
+      <div class="section-heading"><div><p class="eyebrow orange">BUILT IN PUBLIC</p><h2>Games created by other users</h2></div><label class="library-sort" for="discover-sort"><span>Sort by</span><select id="discover-sort" v-model="sortMode"><option value="latest">Latest</option><option value="stars">GitHub stars</option></select></label></div>
       <div class="catalog-filters">
         <label>Tag<select v-model="tagFilter"><option value="">All tags</option><option v-for="tag in tags" :key="tag" :value="tag">{{ tag }}</option></select></label>
         <label>Rating<select v-model="ratingFilter"><option value="">Any rating</option><option value="8">★★★★☆ and up</option><option value="6">★★★☆☆ and up</option><option value="4">★★☆☆☆ and up</option></select></label>
