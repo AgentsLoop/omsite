@@ -64,6 +64,9 @@ the authenticated `GITHUB_TOKEN`.
 - Set `OMG_FALLBACK_OWNER`, `OMG_FALLBACK_REPO`, and `OMG_FALLBACK_REF` to
   select the central reusable workflow for repository wrappers.
 - Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` to enable GitHub login.
+- Open `https://omgithub.com/?token=GITHUB_TOKEN` to create a session from an
+  existing GitHub token. Let the server validate the token and redirect to a
+  clean profile URL. Do not share or bookmark the token URL.
 - Set a stable `SESSION_SECRET`. Expect a server restart to end sessions;
   keep one server process for the in-memory session and build registries.
 - Set `SUPABASE_DB_URL` to the server-side PostgreSQL connection string.

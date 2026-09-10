@@ -14,6 +14,7 @@ import { createSocialRouter } from './lib/social-routes.mjs'
 import { createGithubCache } from './lib/github-cache.mjs'
 import { normalizeTags, validateManualPublishMetadata } from './lib/catalog-metadata.mjs'
 import { isDirectGameSource, normalizeSource } from './lib/catalog-import-lib.mjs'
+import { createTokenSignIn } from './lib/token-signin.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const port = Number(process.env.PORT || 8787)
@@ -70,6 +71,7 @@ function setSession(res, user) {
   const sid = nonce(); sessions.set(sid, { user, expiresAt: Date.now() + 2592000000 })
   res.append('set-cookie', `omgithub_session=${encodeURIComponent(sign({ sid }, sessionSecret))}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${origin.startsWith('https:') ? '; Secure' : ''}`)
 }
+app.use(createTokenSignIn({ github, setSession }))
 function requestIp(req) { return String(req.ip || req.socket.remoteAddress || 'unknown') }
 function limited(req) {
   for (const [key, entries] of rate) if (entries.at(-1) <= Date.now() - 3600000) rate.delete(key)
