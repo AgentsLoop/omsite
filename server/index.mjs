@@ -17,6 +17,7 @@ import { isDirectGameSource, normalizeSource } from './lib/catalog-import-lib.mj
 import { createTokenSignIn } from './lib/token-signin.mjs'
 import { listProfileRepositories } from './lib/profile-repositories.mjs'
 import { remixRepository } from './lib/repository-remix.mjs'
+import { createSessionStore } from './lib/session-store.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const port = Number(process.env.PORT || 8787)
@@ -50,7 +51,7 @@ const publicGithubFetch = createGithubCache(dataDir, { token: githubToken })
 const database = await openDatabase()
 const store = createStore(dataDir, database)
 const social = createProjectSocial(dataDir, database)
-const sessions = new Map()
+const sessions = createSessionStore(dataDir, sessionSecret)
 const pendingBuilds = new Map()
 const publications = new Map()
 const routePublications = new Map()
@@ -65,11 +66,9 @@ function userFor(req) {
   const payload = raw && verify(raw, sessionSecret)
   const session = payload?.sid && sessions.get(payload.sid)
   if (!session) return null
-  if (session.expiresAt <= Date.now()) { sessions.delete(payload.sid); return null }
   return session.user
 }
 function setSession(res, user) {
-  for (const [id, session] of sessions) if (session.expiresAt <= Date.now()) sessions.delete(id)
   const sid = nonce(); sessions.set(sid, { user, expiresAt: Date.now() + 2592000000 })
   res.append('set-cookie', `omgithub_session=${encodeURIComponent(sign({ sid }, sessionSecret))}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${origin.startsWith('https:') ? '; Secure' : ''}`)
 }
