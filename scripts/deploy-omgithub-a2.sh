@@ -4,6 +4,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REMOTE="${OMGHITHUB_DEPLOY_HOST:-a2}"
 DEST="${OMGHITHUB_DEPLOY_DIR:-/home/ubuntu/projects/omgithub}"
+ARCHIVE_DIR=""
+
+cleanup() {
+  if [[ -n "$ARCHIVE_DIR" ]]; then
+    rm -f -- "$ARCHIVE_DIR/omgithub-deploy.tar.gz"
+    rmdir "$ARCHIVE_DIR" 2>/dev/null || true
+  fi
+}
+
+trap cleanup EXIT
 
 run_timed() {
   local label="$1"
@@ -20,31 +30,58 @@ run_timed() {
 
 # shellcheck disable=SC2029 # Parse the command on a2.
 stream_and_deploy() {
-  local remote_dest remote_command archive_path
+  local remote_dest remote_archive remote_command archive_path
 
   # Keep custom deploy paths safe when the command is parsed on a2.
   printf -v remote_dest '%q' "$DEST"
+  ARCHIVE_DIR="$(mktemp -d)"
+  archive_path="$ARCHIVE_DIR/omgithub-deploy.tar.gz"
+  remote_archive="/tmp/omgithub-deploy-${ARCHIVE_DIR##*/}.tar.gz"
+
+  run_timed "create deployment archive" env COPYFILE_DISABLE=1 LC_ALL=C tar --no-xattrs --no-mac-metadata -C "$ROOT" -czf "$archive_path" \
+    --exclude=.git --exclude=node_modules --exclude=dist --exclude=data --exclude=.env .
+  run_timed "transfer deployment archive" scp "$archive_path" "$REMOTE:$remote_archive"
+
   remote_command="set -e
 run_timed() {
   local label=\"\$1\"
   shift
   printf '\\n[%s] start\\n' \"\$label\"
-  /usr/bin/time -p \"\$@\"
+  if declare -F \"\$1\" >/dev/null 2>&1; then
+    time -p \"\$@\"
+  else
+    /usr/bin/time -p \"\$@\"
+  fi
   printf '[%s] complete\\n' \"\$label\"
 }
+wait_for_services() {
+  local container_id health deadline
+  deadline=\$((SECONDS + 120))
+  while ((SECONDS < deadline)); do
+    container_id=\"\$(sudo -n docker compose ps -q omgithub)\"
+    if [[ -n \"\$container_id\" ]]; then
+      health=\"\$(sudo -n docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \"\$container_id\")\"
+      if [[ \"\$health\" == healthy || \"\$health\" == running ]]; then
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+  return 1
+}
 DEST=$remote_dest
+ARCHIVE=$(printf '%q' "$remote_archive")
 run_timed 'create deployment directory' mkdir -p -- \"\$DEST\"
-run_timed 'extract deployment archive' tar -xzf - -C \"\$DEST\"
+run_timed 'extract deployment archive' tar -xzf \"\$ARCHIVE\" -C \"\$DEST\"
 cd \"\$DEST\"
 export DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain
-run_timed 'build and start services' sudo -n docker compose up -d --build --wait
-run_timed 'check service status' sudo -n docker compose ps"
+run_timed 'build service image' sudo -n docker compose build
+run_timed 'start services' sudo -n docker compose up -d --no-build
+run_timed 'wait for service health' wait_for_services
+run_timed 'check service status' sudo -n docker compose ps
+run_timed 'remove remote deployment archive' rm -f -- \"\$ARCHIVE\""
 
-  archive_path="$(mktemp -d)/omgithub-deploy.tar.gz"
-  trap 'rm -f -- "$archive_path"; rmdir "${archive_path%/*}" 2>/dev/null || true' RETURN
-  run_timed "create deployment archive" env COPYFILE_DISABLE=1 LC_ALL=C tar --no-xattrs --no-mac-metadata -C "$ROOT" -czf "$archive_path" \
-    --exclude=.git --exclude=node_modules --exclude=dist --exclude=data --exclude=.env .
-  run_timed "transfer and deploy archive" ssh "$REMOTE" "$remote_command" < "$archive_path"
+  ssh "$REMOTE" "$remote_command"
 }
 
-run_timed "stream archive and deploy" stream_and_deploy
+stream_and_deploy
