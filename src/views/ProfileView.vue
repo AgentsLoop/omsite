@@ -23,6 +23,12 @@
       <p v-if="remixError" class="form-error" role="alert">{{ remixError }}</p>
     </section>
 
+    <section class="library profile-library">
+      <div class="section-heading"><div><p class="eyebrow orange">CREATOR LIBRARY</p><h2>Published projects</h2></div><span>{{ projects.length }} projects</span></div>
+      <div class="cards-grid"><GameCard v-for="project in projects" :key="project.id" :project="project" /></div>
+      <div v-if="!loading && !projects.length" class="empty-library">No published projects yet.</div>
+    </section>
+
     <section class="library repository-library">
       <div class="section-heading">
         <div><p class="eyebrow orange">GITHUB REPOSITORIES</p><h2>Repositories</h2></div>
@@ -49,11 +55,6 @@
       <div v-if="!loading && !repositories.length" class="empty-library">No repositories found.</div>
     </section>
 
-    <section class="library profile-library">
-      <div class="section-heading"><div><p class="eyebrow orange">CREATOR LIBRARY</p><h2>Published games</h2></div><span>{{ projects.length }} games</span></div>
-      <div class="cards-grid"><GameCard v-for="project in projects" :key="project.id" :project="project" /></div>
-      <div v-if="!loading && !projects.length" class="empty-library">No published games yet.</div>
-    </section>
   </main>
 </template>
 
