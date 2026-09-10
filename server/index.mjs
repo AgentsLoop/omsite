@@ -1,6 +1,5 @@
+import { openDatabase } from './lib/database.mjs'
 import express from 'express'
-import { cert, getApps, initializeApp } from 'firebase-admin/app'
-import { getFirestore } from 'firebase-admin/firestore'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { basename, dirname, join, resolve, sep } from 'node:path'
@@ -45,18 +44,9 @@ mkdirSync(gamesDir, { recursive: true })
 
 const publicGithubFetch = createGithubCache(dataDir, { token: githubToken })
 
-let firestore = null
-const firebaseCredential = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 ? Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8') : '')
-if (firebaseCredential) {
-  try {
-    const account = JSON.parse(firebaseCredential)
-    const firebase = getApps()[0] || initializeApp({ credential: cert(account) })
-    firestore = getFirestore(firebase)
-    console.log(`Firebase connected: ${account.project_id}`)
-  } catch (error) { console.warn(`Firebase unavailable, using local persistence: ${error.message}`) }
-}
-const store = createStore(dataDir, firestore)
-const social = createProjectSocial(dataDir, firestore)
+const database = await openDatabase()
+const store = createStore(dataDir, database)
+const social = createProjectSocial(dataDir, database)
 const sessions = new Map()
 const pendingBuilds = new Map()
 const publications = new Map()
@@ -296,7 +286,7 @@ app.post('/api/github/webhooks', express.raw({ type: 'application/json', limit: 
 
 app.use(express.json({ limit: '2mb' }))
 app.get('/api/me', (req, res) => { const user = userFor(req); res.json({ user: user ? { login: user.login, name: user.name, avatar_url: user.avatar_url, html_url: user.html_url } : null }) })
-app.use('/api/projects', createSocialRouter({ store, social, userFor, origin, sessionSecret }))
+app.use('/api/projects', createSocialRouter({ store, social, userFor, origin, sessionSecret, writesPaused: process.env.SOCIAL_WRITES_PAUSED === 'true' }))
 app.get('/api/projects', async (req, res, next) => { try { const user = userFor(req); let rows = await store.all(); if (req.query.mine === '1') rows = user ? rows.filter(row => row.owner_login?.toLowerCase() === user.login.toLowerCase()) : []; res.json({ projects: await Promise.all(rows.map(async row => ({ ...card(row), ...await social.summary(row) }))) }) } catch (e) { next(e) } })
 app.get('/api/projects/:id/opencode-log', async (req, res, next) => {
   try {

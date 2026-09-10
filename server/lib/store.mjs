@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 
-export function createStore(dataDir, firestore = null) {
+export function createStore(dataDir, database = null) {
   mkdirSync(dataDir, { recursive: true })
   const file = join(dataDir, 'projects.json')
   const read = () => existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : []
@@ -15,32 +15,27 @@ export function createStore(dataDir, firestore = null) {
   }
   return {
     async byId(id) {
-      if (!firestore) return read().find(row => row.id === id) || null
-      const snap = await firestore.collection('omgithub_projects').doc(id).get()
-      return snap.exists ? { ...snap.data(), id: snap.id } : null
+      if (!database) return read().find(row => row.id === id) || null
+      return database.get('omgithub_projects', id)
     },
     async all() {
-      if (!firestore) return read()
-      const snap = await firestore.collection('omgithub_projects').orderBy('published_at', 'desc').limit(200).get()
-      return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      if (!database) return read()
+      return database.list('omgithub_projects', { order: 'published_at' })
     },
     async bySlug(slug) {
-      if (!firestore) return read().find(row => row.slug === slug) || null
-      const snap = await firestore.collection('omgithub_projects').where('slug', '==', slug).limit(1).get()
-      return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() }
+      if (!database) return read().find(row => row.slug === slug) || null
+      return (await database.list('omgithub_projects', { field: 'slug', value: slug, limit: 1 }))[0] || null
     },
     async bySourceKey(sourceKey) {
-      if (!firestore) return read().find(row => row.source_key === sourceKey) || null
-      const snap = await firestore.collection('omgithub_projects').where('source_key', '==', sourceKey).limit(1).get()
-      return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() }
+      if (!database) return read().find(row => row.source_key === sourceKey) || null
+      return (await database.list('omgithub_projects', { field: 'source_key', value: sourceKey, limit: 1 }))[0] || null
     },
     async byPublicPath(publicPath) {
-      if (!firestore) return read().find(row => row.public_path === publicPath) || null
-      const snap = await firestore.collection('omgithub_projects').where('public_path', '==', publicPath).limit(1).get()
-      return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() }
+      if (!database) return read().find(row => row.public_path === publicPath) || null
+      return (await database.list('omgithub_projects', { field: 'public_path', value: publicPath, limit: 1 }))[0] || null
     },
     async byRepositoryPath(owner, repo, projectPath = '', sourceEntry = '') {
-      const rows = firestore ? await this.all() : read()
+      const rows = database ? await this.all() : read()
       const prefix = `${String(owner).toLowerCase()}/${String(repo).toLowerCase()}@`
       return rows
         .filter(row => {
@@ -53,7 +48,7 @@ export function createStore(dataDir, firestore = null) {
         .sort((left, right) => String(right.published_at || '').localeCompare(String(left.published_at || '')))[0] || null
     },
     async put(project) {
-      if (firestore) await firestore.collection('omgithub_projects').doc(project.id).set(project, { merge: true })
+      if (database) { await database.put('omgithub_projects', project.id, project, true); return project }
       const rows = read(), index = rows.findIndex(row => row.id === project.id)
       if (index >= 0) rows[index] = { ...rows[index], ...project }; else rows.unshift(project)
       write(rows); return project

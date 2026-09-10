@@ -8,47 +8,26 @@ import { createProjectSocial } from '../lib/project-social.mjs'
 const project = { repo_owner: 'Owner', repo: 'Game', source_key: `owner/game@${'a'.repeat(40)}:games/One`, complexity_score: 6 }
 const user = { id: 12, login: 'player', avatar_url: 'https://github.com/player.png' }
 
-// Model transaction serialization, rollback, retries, and Firestore's rule that
-// every read must precede writes. This does not verify live index configuration.
-function fakeFirestore() {
+// Model transaction serialization and rollback. Verify PostgreSQL separately.
+function fakeDatabase() {
   let records = new Map(), tail = Promise.resolve()
-  const snapshot = key => ({ data: () => structuredClone(records.get(key)) })
-  function collection(name, filters = [], order, maximum = Infinity) {
-    return {
-      doc: key => ({ key: `${name}/${key}` }),
-      where: (field, operator, value) => {
-        assert.equal(operator, '==')
-        return collection(name, [...filters, [field, value]], order, maximum)
-      },
-      orderBy: (field, direction) => collection(name, filters, [field, direction], maximum),
-      limit: count => collection(name, filters, order, count),
-      async get() {
-        let rows = [...records].filter(([key, value]) => key.startsWith(`${name}/`) && filters.every(([field, expected]) => value[field] === expected))
-        if (order) rows.sort((a, b) => String(b[1][order[0]]).localeCompare(String(a[1][order[0]])))
-        return { docs: rows.slice(0, maximum).map(([key]) => snapshot(key)) }
-      }
-    }
-  }
   return {
-    collection,
     failNext: false,
     dump: () => records,
-    runTransaction(fn) {
+    async list(table, { field, value } = {}) {
+      return [...records].filter(([key, row]) => key.startsWith(table + '/') && (!field || row[field] === value)).map(([, row]) => structuredClone(row))
+    },
+    transaction(key, fn) {
       const run = tail.then(async () => {
-        const attempt = async commit => {
-          let writing = false
-          const pending = structuredClone(records)
-          const result = await fn({
-            async get(ref) { assert.equal(writing, false, 'read after write'); return snapshot(ref.key) },
-            set(ref, value) { writing = true; assert.notEqual(value, undefined); pending.set(ref.key, structuredClone(value)) },
-            delete(ref) { writing = true; pending.delete(ref.key) }
-          })
-          if (commit) records = pending
-          return result
-        }
-        await attempt(false)
+        const pending = structuredClone(records)
+        const result = await fn({
+          async get(table, id) { return structuredClone(pending.get(table + '/' + id)) },
+          async put(table, id, value) { pending.set(table + '/' + id, structuredClone(value)) },
+          async delete(table, id) { pending.delete(table + '/' + id) }
+        })
         if (this.failNext) { this.failNext = false; throw new Error('Transaction failed') }
-        return attempt(true)
+        records = pending
+        return result
       })
       tail = run.catch(() => {})
       return run
@@ -59,12 +38,12 @@ function fakeFirestore() {
 async function fixture(t, remote) {
   const dir = await mkdtemp(join(tmpdir(), 'omgithub-social-'))
   t.after(() => rm(dir, { recursive: true, force: true }))
-  const db = remote ? fakeFirestore() : null
+  const db = remote ? fakeDatabase() : null
   return { dir, db, social: createProjectSocial(dir, db) }
 }
 
 for (const remote of [false, true]) {
-  const backend = remote ? 'Firestore transaction double' : 'local'
+  const backend = remote ? 'Database transaction double' : 'local'
   test(`${backend}: seeded votes, editable comments, deletion, and stable identity`, async t => {
     const { social, dir, db } = await fixture(t, remote)
     assert.deepEqual(await social.summary(project), { rating: 6, rating_count: 0, play_count: 0 })
@@ -183,7 +162,7 @@ for (const remote of [false, true]) {
   })
 }
 
-test('Firestore abort leaves both comments and aggregate unchanged', async t => {
+test('Database abort leaves both comments and aggregate unchanged', async t => {
   const { social, db } = await fixture(t, true)
   db.failNext = true
   await assert.rejects(social.comment(project, user, 'Abort', 10), /Transaction failed/)

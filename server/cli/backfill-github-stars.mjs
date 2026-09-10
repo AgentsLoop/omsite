@@ -1,22 +1,14 @@
-import { cert, getApps, initializeApp } from 'firebase-admin/app'
-import { getFirestore } from 'firebase-admin/firestore'
+import { openDatabase } from '../lib/database.mjs'
 import { resolve } from 'node:path'
 import { createStore } from '../lib/store.mjs'
 
 const dataDir = resolve(process.env.DATA_DIR || './data')
 const githubToken = process.env.GITHUB_TOKEN || ''
-const credentialText = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64 ? Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8') : '')
-let firestore = null
-
-if (credentialText) {
-  const account = JSON.parse(credentialText)
-  const firebase = getApps()[0] || initializeApp({ credential: cert(account) })
-  firestore = getFirestore(firebase)
-}
+const database = await openDatabase()
 
 if (!githubToken) throw new Error('GITHUB_TOKEN is required to backfill GitHub stars')
 
-const store = createStore(dataDir, firestore)
+const store = createStore(dataDir, database)
 const rows = await store.all()
 const pending = rows.filter(row => row.github_stars === null || row.github_stars === undefined)
 let updated = 0
@@ -43,3 +35,5 @@ for (const row of pending) {
 }
 
 console.log(`Backfilled ${updated} of ${pending.length} projects.`)
+
+await database?.close()

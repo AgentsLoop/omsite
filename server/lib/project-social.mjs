@@ -67,7 +67,7 @@ function publicSummary(state, id, vote) {
 // Supply trusted server-side project/user records. Derive visitorKey from the
 // main-site cookie or authenticated ID (e.g. "anon:..." or "user:...").
 // This module hashes keys; it does not authenticate callers or manage cookies.
-export function createProjectSocial(dataDir, firestore = null) {
+export function createProjectSocial(dataDir, database = null) {
   const file = resolve(dataDir, 'project-social.json')
   const lock = `${file}.lock`
   const summaryCache = new Map()
@@ -98,7 +98,6 @@ export function createProjectSocial(dataDir, firestore = null) {
       try { await rm(temporary, { force: true }) } finally { await rm(lock, { recursive: true, force: true }) }
     }
   }
-  const ref = (collection, key) => firestore.collection(collection).doc(key)
 
   async function change(project, user, action, input) {
     const pid = identity(project)
@@ -132,7 +131,7 @@ export function createProjectSocial(dataDir, firestore = null) {
       return { state, vote: nextVote, comment: nextComment, play: nextPlay,
         result: { ...publicSummary(state, id, nextVote), ...(action === 'play' ? { counted } : {}) } }
     }
-    if (!firestore) {
+    if (!database) {
       const result = await localChange(db => {
       const out = update(withSeed(db.projects[pid] ?? initial(project), project), db.votes[key], db.comments[key], db.plays[key])
       db.projects[pid] = out.state
@@ -145,21 +144,18 @@ export function createProjectSocial(dataDir, firestore = null) {
       summaryCache.delete(pid)
       return result
     }
-    const result = await firestore.runTransaction(async tx => {
-      const stateRef = ref('project_social', pid)
-      const voteRef = ref('project_ratings', key)
-      const commentRef = ref('project_comments', key)
-      const playRef = ref('project_plays', key)
-      const state = await tx.get(stateRef)
-      const refs = action === 'play' ? [playRef] : [voteRef, commentRef]
-      const snaps = await Promise.all(refs.map(item => tx.get(item)))
-      const out = update(withSeed(state.data() ?? initial(project), project), action === 'play' ? undefined : snaps[0].data(), action === 'play' ? undefined : snaps[1].data(), action === 'play' ? snaps[0].data() : undefined)
-      tx.set(stateRef, out.state)
-      if (action === 'play') tx.set(playRef, out.play)
+    const result = await database.transaction(pid, async tx => {
+      const state = await tx.get('project_social', pid)
+      const vote = action === 'play' ? undefined : await tx.get('project_ratings', key)
+      const comment = action === 'play' ? undefined : await tx.get('project_comments', key)
+      const play = action === 'play' ? await tx.get('project_plays', key) : undefined
+      const out = update(withSeed(state ?? initial(project), project), vote, comment, play)
+      await tx.put('project_social', pid, out.state)
+      if (action === 'play') await tx.put('project_plays', key, out.play)
       else {
-        if (out.vote) tx.set(voteRef, out.vote)
-        if (out.comment) tx.set(commentRef, out.comment)
-        else if (action === 'delete') tx.delete(commentRef)
+        if (out.vote) await tx.put('project_ratings', key, out.vote)
+        if (out.comment) await tx.put('project_comments', key, out.comment)
+        else if (action === 'delete') await tx.delete('project_comments', key)
       }
       return out.result
     })
@@ -175,24 +171,24 @@ export function createProjectSocial(dataDir, firestore = null) {
       const seed = initial(project).seed
       const cached = id === undefined && summaryCache.get(pid)
       if (cached && cached.seed === seed && cached.expires > Date.now()) return cached.value
-      if (!firestore) {
+      if (!database) {
         const db = await read()
         const value = publicSummary(withSeed(db.projects[pid] ?? initial(project), project), id, key && db.votes[key])
         if (id === undefined) summaryCache.set(pid, { value, seed, expires: Date.now() + 30000 })
         return value
       }
-      const value = await firestore.runTransaction(async tx => {
-        const state = await tx.get(ref('project_social', pid))
-        const vote = key ? (await tx.get(ref('project_ratings', key))).data() : undefined
-        return publicSummary(withSeed(state.data() ?? initial(project), project), id, vote)
+      const value = await database.transaction(pid, async tx => {
+        const state = await tx.get('project_social', pid)
+        const vote = key ? await tx.get('project_ratings', key) : undefined
+        return publicSummary(withSeed(state ?? initial(project), project), id, vote)
       })
       if (id === undefined) summaryCache.set(pid, { value, seed, expires: Date.now() + 30000 })
       return value
     },
     async comments(project) {
       const pid = identity(project)
-      const rows = firestore
-        ? (await firestore.collection('project_comments').where('project_id', '==', pid).limit(500).get()).docs.map(doc => doc.data()).filter(row => row.status === 'approved').sort((a, b) => b.created_at.localeCompare(a.created_at) || a.user_id.localeCompare(b.user_id)).slice(0, 100)
+      const rows = database
+        ? (await database.list('project_comments', { field: 'project_id', value: pid })).filter(row => row.status === 'approved').sort((a, b) => b.created_at.localeCompare(a.created_at) || a.user_id.localeCompare(b.user_id)).slice(0, 100)
         : Object.values((await read()).comments).filter(row => row.project_id === pid && row.status === 'approved').sort((a, b) => b.created_at.localeCompare(a.created_at) || a.user_id.localeCompare(b.user_id)).slice(0, 100)
       return rows.map(({ project_id, user_id, login, avatar_url, body, rating, created_at, updated_at, status }) => ({ id: `${project_id}:${user_id}`, project_id, user_id, login, avatar_url, body, rating, created_at, updated_at, status }))
     },

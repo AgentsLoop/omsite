@@ -147,6 +147,6 @@ Use [the site setup guide](../README.md) for configuration. Deploy the
 `bash scripts/deploy-omgithub-a2.sh`. Route `omgithub.com` and
 `*.omgithub.com` through host Caddy to `127.0.0.1:8794`.
 
-Keep `DATA_DIR` on persistent storage. Configure Firebase for the project
-catalog, or use the local `projects.json` fallback. Replace the local catalog
-through a temporary file to avoid truncating the active file during a write.
+Keep `DATA_DIR` on persistent storage for game files and caches. Configure
+`SUPABASE_DB_URL` for the project catalog and social records. Follow
+[the Supabase operations guide](supabase.md).

@@ -16,7 +16,7 @@
   "dependencies": {
     "adm-zip": "^0.6.0",
     "express": "^5.1.0",
-    "firebase-admin": "^13.4.0",
+    "pg": "^8.23.0",
     "vue": "^3.5.22",
     "vue-router": "^4.5.1"
   },

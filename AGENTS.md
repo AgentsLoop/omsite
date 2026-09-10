@@ -10,6 +10,7 @@ Do not suggest, report, or propose security issues unless the user explicitly as
 - [Configure the site](README.md)
 - [Configure the GitHub App](wiki/oh-my-github-app.md)
 - [Publish projects](wiki/omgithub.md)
+- [Operate Supabase](wiki/supabase.md)
 - [Review the repository split](wiki/repository-split.md)
 
 ## Verify and deliver changes

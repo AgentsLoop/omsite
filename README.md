@@ -45,8 +45,8 @@ GITHUB_TOKEN=... npm run catalog:scan
 
 Review source code before any submission. Do not use the importer to submit games.
 Submit the exact reviewed game directory or HTML file manually in OmGithub. Run
-`npm run catalog:prompts` with Firebase
-credentials to apply exact prompts to matching published project records.
+`npm run catalog:prompts` with Supabase
+database credentials to apply exact prompts to matching published project records.
 Reuse the report and disk cache when a run is interrupted.
 
 The Discover section supports `Latest` and `GitHub stars` sorting. Read both
@@ -66,8 +66,9 @@ the authenticated `GITHUB_TOKEN`.
 - Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` to enable GitHub login.
 - Set a stable `SESSION_SECRET`. Expect a server restart to end sessions;
   keep one server process for the in-memory session and build registries.
-- Set `FIREBASE_SERVICE_ACCOUNT_BASE64` or `FIREBASE_SERVICE_ACCOUNT_JSON`
-  to use Firebase. Otherwise, keep the local catalog under persistent `DATA_DIR`.
+- Set `SUPABASE_DB_URL` to the server-side PostgreSQL connection string.
+  Require it in production. Use local JSON storage only for development.
+  Follow [the Supabase operations guide](wiki/supabase.md).
 - Set repository variable `OPENCODE_ACCESS=everyone` to let any issue author
   execute a labeled request or open an issue with `/OpenCode` in its title.
   Leave it unset to require repository write, maintain, or admin access.

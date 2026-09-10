@@ -38,3 +38,23 @@ test('social routes require a signed-in same-origin mutation and deduplicate vis
   assert.equal(first.headers.get('location'), 'https://game.omgithub.com/')
   assert.equal((await request('game/social')).headers.get('cache-control'), 'no-store')
 })
+
+test('migration pause blocks feedback but preserves game launches without new social writes', async t => {
+  const project = { id: 'game', status: 'published', url: 'https://game.omgithub.com' }
+  const app = express()
+  const social = {
+    summary: async () => ({ play_count: 0 }),
+    play: async () => assert.fail('Do not write plays during migration'),
+    rate: async () => assert.fail('Do not write votes during migration')
+  }
+  app.use('/api/projects', createSocialRouter({ store: { byId: async () => project }, social,
+    userFor: () => ({ id: 12 }), origin: 'https://omgithub.com', sessionSecret: 'test', writesPaused: true }))
+  app.use((error, req, res, next) => res.status(error.status || 500).json({ error: error.message }))
+  const server = app.listen(0, '127.0.0.1')
+  await new Promise(resolve => server.once('listening', resolve))
+  t.after(() => { server.closeAllConnections(); server.close() })
+  const base = `http://127.0.0.1:${server.address().port}/api/projects/game`
+  assert.equal((await fetch(base + '/rating', { method: 'PUT', headers: { origin: 'https://omgithub.com' } })).status, 503)
+  assert.equal((await fetch(base + '/play', { method: 'POST', headers: { origin: 'https://omgithub.com' } })).status, 200)
+  assert.equal((await fetch(base + '/play', { redirect: 'manual' })).status, 302)
+})

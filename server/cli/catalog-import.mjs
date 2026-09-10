@@ -1,3 +1,4 @@
+import { openDatabase } from '../lib/database.mjs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createStore } from '../lib/store.mjs'
@@ -66,30 +67,9 @@ export function parseArgs(argv, env = process.env) {
 }
 
 export async function openImportStore(env = process.env) {
-  const credentialText = env.FIREBASE_SERVICE_ACCOUNT_JSON || (env.FIREBASE_SERVICE_ACCOUNT_BASE64 ? Buffer.from(env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8') : '')
-  let firestore = null
-  if (credentialText) {
-    const { cert, getApps, initializeApp } = await import('firebase-admin/app')
-    const { getFirestore } = await import('firebase-admin/firestore')
-    const firebase = getApps()[0] || initializeApp({ credential: cert(JSON.parse(credentialText)) })
-    firestore = getFirestore(firebase)
-  }
-  const store = createStore(resolve(env.DATA_DIR || './data'), firestore)
-  // createStore.all() intentionally returns only 200 cards. Import must match older records too.
-  const all = async () => {
-    if (!firestore) return store.all()
-    const rows = []
-    let cursor = null
-    while (true) {
-      let query = firestore.collection('omgithub_projects').orderBy('__name__').limit(500)
-      if (cursor) query = query.startAfter(cursor)
-      const page = await query.get()
-      rows.push(...page.docs.map(doc => ({ ...doc.data(), id: doc.id })))
-      if (page.size < 500) return rows
-      cursor = page.docs.at(-1)
-    }
-  }
-  return { store, all }
+  const database = await openDatabase(env)
+  const store = createStore(resolve(env.DATA_DIR || './data'), database)
+  return { store, all: () => store.all(), close: () => database?.close() }
 }
 
 export async function runImport(options, { env = process.env, requestFetch = fetch, importStore, log = console.log } = {}) {

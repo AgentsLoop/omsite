@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { cookies, nonce, sign, verify } from './auth.mjs'
 
-export function createSocialRouter({ store, social, userFor, origin, sessionSecret }) {
+export function createSocialRouter({ store, social, userFor, origin, sessionSecret, writesPaused = false }) {
   const router = Router()
   const attempts = new Map()
   const fail = (status, message) => Object.assign(new Error(message), { status })
@@ -24,6 +24,7 @@ export function createSocialRouter({ store, social, userFor, origin, sessionSecr
     return `visitor:${id}`
   }
   function mutation(req, res, next) {
+    if (writesPaused) return next(fail(503, 'Ratings and comments are being restored. Please try later.'))
     if (req.get('origin') !== origin) return next(fail(403, 'Use the OmGithub site to submit feedback.'))
     req.socialUser = userFor(req)
     if (!req.socialUser) return next(fail(401, 'Sign in with GitHub to submit feedback.'))
@@ -52,7 +53,7 @@ export function createSocialRouter({ store, social, userFor, origin, sessionSecr
   router.post('/:id/play', async (req, res, next) => {
     try {
       if (req.get('origin') !== origin) throw fail(403, 'Use the OmGithub site to start a game.')
-      await social.play(req.project, visitor(req, res))
+      if (!writesPaused) await social.play(req.project, visitor(req, res))
       res.set('cache-control', 'no-store').json(await social.summary(req.project))
     } catch (error) { next(error) }
   })
@@ -63,7 +64,7 @@ export function createSocialRouter({ store, social, userFor, origin, sessionSecr
       if (!['https:', 'http:'].includes(url.protocol) || !url.hostname.endsWith(`.${base.hostname}`)) throw fail(422, 'Invalid game address.')
       // A document navigation counts a launch; link previews and prefetches do not.
       if (req.get('sec-fetch-mode') === 'navigate' && !req.get('purpose')?.includes('prefetch')) {
-        await social.play(req.project, visitor(req, res))
+        if (!writesPaused) await social.play(req.project, visitor(req, res))
       }
       res.set('cache-control', 'no-store').redirect(302, url.href)
     } catch (error) { next(error) }

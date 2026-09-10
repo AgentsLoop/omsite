@@ -9,6 +9,9 @@ services:
       PORT: 8787
       PUBLIC_ALIASES: ${PUBLIC_ALIASES:-lolgames.net}
       DATA_DIR: /app/data
+    networks:
+      - default
+      - supabase
     ports:
       - "127.0.0.1:8794:8787"
     volumes:
@@ -21,3 +24,8 @@ services:
 
 volumes:
   omgithub-data:
+
+networks:
+  supabase:
+    external: true
+    name: supabase_default
