@@ -15,6 +15,8 @@ import { createGithubCache } from './lib/github-cache.mjs'
 import { normalizeTags, validateManualPublishMetadata } from './lib/catalog-metadata.mjs'
 import { isDirectGameSource, normalizeSource } from './lib/catalog-import-lib.mjs'
 import { createTokenSignIn } from './lib/token-signin.mjs'
+import { listProfileRepositories } from './lib/profile-repositories.mjs'
+import { remixRepository } from './lib/repository-remix.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const port = Number(process.env.PORT || 8787)
@@ -252,7 +254,7 @@ app.get('/health', (_req, res) => res.json({ ok: true, service: 'omgithub' }))
 app.get('/auth/github', (req, res) => {
   if (!process.env.GITHUB_CLIENT_ID) return res.status(503).send('GitHub login is not configured')
   const state = nonce(); res.setHeader('set-cookie', `omgithub_oauth=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${origin.startsWith('https:') ? '; Secure' : ''}`)
-  const params = new URLSearchParams({ client_id: process.env.GITHUB_CLIENT_ID, redirect_uri: `${origin}/auth/github/callback`, scope: 'read:user public_repo', state })
+  const params = new URLSearchParams({ client_id: process.env.GITHUB_CLIENT_ID, redirect_uri: `${origin}/auth/github/callback`, scope: 'read:user repo workflow', state })
   res.redirect(`https://github.com/login/oauth/authorize?${params}`)
 })
 app.get('/auth/github/callback', async (req, res) => {
@@ -299,7 +301,39 @@ app.get('/api/projects/:id/opencode-log', async (req, res, next) => {
     res.type('application/x-ndjson').send(readFileSync(transcriptPath, 'utf8'))
   } catch (e) { next(e) }
 })
-app.get('/api/profiles/:login', async (req, res, next) => { try { const profile = await github(`/users/${encodeURIComponent(req.params.login)}`, githubToken); const rows = (await store.all()).filter(row => row.owner_login?.toLowerCase() === req.params.login.toLowerCase()); res.json({ profile, projects: rows.map(card) }) } catch (e) { next(e) } })
+app.get('/api/profiles/:login', async (req, res, next) => {
+  try {
+    const [profile, repositories, allProjects] = await Promise.all([
+      github(`/users/${encodeURIComponent(req.params.login)}`, githubToken),
+      listProfileRepositories(req.params.login, userFor(req), github),
+      store.all()
+    ])
+    const projects = allProjects.filter(row => row.owner_login?.toLowerCase() === req.params.login.toLowerCase())
+    res.json({ profile, repositories, projects: projects.map(card) })
+  } catch (e) { next(e) }
+})
+
+app.post('/api/repositories/:owner/:repo/remix', async (req, res, next) => {
+  try {
+    if (!sameOrigin(req)) return res.status(403).json({ error: 'Use the OmGithub site to remix a repository.' })
+    if (limited(req)) return res.status(429).json({ error: 'Creation limit reached. Try again later.' })
+    const result = await remixRepository({
+      owner: req.params.owner,
+      repo: req.params.repo,
+      prompt: req.body?.prompt,
+      user: userFor(req),
+      origin,
+      config: githubApp,
+      requestGithub: github
+    })
+    res.status(201).json({
+      number: result.issue.number,
+      github_url: result.issue.html_url,
+      omgithub_path: `/${req.params.owner}/${req.params.repo}/issues/${result.issue.number}`,
+      workflow_installed: result.workflowInstalled
+    })
+  } catch (e) { next(e) }
+})
 
 app.post('/api/issues', async (req, res, next) => {
   try {

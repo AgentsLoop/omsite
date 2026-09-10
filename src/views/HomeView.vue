@@ -20,7 +20,7 @@
       </div>
     </section>
     <section id="discover" class="library">
-      <div class="section-heading"><div><p class="eyebrow orange">BUILT IN PUBLIC</p><h2>{{ me ? `${me.login}'s games` : 'Games created with OmGithub' }}</h2></div><label class="library-sort" for="discover-sort"><span>Sort by</span><select id="discover-sort" v-model="sortMode"><option value="latest">Latest</option><option value="stars">GitHub stars</option></select></label></div>
+      <div class="section-heading"><div><p class="eyebrow orange">BUILT IN PUBLIC</p><h2>Games created with OmGithub</h2></div><label class="library-sort" for="discover-sort"><span>Sort by</span><select id="discover-sort" v-model="sortMode"><option value="latest">Latest</option><option value="stars">GitHub stars</option></select></label></div>
       <div class="catalog-filters">
         <label>Tag<select v-model="tagFilter"><option value="">All tags</option><option v-for="tag in tags" :key="tag" :value="tag">{{ tag }}</option></select></label>
         <label>Rating<select v-model="ratingFilter"><option value="">Any rating</option><option value="8">★★★★☆ and up</option><option value="6">★★★☆☆ and up</option><option value="4">★★☆☆☆ and up</option></select></label>
@@ -29,7 +29,7 @@
       <p v-if="projectsError" class="form-error" role="alert">{{ projectsError }}</p>
       <div v-else-if="loadingProjects" class="cards-grid" aria-label="Loading games"><div v-for="n in 3" :key="n" class="game-card skeleton"></div></div>
       <div v-else-if="projects.length" class="cards-grid"><GameCard v-for="project in projects" :key="project.id || project.issue_path" :project="project" /></div>
-      <div v-else class="empty-library">{{ data?.projects?.length ? 'No games match these filters.' : 'Your published games will appear here.' }}</div>
+      <div v-else class="empty-library">{{ data?.projects?.length ? 'No games match these filters.' : 'Published games will appear here.' }}</div>
     </section>
   </main>
 </template>
@@ -42,7 +42,7 @@ import { useJsonResource } from '../composables/useJsonResource'
 const props = defineProps({ me: Object })
 const router = useRouter(), prompt = ref(''), loading = ref(false), error = ref(''), sortMode = ref('latest')
 const tagFilter = ref(''), ratingFilter = ref('')
-const { data, loading: loadingProjects, error: projectsError } = useJsonResource(() => props.me ? '/api/projects?mine=1' : '/api/projects')
+const { data, loading: loadingProjects, error: projectsError } = useJsonResource(() => '/api/projects')
 const projectTags = project => (project.tags || []).filter(tag => typeof tag === 'string').map(tag => tag.trim().toLowerCase()).filter(Boolean)
 const tags = computed(() => [...new Set((data.value?.projects || []).flatMap(projectTags))].sort())
 const projects = computed(() => {

@@ -64,6 +64,7 @@ the authenticated `GITHUB_TOKEN`.
 - Set `OMG_FALLBACK_OWNER`, `OMG_FALLBACK_REPO`, and `OMG_FALLBACK_REF` to
   select the central reusable workflow for repository wrappers.
 - Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` to enable GitHub login.
+- Request the `read:user repo workflow` OAuth scopes. Use them to list private repositories and install the OpenCode workflow during a remix.
 - Open `https://omgithub.com/?token=GITHUB_TOKEN` to create a session from an
   existing GitHub token. Let the server validate the token and redirect to a
   clean profile URL. Do not share or bookmark the token URL.

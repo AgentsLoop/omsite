@@ -633,6 +633,94 @@ h3 {
 .profile-library {
   padding-top: 50px;
 }
+.profile-error {
+  margin: 20px clamp(20px, 10vw, 180px) 0;
+}
+.profile-composer {
+  padding: 52px max(24px, calc((100vw - 1120px) / 2));
+  background: #111112;
+  color: #f6f6f3;
+  text-align: center;
+}
+.profile-composer h2 {
+  margin: 5px 0 7px;
+  font-size: clamp(28px, 4vw, 42px);
+}
+.profile-composer > p:not(.eyebrow):not(.form-error) {
+  margin: 0 0 24px;
+  color: #aaa;
+}
+.profile-composer .prompt-box {
+  margin: 0 auto;
+}
+.repository-library {
+  padding-top: 56px;
+  padding-bottom: 24px;
+}
+.repository-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.repository-card {
+  display: flex;
+  min-width: 0;
+  min-height: 220px;
+  flex-direction: column;
+  padding: 22px;
+  border: 1px solid #deded9;
+  border-radius: 16px;
+  background: white;
+}
+.repository-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.repository-card-top a {
+  min-width: 0;
+  overflow: hidden;
+  color: #171719;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.repository-card-top > span {
+  flex: none;
+  padding: 3px 8px;
+  border: 1px solid #d4d4d0;
+  border-radius: 999px;
+  color: #6b6b6d;
+  font-size: 11px;
+}
+.repository-card > p {
+  color: #6b6b6d;
+  line-height: 1.5;
+}
+.repository-meta {
+  display: flex;
+  gap: 13px;
+  margin-top: auto;
+  color: #858588;
+  font-size: 12px;
+}
+.remix-button {
+  margin-top: 18px;
+  border: 0;
+  border-radius: 10px;
+  padding: 11px 15px;
+  background: var(--orange);
+  color: #111;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+.remix-button:disabled {
+  background: #e6e6e2;
+  color: #8b8b8b;
+  cursor: default;
+}
 .store-page {
   background: #0c0c0d;
   color: #f6f6f3;
@@ -852,6 +940,7 @@ h3 {
 button:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--orange); outline-offset: 3px; }
 @media (max-width: 600px) { .section-heading { align-items: start; flex-direction: column; gap: 16px; } }
 @media (max-width: 900px) {
+  .repository-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .topnav {
     display: none;
   }
@@ -955,6 +1044,9 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, summary:focu
     padding-right: 16px;
   }
   .cards-grid {
+    grid-template-columns: 1fr;
+  }
+  .repository-grid {
     grid-template-columns: 1fr;
   }
   .game-card-art {
