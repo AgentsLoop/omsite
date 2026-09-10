@@ -21,27 +21,16 @@ Use the five public tables for projects, aggregates, votes, comments, and plays.
 Keep project changes atomic with PostgreSQL advisory transaction locks.
 Require a working database before production startup.
 
-## Complete the deferred legacy import
+## Keep the completed migration state
 
-Preserve `/home/ubuntu/projects/omgithub/.env.before-supabase` for the
-legacy service account. Keep `SOCIAL_WRITES_PAUSED=true` until the import
-finishes. Continue game launches without counting plays during this pause.
+Use the 103 restored catalog records as the migration baseline.
+Keep `SOCIAL_WRITES_PAUSED=false`. Accept new ratings, comments, and play
+counts directly in Supabase.
 
-Run `scripts/export-legacy-firestore.mjs` with the legacy environment in a
-temporary Node container after the Firebase read quota resets. Mount the
-application data volume and save the export there. Stop on HTTP 429; retry later.
-Keep Firebase unchanged.
-
-Compare exported project IDs and metadata with the 103 records restored from
-`projects.json` on 2026-09-10. Insert missing projects. Preserve newer Supabase
-publication or metadata changes when reconciling matching records.
-Import the four social tables with `server/cli/import-supabase.mjs`.
-Remove the projects key from a copy of the export before importing social tables.
-Require empty destination social tables; do not overwrite live records.
-
-Verify all social row counts and record bodies against the export. Set
-`SOCIAL_WRITES_PAUSED=false`, recreate the application, and verify rating,
-comment, and play endpoints. Keep the original export for rollback.
+Do not resume the legacy social import or its canceled hourly follow-up.
+Follow the user's 2026-09-10 decision to omit the old social records.
+Keep the legacy environment and catalog backup only for manual recovery.
+Do not overwrite new Supabase records with legacy data.
 
 ## Verify and back up
 
