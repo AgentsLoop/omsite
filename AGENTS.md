@@ -22,3 +22,11 @@ Add per-command timing when writing shell scripts.
 Write Markdown as direct instructions in English.
 Commit and push each completed code change. Record the reason, verification, and current Chat-ID in the commit body.
 Include the relative age when reporting a commit.
+
+## Signed-in browser tests
+
+Use a token from `gh auth` when a browser test requires a signed-in GitHub user.
+Run `gh auth status` to select the account. Retrieve its token with `gh auth token --user LOGIN`.
+Do not print, log, commit, or place the token in a user-visible URL.
+Send the token only to OmGithub through the existing token sign-in route, then confirm the session with `/api/me` or the signed-in profile UI.
+Use `?exec=logout` on the OmGithub home route to end the test session.

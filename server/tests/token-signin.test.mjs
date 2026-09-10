@@ -8,7 +8,8 @@ async function fixture(t, { github } = {}) {
   const app = express()
   app.use(createTokenSignIn({
     github: github || (async (_path, token) => ({ id: 12, login: token === 'ghp_abcdefghijklmnopqrstuvwxyz' ? 'player' : '' })),
-    setSession: (res, user) => { sessions.push(user); res.cookie('session', 'test', { httpOnly: true }) }
+    setSession: (res, user) => { sessions.push(user); res.cookie('session', 'test', { httpOnly: true }) },
+    clearSession: (_req, res) => { res.cookie('session', '', { httpOnly: true, maxAge: 0 }) }
   }))
   app.get('/', (_req, res) => res.send('home'))
   app.use((error, _req, res, _next) => res.status(error.status || 500).json({ error: error.message }))
@@ -35,6 +36,17 @@ test('ordinary home requests pass through without token validation', async t => 
   const response = await fetch(`${base}/`)
   assert.equal(response.status, 200)
   assert.equal(await response.text(), 'home')
+  assert.deepEqual(sessions, [])
+})
+
+test('logout query clears the session and returns to the clean home URL', async t => {
+  const { base, sessions } = await fixture(t)
+  const response = await fetch(`${base}/?exec=logout`, { redirect: 'manual' })
+  assert.equal(response.status, 303)
+  assert.equal(response.headers.get('location'), '/')
+  assert.equal(response.headers.get('cache-control'), 'no-store')
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer')
+  assert.match(response.headers.get('set-cookie'), /^session=;/)
   assert.deepEqual(sessions, [])
 })
 

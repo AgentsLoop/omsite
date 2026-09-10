@@ -73,7 +73,13 @@ function setSession(res, user) {
   const sid = nonce(); sessions.set(sid, { user, expiresAt: Date.now() + 2592000000 })
   res.append('set-cookie', `omgithub_session=${encodeURIComponent(sign({ sid }, sessionSecret))}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${origin.startsWith('https:') ? '; Secure' : ''}`)
 }
-app.use(createTokenSignIn({ github, setSession }))
+function clearSession(req, res) {
+  const raw = cookies(req.headers.cookie).omgithub_session
+  const payload = raw && verify(raw, sessionSecret)
+  if (payload?.sid) sessions.delete(payload.sid)
+  res.append('set-cookie', `omgithub_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${origin.startsWith('https:') ? '; Secure' : ''}`)
+}
+app.use(createTokenSignIn({ github, setSession, clearSession }))
 function requestIp(req) { return String(req.ip || req.socket.remoteAddress || 'unknown') }
 function limited(req) {
   for (const [key, entries] of rate) if (entries.at(-1) <= Date.now() - 3600000) rate.delete(key)

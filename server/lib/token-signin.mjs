@@ -1,8 +1,15 @@
 const fail = (message, status = 400) => Object.assign(new Error(message), { status })
 
-export function createTokenSignIn({ github, setSession }) {
+export function createTokenSignIn({ github, setSession, clearSession }) {
   return async function tokenSignIn(req, res, next) {
-    if (req.method !== 'GET' || req.path !== '/' || req.query.token === undefined) return next()
+    if (req.method !== 'GET' || req.path !== '/') return next()
+    if (req.query.exec === 'logout') {
+      res.set('cache-control', 'no-store')
+      res.set('referrer-policy', 'no-referrer')
+      clearSession?.(req, res)
+      return res.redirect(303, '/')
+    }
+    if (req.query.token === undefined) return next()
     try {
       res.set('cache-control', 'no-store')
       res.set('referrer-policy', 'no-referrer')
