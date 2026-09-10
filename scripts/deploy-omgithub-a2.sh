@@ -5,8 +5,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REMOTE="${OMGHITHUB_DEPLOY_HOST:-a2}"
 DEST="${OMGHITHUB_DEPLOY_DIR:-/home/ubuntu/projects/omgithub}"
 ARCHIVE_DIR=""
+SSH_CONTROL_PATH=""
 
 cleanup() {
+  if [[ -n "$SSH_CONTROL_PATH" && -S "$SSH_CONTROL_PATH" ]]; then
+    ssh -S "$SSH_CONTROL_PATH" -O exit "$REMOTE" >/dev/null 2>&1 || true
+  fi
   if [[ -n "$ARCHIVE_DIR" ]]; then
     rm -f -- "$ARCHIVE_DIR/omgithub-deploy.tar.gz"
     rmdir "$ARCHIVE_DIR" 2>/dev/null || true
@@ -30,17 +34,20 @@ run_timed() {
 
 # shellcheck disable=SC2029 # Parse the command on a2.
 stream_and_deploy() {
-  local remote_dest remote_archive remote_command archive_path
+  local remote_dest remote_archive remote_archive_quoted remote_command archive_path
 
   # Keep custom deploy paths safe when the command is parsed on a2.
   printf -v remote_dest '%q' "$DEST"
   ARCHIVE_DIR="$(mktemp -d)"
   archive_path="$ARCHIVE_DIR/omgithub-deploy.tar.gz"
   remote_archive="/tmp/omgithub-deploy-${ARCHIVE_DIR##*/}.tar.gz"
+  printf -v remote_archive_quoted '%q' "$remote_archive"
+  SSH_CONTROL_PATH="$ARCHIVE_DIR/ssh-control"
 
   run_timed "create deployment archive" env COPYFILE_DISABLE=1 LC_ALL=C tar --no-xattrs --no-mac-metadata -C "$ROOT" -czf "$archive_path" \
     --exclude=.git --exclude=node_modules --exclude=dist --exclude=data --exclude=.env .
-  run_timed "transfer deployment archive" scp "$archive_path" "$REMOTE:$remote_archive"
+  run_timed "connect to deployment host" ssh -M -S "$SSH_CONTROL_PATH" -fN "$REMOTE"
+  run_timed "transfer deployment archive" ssh -S "$SSH_CONTROL_PATH" "$REMOTE" "cat > $remote_archive_quoted" < "$archive_path"
 
   remote_command="set -e
 run_timed() {
@@ -81,7 +88,9 @@ run_timed 'wait for service health' wait_for_services
 run_timed 'check service status' sudo -n docker compose ps
 run_timed 'remove remote deployment archive' rm -f -- \"\$ARCHIVE\""
 
-  ssh "$REMOTE" "$remote_command"
+  ssh -S "$SSH_CONTROL_PATH" "$REMOTE" "$remote_command"
+  run_timed "disconnect from deployment host" ssh -S "$SSH_CONTROL_PATH" -O exit "$REMOTE"
+  SSH_CONTROL_PATH=""
 }
 
 stream_and_deploy
