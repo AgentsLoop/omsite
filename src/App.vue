@@ -5,7 +5,7 @@
         <span class="brand-mark">O</span><span>OmGithub</span>
       </RouterLink>
       <nav class="topnav"><a href="/#discover">Discover</a><a href="https://github.com/AgentsLoop/OhMyGithub" target="_blank">GitHub</a></nav>
-      <RouterLink class="submit-game-button" to="/submit">Submit your game</RouterLink>
+      <RouterLink class="submit-game-button" to="/submit">Submit your project</RouterLink>
       <a v-if="!me" class="login-button" href="/auth/github">Sign in</a>
       <RouterLink v-else class="user-pill" :to="`/${me.login}`"><img :src="me.avatar_url" alt="" /><span>{{ me.login }}</span></RouterLink>
     </header>

@@ -1,7 +1,7 @@
 <template>
   <main v-if="project" class="store-page">
     <section class="store-hero">
-      <div><p class="eyebrow orange">OMGHITHUB STORE</p><h1>{{ project.title }}</h1><p class="store-description">{{ project.description }}</p><div class="store-buttons"><a class="play" :href="`/api/projects/${encodeURIComponent(project.id)}/play`" target="_blank" rel="noopener">Play</a><a class="install" :href="project.install_url">Install</a><button @click="share">Share</button><RouterLink :to="`/${project.owner}`" class="creator"><img v-if="project.owner_avatar" :src="project.owner_avatar" alt="" />By {{ project.owner }}</RouterLink></div><p role="status">{{ shareStatus }}</p><details class="game-details"><summary>Game details</summary><p><a :href="project.github_url" target="_blank" rel="noopener noreferrer">View the source on GitHub</a></p></details></div><div class="store-icon">O</div>
+      <div><p class="eyebrow orange">OMGHITHUB STORE</p><h1>{{ project.title }}</h1><p class="store-description">{{ project.description }}</p><div class="store-buttons"><a class="play" :href="`/api/projects/${encodeURIComponent(project.id)}/play`" target="_blank" rel="noopener">Play</a><a class="install" :href="project.install_url">Install</a><button @click="share">Share</button><RouterLink v-if="remixLocation" :to="remixLocation">Remix</RouterLink><RouterLink :to="`/${project.owner}`" class="creator"><img v-if="project.owner_avatar" :src="project.owner_avatar" alt="" />By {{ project.owner }}</RouterLink></div><p role="status">{{ shareStatus }}</p><details class="game-details"><summary>Project details</summary><p><a :href="project.github_url" target="_blank" rel="noopener noreferrer">View the source on GitHub</a></p></details></div><div class="store-icon">O</div>
     </section>
     <ProjectSocial :key="`${route.fullPath}:${project.id}`" :project="project" :me="me" />
     <section class="screens-section"><h2>Screenshots</h2><div class="store-shots"><img v-for="shot in project.screenshots" :key="shot" :src="shot" alt="Project screenshot" @click="selected = shot" /></div><p v-if="!project.screenshots?.length" class="empty-reviews">No screenshots yet.</p></section>
@@ -22,6 +22,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'; import { useRoute } from 'vue-router'
 import ProjectSocial from '../components/ProjectSocial.vue'
+import { projectRemixLocation } from '../lib/project-repository.mjs'
 import { useJsonResource } from '../composables/useJsonResource'
 const route = useRoute(), selected = ref('')
 defineProps({ me: Object })
@@ -36,17 +37,18 @@ const { data: publication, loading, error } = useJsonResource(() => {
   return ref ? `${base}/${routeKind}/${encodeURIComponent(ref)}${path ? `/${path}` : ''}/progress` : `${base}/progress`
 }, { pollMs: 2000, acceptStatuses: [202, 502], shouldPoll: result => result?.state !== 'published' && result?.state !== 'failed' })
 const project = computed(() => publication.value?.project || null)
+const remixLocation = computed(() => project.value ? projectRemixLocation(project.value) : null)
 const steps = [
-  { index: 0, id: 'checking', label: 'Checking the game' },
+  { index: 0, id: 'checking', label: 'Checking the project' },
   { index: 1, id: 'queued', label: 'Preparing the build' },
-  { index: 2, id: 'building', label: 'Creating the game preview' },
-  { index: 3, id: 'publishing', label: 'Publishing the game' }
+  { index: 2, id: 'building', label: 'Creating the project preview' },
+  { index: 3, id: 'publishing', label: 'Publishing the project' }
 ]
 const currentStep = computed(() => ({ checking: 0, queued: 1, building: 2, publishing: 3, published: 4 }[publication.value?.state] ?? 0))
 const friendlyPublicationMessage = computed(() => ({
   checking: 'Getting everything ready…',
-  queued: 'Your game is next in line.',
-  building: 'The game and its preview are being created.',
+  queued: 'Your project is next in line.',
+  building: 'The project and its preview are being created.',
   publishing: 'Almost ready to play.'
 }[publication.value?.state] || 'Getting everything ready…'))
 async function share() {

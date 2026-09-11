@@ -8,6 +8,8 @@ and follow build progress. Use this flow without signing in.
 
 ## Publish a public repository path
 
+Use **Remix** on a published project card or project page to select its source repository in the composer. Keep the repository selector visible on home and profile composers. Validate cards, selectors, and modals in the dark theme at desktop and mobile widths before delivery. Deploy the verified build and check the live asset version when fixing missing production UI.
+
 Use **Deploy** on a profile repository card to publish its root. Use **Open** after a successful root deployment. Keep subdirectory publications separate from the root deployment state. Show only public repositories.
 
 Select **Remix** to choose a repository in the composer. Submit the prompt to reuse a writable repository or copy a public repository into your account. Select **Playground** to create or reuse `<logged-in-user>/PlayGround` with your GitHub token. Keep Playground public and enable Issues.

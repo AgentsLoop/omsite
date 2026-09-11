@@ -1,5 +1,6 @@
 @import "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap";
 :root {
+  color-scheme: dark;
   font-family: "DM Sans", sans-serif;
   color: #f6f6f3;
   background: #0c0c0d;
@@ -668,9 +669,9 @@ h3 {
   min-height: 220px;
   flex-direction: column;
   padding: 22px;
-  border: 1px solid #deded9;
+  border: 1px solid var(--line);
   border-radius: 16px;
-  background: white;
+  background: var(--panel);
 }
 .repository-card-top {
   display: flex;
@@ -681,7 +682,7 @@ h3 {
 .repository-card-top a {
   min-width: 0;
   overflow: hidden;
-  color: #171719;
+  color: #f6f6f3;
   font-weight: 750;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -689,20 +690,20 @@ h3 {
 .repository-card-top > span {
   flex: none;
   padding: 3px 8px;
-  border: 1px solid #d4d4d0;
+  border: 1px solid #444;
   border-radius: 999px;
-  color: #6b6b6d;
+  color: #b9b9ba;
   font-size: 11px;
 }
 .repository-card > p {
-  color: #6b6b6d;
+  color: #b9b9ba;
   line-height: 1.5;
 }
 .repository-meta {
   display: flex;
   gap: 13px;
   margin-top: auto;
-  color: #858588;
+  color: #a8a8ac;
   font-size: 12px;
 }
 .remix-button {
@@ -717,11 +718,15 @@ h3 {
   cursor: pointer;
 }
 .remix-button:disabled {
-  background: #e6e6e2;
+  background: #29292b;
   color: #8b8b8b;
   cursor: default;
 }
 .repository-actions { display: flex; gap: 10px; }
+.project-card-link { display: block; }
+.project-card-actions { padding: 0 22px 20px; }
+.project-card-actions .remix-button { width: 100%; margin-top: 0; background: #29292b; border: 1px solid #48484b; color: #f6f6f3; }
+.remix-button:focus-visible, select:focus-visible { outline: 2px solid var(--orange); outline-offset: 3px; }
 .repository-actions .remix-button { flex: 1; text-align: center; text-decoration: none; }
 .composer-repository { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }
 .composer-repository select { max-width: 70%; padding: 9px 12px; border: 1px solid #666; border-radius: 8px; background: #222; color: #fff; }

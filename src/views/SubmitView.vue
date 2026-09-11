@@ -2,14 +2,14 @@
   <main class="publication-page">
     <section class="publication-card">
       <p class="eyebrow orange">SHARE YOUR GAME</p>
-      <h1>Submit your game</h1>
+      <h1>Submit your project</h1>
       <p>Paste a public GitHub URL. No sign-in needed.</p>
       <form class="submit-game-form" @submit.prevent="submit">
         <label for="game-url">GitHub URL</label>
         <input id="game-url" v-model="sourceUrl" type="url" required placeholder="https://github.com/owner/game" aria-describedby="game-url-help" :aria-invalid="error ? 'true' : undefined" />
-        <small id="game-url-help">Use a repository, a game folder, or an HTML file. We will build your game and create a page to play it.</small>
+        <small id="game-url-help">Use a repository, a project folder, or an HTML file. We will build your project and create a page to open it.</small>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-        <button class="submit-game-button" type="submit">Submit your game</button>
+        <button class="submit-game-button" type="submit">Submit your project</button>
       </form>
     </section>
   </main>

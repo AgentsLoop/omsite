@@ -15,6 +15,10 @@ Do not suggest, report, or propose security issues unless the user explicitly as
 
 ## Verify and deliver changes
 
+Validate every new or changed UI in the dark theme at desktop and mobile widths. Inspect rendered cards, inputs, dropdowns, modals, and disabled states. Use dark surface tokens and readable text; reject unintended white panels. Check the deployed build when fixing live-site UI.
+
+After each user-facing code change, commit and push the change, then deploy it to production. Spawn a `multi_agent_v1__spawn_agent` verifier with the Terra model after deployment. Require it to test the live site at desktop and mobile widths, capture screenshots, critique behavior and visual quality, and return an explicit pass or fail. Fix every failure, redeploy, and repeat verification until it passes.
+
 Run `npm test`, `npm run build`, and `git diff --check` before delivery.
 Run `actionlint .github/workflows/omgithub-build.yml` after workflow changes.
 Keep secrets in the deployment environment. Exclude `.env`, `data`, and dependencies from Git.

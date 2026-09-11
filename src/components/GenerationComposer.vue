@@ -2,7 +2,7 @@
   <div ref="container" class="generation-composer">
     <form class="prompt-box" @submit.prevent="create">
       <span class="prompt-icon">✦</span>
-      <textarea ref="field" v-model="prompt" :disabled="busy" rows="1" placeholder="Ask OmGithub to create or change a game…" aria-label="Generation request" @keydown.enter.exact.prevent="create"></textarea>
+      <textarea ref="field" v-model="prompt" :disabled="busy" rows="1" placeholder="Ask OmGithub to create or change a project…" aria-label="Generation request" @keydown.enter.exact.prevent="create"></textarea>
       <button :disabled="busy || !prompt.trim()" aria-label="Generate"><span v-if="busy" class="spinner"></span><span v-else>↑</span></button>
     </form>
     <label class="composer-repository">Repository
@@ -50,6 +50,8 @@ const targetCopy = computed(() => !selected.value ? (props.me ? `Generate in ${p
   options.value.find(row => row.full_name === selected.value)?.can_write ? `Generate in ${selected.value}.` : 'Copy this public repository to your account, then generate there.')
 async function selectRepository(repository) {
   if (busy.value || creatingProject.value) return
+  const known = data.value?.repositories?.find(row => row.full_name.toLowerCase() === repository.full_name.toLowerCase())
+  if (known) repository = { ...repository, ...known }
   additions.value = [repository, ...additions.value.filter(row => row.full_name.toLowerCase() !== repository.full_name.toLowerCase())]
   selected.value = repository.full_name
   error.value = ''

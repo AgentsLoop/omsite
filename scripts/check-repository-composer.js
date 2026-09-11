@@ -3,6 +3,7 @@ async page => {
   const writes = []
   const repository = { id: 1, owner: 'creator', name: 'game', full_name: 'creator/game', html_url: 'https://github.com/creator/game', can_remix: true, can_deploy: true, deployment_status: 'not_deployed' }
   const own = { ...repository, id: 2, owner: 'player', full_name: 'player/game', can_write: true, deployment_status: 'published', deployment_path: '/player/game' }
+  const published = { id: 'published', title: 'Published project', repo_owner: 'creator', repo: 'game', store_path: '/creator/game', status: 'published' }
   await page.unroute('**/api/**')
   await page.route('**/api/**', async route => {
     const path = route.request().url().replace(/^https?:\/\/[^/]+/, '').split('?')[0]
@@ -15,13 +16,13 @@ async page => {
       json = { repository: { ...own, id: 3, name: body.name, full_name: 'player/' + body.name, deployment_status: 'not_deployed', deployment_path: '' } }
     }
     else if (path === '/api/repositories') json = { repositories: [own] }
-    else if (path.startsWith('/api/profiles/')) json = { profile: { login: 'creator' }, repositories: [repository, own], projects: [] }
+    else if (path.startsWith('/api/profiles/')) json = { profile: { login: 'creator' }, repositories: [repository, own], projects: [published] }
     else if (route.request().method() === 'POST') {
       writes.push({ path, body: route.request().postDataJSON() })
       json = { omgithub_path: path.endsWith('/deploy') ? '/creator/game' : '/player/game/issues/42' }
     } else if (path.endsWith('/progress')) json = { state: 'building' }
     else if (path.includes('/issues/')) json = { title: 'Test generation', screenshots: [], status: 'in progress' }
-    else json = { projects: [] }
+    else json = { projects: [published] }
     await route.fulfill({ json })
   })
   await page.goto('http://127.0.0.1:5193/creator')
@@ -50,6 +51,10 @@ async page => {
   await page.goto('http://127.0.0.1:5193/creator')
   await page.getByRole('button', { name: 'Remix', exact: true }).first().waitFor()
   if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error('Mobile horizontal overflow')
+  for (const selector of ['.repository-card', '.game-card', '.composer-repository select']) {
+    const color = await page.locator(selector).first().evaluate(el => getComputedStyle(el).backgroundColor)
+    if (color === 'rgb(255, 255, 255)' || color === 'rgba(0, 0, 0, 0)') throw new Error('Missing dark surface: ' + selector)
+  }
   await page.getByRole('combobox').selectOption('__new_project__')
   const dialog = page.getByRole('dialog', { name: 'New Project', exact: true })
   await dialog.waitFor()
@@ -80,5 +85,18 @@ async page => {
   await page.getByRole('combobox', { name: /^Repository/ }).selectOption('__new_project__')
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
   if (await page.getByRole('combobox', { name: /^Repository/ }).inputValue() !== 'player/game') throw new Error('Cancel changed previous selection')
-  return { passed: ['Remix selection without submission', 'selected generation', 'user Playground default', 'Deploy progress navigation', 'Open without write', 'mobile layout', 'modal focus and Escape', 'duplicate-name error', 'new project selection without generation', 'generation in new project', 'home modal cancellation'] }
+  await page.locator('.game-card').getByRole('button', { name: 'Remix', exact: true }).click()
+  if (await page.getByRole('combobox', { name: /^Repository/ }).inputValue() !== 'creator/game') throw new Error('Published home project Remix did not select source')
+  await page.goto('http://127.0.0.1:5193/?remix=creator/game')
+  await page.waitForFunction(() => document.querySelector('.composer-repository select')?.value === 'creator/game')
+  await page.getByRole('combobox', { name: /^Repository/ }).selectOption('__new_project__')
+  await dialog.waitFor()
+  if (await dialog.evaluate(el => getComputedStyle(el).backgroundColor) === 'rgb(255, 255, 255)') throw new Error('Light modal surface')
+  await page.screenshot({ path: '/tmp/omgithub-dark-mobile.png' })
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto('http://127.0.0.1:5193/creator')
+  await page.locator('.repository-card').first().waitFor()
+  await page.screenshot({ path: '/tmp/omgithub-dark-desktop.png', fullPage: true })
+  return { passed: ['published profile Remix', 'selected generation', 'user Playground default', 'Deploy progress navigation', 'Open without write', 'mobile dark surfaces', 'modal focus and Escape', 'duplicate-name error', 'new project selection without generation', 'generation in new project', 'home modal cancellation', 'published home Remix', 'published-page remix link selection', 'dark modal and desktop screenshots'] }
 }
