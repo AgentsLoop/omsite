@@ -35,6 +35,7 @@ import { useRoute } from 'vue-router'
 import GenerationComposer from '../components/GenerationComposer.vue'
 import GameCard from '../components/GameCard.vue'
 import { useJsonResource } from '../composables/useJsonResource'
+import { loadDiscoverSort, saveDiscoverSort } from '../lib/discover-sort.mjs'
 defineProps({ me: Object })
 const composer = ref(null), route = useRoute()
 watch([() => route.query.remix, composer], async ([value, composerInstance]) => {
@@ -43,7 +44,8 @@ watch([() => route.query.remix, composer], async ([value, composerInstance]) => 
   const [owner, name] = value.split('/')
   composerInstance?.selectRepository({ owner, name, full_name: value, can_remix: true })
 }, { immediate: true, flush: 'post' })
-const sortMode = ref('latest')
+const sortMode = ref(loadDiscoverSort(window.localStorage))
+watch(sortMode, value => saveDiscoverSort(window.localStorage, value))
 const tagFilter = ref(''), ratingFilter = ref('')
 const { data, loading: loadingProjects, error: projectsError } = useJsonResource(() => '/api/projects')
 const projectTags = project => (project.tags || []).filter(tag => typeof tag === 'string').map(tag => tag.trim().toLowerCase()).filter(Boolean)
