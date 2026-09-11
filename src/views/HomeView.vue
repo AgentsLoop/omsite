@@ -37,11 +37,11 @@ import GameCard from '../components/GameCard.vue'
 import { useJsonResource } from '../composables/useJsonResource'
 defineProps({ me: Object })
 const composer = ref(null), route = useRoute()
-watch(() => route.query.remix, async value => {
+watch([() => route.query.remix, composer], async ([value, composerInstance]) => {
   if (typeof value !== 'string' || !/^[\w.-]+\/[\w.-]+$/.test(value)) return
   await nextTick()
   const [owner, name] = value.split('/')
-  composer.value?.selectRepository({ owner, name, full_name: value, can_remix: true })
+  composerInstance?.selectRepository({ owner, name, full_name: value, can_remix: true })
 }, { immediate: true, flush: 'post' })
 const sortMode = ref('latest')
 const tagFilter = ref(''), ratingFilter = ref('')
