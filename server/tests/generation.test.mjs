@@ -5,18 +5,19 @@ import { clonePublicRepository } from '../lib/repository-clone.mjs'
 import { withDeployments } from '../lib/profile-repositories.mjs'
 import { remixRepository } from '../lib/repository-remix.mjs'
 
-test('empty selection uses Playground and server credentials', async () => {
+test('empty selection reuses the signed-in user Playground and user credentials', async () => {
   const calls = []
-  const result = await generateIssue({ user: { login: 'player', token: 'user-token' }, serverToken: 'server-token', prompt: 'Create a maze game', origin: 'https://omgithub.com', config: {}, requestGithub: async (path, token, options = {}) => {
+  const result = await generateIssue({ user: { login: 'player', token: 'user-token' }, prompt: 'Create a maze game', origin: 'https://omgithub.com', config: {}, requestGithub: async (path, token, options = {}) => {
     calls.push({ path, token })
-    if (path === '/repos/AgentsLoop/PlayGround') return { full_name: 'AgentsLoop/PlayGround', default_branch: 'main', permissions: { push: true } }
+    if (path === '/repos/player/PlayGround') return { full_name: 'player/PlayGround', default_branch: 'main', permissions: { push: true } }
     if (path.endsWith('/commits/main')) return { sha: 'a'.repeat(40) }
-    if (path.endsWith('/issues')) return { number: 12, html_url: 'https://github.com/AgentsLoop/PlayGround/issues/12' }
+    if (path.endsWith('/issues')) return { number: 12, html_url: 'https://github.com/player/PlayGround/issues/12' }
     if (options.method === 'PUT') return {}
     return {}
   } })
-  assert.equal(result.omgithub_path, '/AgentsLoop/PlayGround/issues/12')
-  assert.ok(calls.every(call => call.token === 'server-token'))
+  assert.equal(result.omgithub_path, '/player/PlayGround/issues/12')
+  assert.ok(calls.every(call => call.token === 'user-token'))
+  assert.ok(!calls.some(call => call.path === '/user/repos'))
 })
 
 test('clone skips occupied names and copies history before setting the default branch', async () => {

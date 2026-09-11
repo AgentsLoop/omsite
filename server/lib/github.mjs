@@ -18,7 +18,7 @@ export async function github(path, token, options = {}) {
   const response = await fetch(`${API}${path}`, { ...options, headers: { accept: 'application/vnd.github+json', 'user-agent': 'OmGithub', 'x-github-api-version': '2022-11-28', ...(token ? { authorization: `Bearer ${token}` } : {}), ...(options.headers || {}) } })
   const text = await response.text(); let data = null
   try { data = text ? JSON.parse(text) : null } catch { data = text }
-  if (!response.ok) throw Object.assign(new Error(data?.message || `GitHub returned ${response.status}`), { status: response.status })
+  if (!response.ok) throw Object.assign(new Error(data?.message || `GitHub returned ${response.status}`), { status: response.status, errors: data?.errors })
   return data
 }
 export function extractUrls(issue, comments = []) {

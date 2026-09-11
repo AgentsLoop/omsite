@@ -57,7 +57,7 @@ the authenticated `GITHUB_TOKEN`.
 ## Configuration
 
 - Set `GITHUB_TOKEN` for public repository builds and reads.
-- Require GitHub login for site issue submission. Use the user's token for selected public repositories. Use `GITHUB_TOKEN` for generation in `AgentsLoop/PlayGround` when no repository is selected. Grant that server token write and workflow access to Playground.
+- Require GitHub login for site issue submission. Use the user's token for generation. Create or reuse `<logged-in-user>/PlayGround` when no repository is selected. Create it as a public repository with an initial commit and GitHub Issues enabled. Use **New Project…** in either composer to create and select a named public repository.
 - Set `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_WEBHOOK_SECRET`
   to install listeners through installation webhooks.
 - Set `OMG_FALLBACK_OWNER`, `OMG_FALLBACK_REPO`, and `OMG_FALLBACK_REF` to

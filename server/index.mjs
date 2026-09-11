@@ -17,6 +17,7 @@ import { isDirectGameSource, normalizeSource } from './lib/catalog-import-lib.mj
 import { createTokenSignIn } from './lib/token-signin.mjs'
 import { listProfileRepositories, withDeployments } from './lib/profile-repositories.mjs'
 import { generateIssue } from './lib/generation.mjs'
+import { createUserRepository } from './lib/repository-create.mjs'
 import { remixRepository } from './lib/repository-remix.mjs'
 import { createSessionStore } from './lib/session-store.mjs'
 
@@ -325,6 +326,17 @@ app.get('/api/repositories', async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
+app.post('/api/repositories', async (req, res, next) => {
+  try {
+    if (!sameOrigin(req)) return res.status(403).json({ error: 'Use the OmGithub site to create a project.' })
+    const user = userFor(req)
+    if (!user) return res.status(401).json({ error: 'Sign in with GitHub to create a project.' })
+    if (limited(req)) return res.status(429).json({ error: 'Creation limit reached. Try again later.' })
+    const repository = await createUserRepository({ name: req.body?.name, user, requestGithub: github })
+    res.status(201).json({ repository })
+  } catch (error) { next(error) }
+})
+
 app.post('/api/repositories/:owner/:repo/deploy', async (req, res, next) => {
   try {
     if (!sameOrigin(req)) return res.status(403).json({ error: 'Use the OmGithub site to deploy a repository.' })
@@ -367,7 +379,7 @@ app.post('/api/issues', async (req, res, next) => {
     const prompt = String(req.body?.prompt || '').trim(); if (prompt.length < 8 || prompt.length > 12000) return res.status(400).json({ error: 'Prompt must be between 8 and 12,000 characters.' })
     const user = userFor(req)
     if (!user) return res.status(401).json({ error: 'Sign in with GitHub to create a game.' })
-    res.status(201).json(await generateIssue({ selection: req.body?.repository, prompt, user, serverToken: githubToken, origin, config: githubApp, requestGithub: github }))
+    res.status(201).json(await generateIssue({ selection: req.body?.repository, prompt, user, origin, config: githubApp, requestGithub: github }))
   } catch (e) { next(e) }
 })
 
