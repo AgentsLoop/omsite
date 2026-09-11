@@ -97,8 +97,8 @@ async function createProject() {
 }
 async function create() {
   if (busy.value || creatingProject.value || projectDialog.value?.open) return
+  if (!props.me) { window.location.assign('/auth/github'); return }
   if (prompt.value.trim().length < 8 || prompt.value.trim().length > 12000) { error.value = 'Prompt must be between 8 and 12,000 characters.'; return }
-  if (!props.me) { error.value = 'Sign in with GitHub to generate.'; return }
   busy.value = true; error.value = ''
   try {
     const [owner, repo] = selected.value.split('/')
