@@ -54,6 +54,7 @@ const previewUrl = computed(() => project.value?.preview_url || '')
 const previewLabel = computed(() => displayedShot.value ? 'Build screenshot' : project.value?.preview_url ? 'Playable preview' : project.value?.screenshots?.length ? 'Build screenshot' : 'Waiting for preview')
 const failedStates = new Set(['action_required', 'cancelled', 'failure', 'startup_failure', 'timed_out'])
 const workflowFailed = computed(() => failedStates.has(project.value?.actions?.status))
+const currentGithubAction = computed(() => project.value?.actions?.active_step || '')
 const workflowSummary = computed(() => {
   const actions = project.value?.actions
   if (!actions || actions.status === 'waiting') return 'Waiting for the GitHub Actions run.'
@@ -79,7 +80,9 @@ const steps = computed(() => {
     { label: 'Published', copy: p.project_path || 'Immutable project link pending', done: Boolean(p.project_path), active: complete && !p.project_path }
   ]
 })
-const currentStep = computed(() => steps.value.find(step => step.active) || [...steps.value].reverse().find(step => step.done) || steps.value[0])
+const currentStep = computed(() => currentGithubAction.value
+  ? { label: 'GitHub Actions', copy: currentGithubAction.value }
+  : steps.value.find(step => step.active) || [...steps.value].reverse().find(step => step.done) || steps.value[0])
 watch(project, (current, previous) => {
   if (!current) { selectedShot.value = ''; displayedShot.value = ''; return }
   if (current.preview_url && !previous?.preview_url) displayedShot.value = ''
