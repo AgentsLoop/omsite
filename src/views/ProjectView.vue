@@ -13,19 +13,17 @@
       <nav class="mobile-pane-tabs" aria-label="Workspace panes"><button :class="mobilePane === 'chat' ? 'active' : ''" @click="showPane('chat')">Chat</button><button :class="mobilePane === 'preview' ? 'active' : ''" @click="showPane('preview')">Preview</button></nav>
       <div class="studio-grid">
         <section class="chat-panel" :class="{ 'mobile-hidden': mobilePane !== 'chat' }">
-          <details v-if="project.actions?.run_id && !project.opencode_url" class="actions-progress" open>
-            <summary :class="{ failed: workflowFailed }"><span>{{ workflowIcon(project.actions.status) }}</span><strong>{{ workflowSummary }}</strong><a :href="project.actions.url" target="_blank" @click.stop>GitHub Actions ↗</a></summary>
-            <div class="actions-jobs">
-              <section v-for="job in project.actions.jobs" :key="job.id">
-                <h3><span>{{ workflowIcon(job.conclusion || job.status) }}</span><a :href="job.url" target="_blank">{{ job.name }}</a></h3>
-                <ol>
-                  <li v-for="step in job.steps" :key="`${job.id}-${step.number}`" :class="step.conclusion || step.status"><span>{{ workflowIcon(step.conclusion || step.status) }}</span><span>{{ step.name }}</span><small>{{ step.conclusion || step.status }}</small></li>
-                </ol>
-              </section>
-            </div>
-          </details>
           <iframe v-if="project.opencode_url" :src="project.opencode_url" allow="clipboard-read; clipboard-write" title="Live OpenCode chat"></iframe>
-          <div v-else class="preview-wait"><div class="orbit"><span></span></div><h2>{{ workflowFailed ? 'GitHub Actions failed' : 'Preparing OpenCode' }}</h2><p>{{ workflowFailed ? `Failed at: ${project.actions.failed_step || 'Open the run for failure details.'}` : workflowSummary }}</p><a v-if="project.actions?.url" :href="project.actions.url" target="_blank">Open GitHub Actions ↗</a></div>
+          <div v-else class="preview-wait workflow-wait">
+            <div class="orbit"><span></span></div>
+            <h2>{{ workflowFailed ? 'GitHub Actions failed' : 'Preparing OpenCode' }}</h2>
+            <div class="workflow-status" :class="{ failed: workflowFailed }">
+              <div class="workflow-status-copy"><span>{{ workflowFailed ? 'Failed action' : 'Current action' }}</span><strong>{{ workflowProgress.currentAction }}</strong></div>
+              <span class="workflow-count">{{ workflowProgress.completed }} / {{ workflowProgress.total || '—' }}</span>
+            </div>
+            <div class="workflow-bar" role="progressbar" aria-label="GitHub Actions progress" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="workflowProgress.percent"><span :style="{ width: `${workflowProgress.percent}%` }"></span></div>
+            <a v-if="project.actions?.url" :href="project.actions.url" target="_blank">Open GitHub Actions ↗</a>
+          </div>
         </section>
         <section class="preview-panel" :class="{ 'mobile-hidden': mobilePane !== 'preview' }">
           <div class="preview-toolbar"><span class="live-dot"></span><strong>{{ previewLabel }}</strong><div class="shot-tabs"><button v-if="project.project_files_url" :class="selectedPreview === 'files' ? 'selected' : ''" @click="selectedPreview = 'files'">Files</button><button v-for="(shot, index) in project.screenshots" :key="shot" :class="displayedShot === shot ? 'selected' : ''" @click="selectedPreview = shot">{{ index + 1 }}</button><button v-if="project.preview_url" :class="selectedPreview === 'game' ? 'selected' : ''" @click="selectedPreview = 'game'">Final Game</button></div><button v-if="previewUrl" class="preview-refresh" type="button" title="Refresh preview" aria-label="Refresh preview" @click="refreshPreview">↻</button><a v-if="displayedShot || previewUrl" :href="displayedShot || previewUrl" target="_blank">Open ↗</a></div>
@@ -43,6 +41,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { refreshPreviewFrame, selectPreview, switchWorkspacePane } from '../preview-selection.mjs'
+import { summarizeWorkflowProgress } from '../workflow-progress.mjs'
 import { useRoute } from 'vue-router'
 import { useJsonResource } from '../composables/useJsonResource'
 const route = useRoute(), selectedShot = ref(''), selectedPreview = ref(''), mobilePane = ref('chat'), previewFrameKey = ref(0)
@@ -57,22 +56,7 @@ const previewLabel = computed(() => displayedShot.value ? 'Build screenshot' : s
 const failedStates = new Set(['action_required', 'cancelled', 'failure', 'startup_failure', 'timed_out'])
 const workflowFailed = computed(() => failedStates.has(project.value?.actions?.status))
 const currentGithubAction = computed(() => project.value?.actions?.active_step || '')
-const workflowSummary = computed(() => {
-  const actions = project.value?.actions
-  if (!actions || actions.status === 'waiting') return 'Waiting for the GitHub Actions run.'
-  if (actions.status === 'unavailable') return 'GitHub Actions progress is temporarily unavailable.'
-  if (workflowFailed.value) return `Failed at ${actions.failed_step || 'GitHub Actions'}`
-  if (actions.active_step) return actions.active_step
-  if (actions.status === 'completed') return actions.conclusion === 'success' ? 'GitHub Actions completed' : `GitHub Actions: ${actions.conclusion}`
-  return 'GitHub Actions is starting.'
-})
-function workflowIcon(state) {
-  if (state === 'success') return '✓'
-  if (failedStates.has(state)) return '×'
-  if (state === 'in_progress' || state === 'queued') return '●'
-  if (state === 'skipped') return '−'
-  return '○'
-}
+const workflowProgress = computed(() => summarizeWorkflowProgress(project.value?.actions))
 function refreshPreview() {
   previewFrameKey.value = refreshPreviewFrame(previewFrameKey.value)
 }
