@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fix Agent or Skill"
+  short_description: "Apply a user correction to agent instructions or a skill."
+  default_prompt: "Use $fix-agent-or-skill to apply my latest behavioral correction to the correct AGENTS.md or SKILL.md file."
