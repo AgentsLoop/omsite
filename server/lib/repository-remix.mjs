@@ -85,7 +85,7 @@ export async function remixRepository({ owner, repo, prompt, user, origin, confi
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       title: `/OpenCode ${firstLine}`,
-      body: `${request}\n\n---\nRemixed with [OmGithub](${origin}) by @${user.login}.`,
+      body: request,
       labels: ['OpenCode']
     })
   })

@@ -41,6 +41,7 @@ test('install the pinned action, add the OpenCode label, and create a remix issu
   assert.equal(JSON.parse(workflowWrite.body).branch, 'main')
   const issueWrite = mock.calls.find(call => call.path.endsWith('/issues'))
   assert.equal(JSON.parse(issueWrite.body).title, '/OpenCode Add a cooperative game mode')
+  assert.equal(JSON.parse(issueWrite.body).body, 'Add a cooperative game mode')
   assert.deepEqual(JSON.parse(issueWrite.body).labels, ['OpenCode'])
   assert.equal(mock.calls.some(call => call.path.endsWith('/labels') && call.method === 'POST'), true)
 })
