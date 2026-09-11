@@ -59,9 +59,10 @@ the authenticated `GITHUB_TOKEN`.
 - Set `GITHUB_TOKEN` for public repository builds and reads.
 - Require GitHub login for site issue submission. Use the user's token for generation. Create or reuse `<logged-in-user>/PlayGround` when no repository is selected. Create it as a public repository with an initial commit and GitHub Issues enabled. Use **New Project…** in either composer to create and select a named public repository.
 - Set `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_WEBHOOK_SECRET`
-  to install listeners when the App receives an opened-issue webhook. Subscribe
-  the App to issue events. Grant Actions, Contents, Issues, and Workflows write
-  access. Do not install listeners from App installation events.
+  to install listeners when the App receives an issue with an `OpenCode` label
+  or a `/OpenCode` title. Subscribe the App to issue events. Grant Actions,
+  Contents, Issues, and Workflows write access. Ignore App installation events
+  and other issues.
 - Set `OMG_FALLBACK_OWNER`, `OMG_FALLBACK_REPO`, and `OMG_FALLBACK_REF` to
   select the central reusable workflow for repository wrappers.
 - Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` to enable GitHub login.

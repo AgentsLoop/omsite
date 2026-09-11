@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { generateKeyPairSync } from 'node:crypto'
-import { ensureIssueWorkflow, isOpenedIssueEvent, handleOpenedIssue, extractUrls, repositoryWorkflow } from '../lib/github.mjs'
+import { ensureIssueWorkflow, isActionableIssueEvent, handleActionableIssue, extractUrls, repositoryWorkflow } from '../lib/github.mjs'
 
 test('extractUrls separates OpenCode, screenshots, preview, and immutable project URL', () => {
   const sha = 'a'.repeat(40)
@@ -35,7 +35,6 @@ const response = (data, status = 200) => ({ ok: status >= 200 && status < 300, s
 function repositoryMock(existing = null) {
   const calls = []
   let stored = existing
-  let comments = []
   const requestFetch = async (url, options = {}) => {
     const path = new URL(url).pathname
     calls.push({ path, url, ...options })
@@ -49,10 +48,6 @@ function repositoryMock(existing = null) {
       return stored ? response({ content: stored, sha: 'old-file-sha' }) : response({}, 404)
     }
     if (path.endsWith('/labels/OpenCode')) return response({ name: 'OpenCode' })
-    if (path.endsWith('/issues/17/comments')) {
-      if (options.method === 'POST') { comments.push(JSON.parse(options.body)); return response({ id: 1 }, 201) }
-      return response(comments)
-    }
     if (path.endsWith('/actions/workflows/opencode.yml/dispatches')) return response(null, 204)
     throw new Error(`Unexpected API call ${path}`)
   }
@@ -102,44 +97,26 @@ test('migrate existing caller with file SHA to prevent overwriting concurrent up
   assert.equal(JSON.parse(mock.calls.find(call => call.method === 'PUT').body).sha, 'old-file-sha')
 })
 
-test('installation events do not request eager repository setup', () => {
+test('only OpenCode issue events request repository setup', () => {
   const payload = { installation: { id: 9 }, action: 'created', repositories: [{ full_name: 'user/project' }] }
-  assert.equal(isOpenedIssueEvent('installation', payload), false)
-  assert.equal(isOpenedIssueEvent('installation_repositories', { ...payload, action: 'added', repositories_added: payload.repositories }), false)
-  assert.equal(isOpenedIssueEvent('issues', { ...payload, action: 'opened' }), true)
-  assert.equal(isOpenedIssueEvent('issues', { ...payload, action: 'labeled' }), false)
+  const issue = { number: 17, title: 'Ordinary issue', labels: [] }
+  assert.equal(isActionableIssueEvent('installation', payload), false)
+  assert.equal(isActionableIssueEvent('issues', { ...payload, action: 'opened', issue }), false)
+  assert.equal(isActionableIssueEvent('issues', { ...payload, action: 'opened', issue: { ...issue, title: '/OpenCode Build this' } }), true)
+  assert.equal(isActionableIssueEvent('issues', { ...payload, action: 'opened', issue: { ...issue, labels: [{ name: 'OpenCode' }] } }), true)
+  assert.equal(isActionableIssueEvent('issues', { ...payload, action: 'labeled', issue, label: { name: 'OpenCode' } }), true)
+  assert.equal(isActionableIssueEvent('issues', { ...payload, action: 'labeled', issue, label: { name: 'bug' } }), false)
 })
 
-test('opened issue installs the listener and comments once when OpenCode is missing', async () => {
-  const mock = repositoryMock()
-  const payload = {
-    action: 'opened', installation: { id: 9 }, repository: { name: 'project', owner: { login: 'user' }, default_branch: 'trunk' },
-    issue: { number: 17, title: 'Please improve this', labels: [] }
-  }
-
-  const first = await handleOpenedIssue(payload, config, mock.requestFetch)
-  const second = await handleOpenedIssue(payload, config, mock.requestFetch)
-
-  assert.equal(first.commented, true)
-  assert.equal(first.dispatched, false)
-  assert.equal(second.commented, false)
-  const writes = mock.calls.filter(call => call.path.endsWith('/issues/17/comments') && call.method === 'POST')
-  assert.equal(writes.length, 1)
-  assert.match(JSON.parse(writes[0].body).body, /add the `OpenCode` label/i)
-  assert.match(JSON.parse(writes[0].body).body, /OPENCODE_ACCESS=everyone/)
-  assert.equal(mock.calls.some(call => call.path.endsWith('/dispatches')), false)
-})
-
-test('opened labeled issue installs and dispatches without a guidance comment', async () => {
+test('actionable issue installs and dispatches the listener', async () => {
   const mock = repositoryMock()
   const payload = {
     action: 'opened', installation: { id: 9 }, repository: { name: 'project', owner: { login: 'user' }, default_branch: 'trunk' },
     issue: { number: 17, title: 'Build this', labels: [{ name: 'OpenCode' }] }
   }
 
-  const result = await handleOpenedIssue(payload, config, mock.requestFetch)
+  const result = await handleActionableIssue(payload, config, mock.requestFetch)
 
-  assert.equal(result.commented, false)
   assert.equal(result.dispatched, true)
   const dispatch = mock.calls.find(call => call.path.endsWith('/actions/workflows/opencode.yml/dispatches'))
   assert.deepEqual(JSON.parse(dispatch.body), { ref: 'trunk', inputs: { issue_number: '17' } })
@@ -152,23 +129,22 @@ test('opened eligible issue does not dispatch when the listener already handled 
     issue: { number: 17, title: 'Build this', labels: [{ name: 'OpenCode' }] }
   }
 
-  const result = await handleOpenedIssue(payload, config, mock.requestFetch)
+  const result = await handleActionableIssue(payload, config, mock.requestFetch)
 
   assert.equal(result.installed, false)
   assert.equal(result.dispatched, false)
   assert.equal(mock.calls.some(call => call.path.endsWith('/dispatches')), false)
 })
 
-test('opened issue keeps the title shortcut while posting missing-label guidance', async () => {
+test('opened issue keeps the title shortcut', async () => {
   const mock = repositoryMock()
   const payload = {
     action: 'opened', installation: { id: 9 }, repository: { name: 'project', owner: { login: 'user' }, default_branch: 'trunk' },
     issue: { number: 17, title: '/OpenCode Build this', labels: [] }
   }
 
-  const result = await handleOpenedIssue(payload, config, mock.requestFetch)
+  const result = await handleActionableIssue(payload, config, mock.requestFetch)
 
-  assert.equal(result.commented, true)
   assert.equal(result.dispatched, true)
 })
 

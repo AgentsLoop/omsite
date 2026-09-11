@@ -6,7 +6,7 @@ import { basename, dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cookies, nonce, sign, verify } from './lib/auth.mjs'
 import { dispatchPublicBuild, normalizeBuildRunner } from './lib/github-build.mjs'
-import { extractUrls, github, handleOpenedIssue, isOpenedIssueEvent, verifyWebhookSignature } from './lib/github.mjs'
+import { extractUrls, github, handleActionableIssue, isActionableIssueEvent, verifyWebhookSignature } from './lib/github.mjs'
 import { workflowProgress } from './lib/github-progress.mjs'
 import { materializePublicProject, resolveLatestPublicCommit, resolvePublicCommit, validateProjectPath, validateSource, validateSourceEntry } from './lib/public-project.mjs'
 import { createStore } from './lib/store.mjs'
@@ -281,11 +281,11 @@ app.post('/api/github/webhooks', express.raw({ type: 'application/json', limit: 
     }
     const payload = JSON.parse(req.body.toString('utf8'))
     const event = String(req.headers['x-github-event'] || '')
-    if (!isOpenedIssueEvent(event, payload)) return res.status(202).json({ accepted: false })
+    if (!isActionableIssueEvent(event, payload)) return res.status(202).json({ accepted: false })
     if (!githubApp.appId || !githubApp.privateKey) {
       return res.status(503).json({ error: 'GitHub App is not configured' })
     }
-    const result = await handleOpenedIssue(payload, githubApp)
+    const result = await handleActionableIssue(payload, githubApp)
     res.status(202).json({ accepted: true, ...result })
   } catch (error) { next(error) }
 })
