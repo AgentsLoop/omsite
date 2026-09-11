@@ -17,7 +17,7 @@ Do not suggest, report, or propose security issues unless the user explicitly as
 
 Validate every new or changed UI in the dark theme at desktop and mobile widths. Inspect rendered cards, inputs, dropdowns, modals, and disabled states. Use dark surface tokens and readable text; reject unintended white panels. Check the deployed build when fixing live-site UI.
 
-After each user-facing code change, commit and push the change, then spawn a `collaboration.spawn_agent` delivery verifier with model `gpt-5.6-terra`. Require it to run the required build and checks, verify that the working tree is clean and committed, deploy the change to production, test the live site at desktop and mobile widths, capture screenshots, critique behavior and visual quality, and return an explicit pass or fail. Fix every failure, commit and push the fix, then repeat the agent-run build, deployment, and verification until it passes.
+After each user-facing code change, commit and push the change, then spawn a `collaboration.spawn_agent` delivery verifier with model `gpt-5.6-terra`. Require it to run the required build and checks, deploy the change to production, test the live site at desktop and mobile widths, capture screenshots, critique behavior and visual quality, and return an explicit pass or fail. Fix every failure, commit and push the fix, then repeat the agent-run build, deployment, and verification until it passes.
 
 Spawn the verifier with this pattern:
 
@@ -26,7 +26,7 @@ collaboration.spawn_agent({
   "task_name": "build_deploy_verify_production",
   "model": "gpt-5.6-terra",
   "fork_turns": "3",
-  "message": "Run the required build and checks. Verify that the working tree is clean and committed. Deploy the change to production. Test the live site at desktop and mobile widths. Exercise the changed behavior, capture screenshots, critique the dark theme and visual quality, and return an explicit PASS or FAIL with defects."
+  "message": "Run the required build and checks. Deploy the change to production. Test the live site at desktop and mobile widths. Exercise the changed behavior, capture screenshots, critique the dark theme and visual quality, and return an explicit PASS or FAIL with defects."
 })
 ```
 
