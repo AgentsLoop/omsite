@@ -16,7 +16,10 @@ async page => {
       json = { repository: { ...own, id: 3, name: body.name, full_name: 'player/' + body.name, deployment_status: 'not_deployed', deployment_path: '' } }
     }
     else if (path === '/api/repositories') json = { repositories: [own] }
-    else if (path.startsWith('/api/profiles/')) json = { profile: { login: 'creator' }, repositories: [repository, own], projects: [published] }
+    else if (path.startsWith('/api/profiles/')) {
+      const login = path.split('/').at(-1)
+      json = { profile: { login }, repositories: [repository, own], projects: [published] }
+    }
     else if (route.request().method() === 'POST') {
       writes.push({ path, body: route.request().postDataJSON() })
       json = { omgithub_path: path.endsWith('/deploy') ? '/creator/game' : '/player/game/issues/42' }
@@ -26,6 +29,7 @@ async page => {
     await route.fulfill({ json })
   })
   await page.goto('http://127.0.0.1:5193/creator')
+  if (await page.getByRole('link', { name: 'Log out', exact: true }).count()) throw new Error('Logout appeared on another profile')
   await page.getByRole('button', { name: 'Remix', exact: true }).first().click()
   if (await page.getByRole('combobox').inputValue() !== 'creator/game') throw new Error('Remix did not select repository')
   if (writes.length) throw new Error('Remix submitted too early')
@@ -98,5 +102,13 @@ async page => {
   await page.goto('http://127.0.0.1:5193/creator')
   await page.locator('.repository-card').first().waitFor()
   await page.screenshot({ path: '/tmp/omgithub-dark-desktop.png', fullPage: true })
-  return { passed: ['published profile Remix', 'selected generation', 'user Playground default', 'Deploy progress navigation', 'Open without write', 'mobile dark surfaces', 'modal focus and Escape', 'duplicate-name error', 'new project selection without generation', 'generation in new project', 'home modal cancellation', 'published home Remix', 'published-page remix link selection', 'dark modal and desktop screenshots'] }
+  await page.goto('http://127.0.0.1:5193/player')
+  const logout = page.getByRole('link', { name: 'Log out', exact: true })
+  await logout.waitFor()
+  if (await logout.getAttribute('href') !== '/?exec=logout') throw new Error('Wrong logout destination')
+  if (await logout.evaluate(el => getComputedStyle(el).backgroundColor) === 'rgb(255, 255, 255)') throw new Error('Light logout button')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await logout.waitFor()
+  if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error('Logout caused mobile overflow')
+  return { passed: ['published profile Remix', 'selected generation', 'user Playground default', 'Deploy progress navigation', 'Open without write', 'mobile dark surfaces', 'modal focus and Escape', 'duplicate-name error', 'new project selection without generation', 'generation in new project', 'home modal cancellation', 'published home Remix', 'published-page remix link selection', 'dark modal and desktop screenshots', 'own-profile logout only', 'dark mobile logout'] }
 }

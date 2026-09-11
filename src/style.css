@@ -631,6 +631,10 @@ h3 {
   color: var(--orange);
   font-size: 13px;
 }
+.profile-links { display: flex; align-items: center; gap: 14px; }
+.profile-links .profile-logout { padding: 7px 11px; border: 1px solid #4b4b4e; border-radius: 8px; background: #242426; color: #f6f6f3; font-weight: 700; }
+.profile-links .profile-logout:hover { border-color: var(--orange); }
+.profile-links .profile-logout:focus-visible { outline: 2px solid var(--orange); outline-offset: 3px; }
 .profile-library {
   padding-top: 50px;
 }

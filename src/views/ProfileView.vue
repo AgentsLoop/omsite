@@ -7,7 +7,10 @@
         <p class="eyebrow">OMGHITHUB CREATOR</p>
         <h1>{{ profile.name || profile.login }}</h1>
         <p>@{{ profile.login }} · {{ profile.bio || 'Building in public with AI and GitHub.' }}</p>
-        <a :href="profile.html_url" target="_blank">View on GitHub ↗</a>
+        <div class="profile-links">
+          <a :href="profile.html_url" target="_blank">View on GitHub ↗</a>
+          <a v-if="isOwnProfile" class="profile-logout" href="/?exec=logout">Log out</a>
+        </div>
       </div>
     </section>
 
@@ -62,7 +65,7 @@ import GameCard from '../components/GameCard.vue'
 import GenerationComposer from '../components/GenerationComposer.vue'
 import { useJsonResource } from '../composables/useJsonResource'
 
-defineProps({ me: Object })
+const props = defineProps({ me: Object })
 const route = useRoute()
 const router = useRouter()
 const composer = ref(null)
@@ -70,6 +73,7 @@ const deploying = ref('')
 const deployError = ref('')
 const { data, loading, error } = useJsonResource(() => `/api/profiles/${encodeURIComponent(route.params.login)}`)
 const profile = computed(() => data.value?.profile || null)
+const isOwnProfile = computed(() => Boolean(props.me?.login && profile.value?.login?.toLowerCase() === props.me.login.toLowerCase()))
 const repositories = computed(() => data.value?.repositories || [])
 const projects = computed(() => data.value?.projects || [])
 
