@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { generateKeyPairSync } from 'node:crypto'
-import { ensureIssueWorkflow, setupRepositories, extractUrls, repositoryWorkflow } from '../lib/github.mjs'
+import { ensureIssueWorkflow, isOpenedIssueEvent, handleOpenedIssue, extractUrls, repositoryWorkflow } from '../lib/github.mjs'
 
 test('extractUrls separates OpenCode, screenshots, preview, and immutable project URL', () => {
   const sha = 'a'.repeat(40)
@@ -35,6 +35,7 @@ const response = (data, status = 200) => ({ ok: status >= 200 && status < 300, s
 function repositoryMock(existing = null) {
   const calls = []
   let stored = existing
+  let comments = []
   const requestFetch = async (url, options = {}) => {
     const path = new URL(url).pathname
     calls.push({ path, url, ...options })
@@ -48,7 +49,11 @@ function repositoryMock(existing = null) {
       return stored ? response({ content: stored, sha: 'old-file-sha' }) : response({}, 404)
     }
     if (path.endsWith('/labels/OpenCode')) return response({ name: 'OpenCode' })
-    if (path.endsWith('/comments')) return response({ id: 1 }, 201)
+    if (path.endsWith('/issues/17/comments')) {
+      if (options.method === 'POST') { comments.push(JSON.parse(options.body)); return response({ id: 1 }, 201) }
+      return response(comments)
+    }
+    if (path.endsWith('/actions/workflows/opencode.yml/dispatches')) return response(null, 204)
     throw new Error(`Unexpected API call ${path}`)
   }
   return { calls, requestFetch }
@@ -56,12 +61,13 @@ function repositoryMock(existing = null) {
 
 test('native wrapper isolates validation and passes every validated execution input', () => {
   const workflow = repositoryWorkflow('central', 'runtime', sha)
-  assert.match(workflow, /types: \[opened\]/)
+  assert.match(workflow, /types: \[opened, labeled\]/)
   assert.match(workflow, /workflow_dispatch/)
   assert.doesNotMatch(workflow, /dispatches|secrets: inherit/)
   const prepare = workflow.split('  prepare:')[1].split('  opencode:')[0]
   assert.doesNotMatch(prepare, /secrets/)
   assert.match(prepare, /github.event.issue.labels/)
+  assert.match(prepare, /github.event.label.name == 'OpenCode'/)
   assert.match(prepare, /\/OpenCode/)
   assert.match(prepare, new RegExp(`runtime_ref: ${sha}`))
   assert.match(workflow, /if: needs.prepare.outputs.approved == 'true'/)
@@ -96,12 +102,74 @@ test('migrate existing caller with file SHA to prevent overwriting concurrent up
   assert.equal(JSON.parse(mock.calls.find(call => call.method === 'PUT').body).sha, 'old-file-sha')
 })
 
-test('only installation events request setup', () => {
+test('installation events do not request eager repository setup', () => {
   const payload = { installation: { id: 9 }, action: 'created', repositories: [{ full_name: 'user/project' }] }
-  assert.deepEqual(setupRepositories('installation', payload), [{ owner: 'user', repo: 'project' }])
-  assert.deepEqual(setupRepositories('installation_repositories', { ...payload, action: 'added', repositories_added: payload.repositories }), [{ owner: 'user', repo: 'project' }])
-  assert.deepEqual(setupRepositories('issues', { ...payload, action: 'opened' }), [])
-  assert.deepEqual(setupRepositories('issues', { ...payload, action: 'labeled' }), [])
+  assert.equal(isOpenedIssueEvent('installation', payload), false)
+  assert.equal(isOpenedIssueEvent('installation_repositories', { ...payload, action: 'added', repositories_added: payload.repositories }), false)
+  assert.equal(isOpenedIssueEvent('issues', { ...payload, action: 'opened' }), true)
+  assert.equal(isOpenedIssueEvent('issues', { ...payload, action: 'labeled' }), false)
+})
+
+test('opened issue installs the listener and comments once when OpenCode is missing', async () => {
+  const mock = repositoryMock()
+  const payload = {
+    action: 'opened', installation: { id: 9 }, repository: { name: 'project', owner: { login: 'user' }, default_branch: 'trunk' },
+    issue: { number: 17, title: 'Please improve this', labels: [] }
+  }
+
+  const first = await handleOpenedIssue(payload, config, mock.requestFetch)
+  const second = await handleOpenedIssue(payload, config, mock.requestFetch)
+
+  assert.equal(first.commented, true)
+  assert.equal(first.dispatched, false)
+  assert.equal(second.commented, false)
+  const writes = mock.calls.filter(call => call.path.endsWith('/issues/17/comments') && call.method === 'POST')
+  assert.equal(writes.length, 1)
+  assert.match(JSON.parse(writes[0].body).body, /add the `OpenCode` label/i)
+  assert.match(JSON.parse(writes[0].body).body, /OPENCODE_ACCESS=everyone/)
+  assert.equal(mock.calls.some(call => call.path.endsWith('/dispatches')), false)
+})
+
+test('opened labeled issue installs and dispatches without a guidance comment', async () => {
+  const mock = repositoryMock()
+  const payload = {
+    action: 'opened', installation: { id: 9 }, repository: { name: 'project', owner: { login: 'user' }, default_branch: 'trunk' },
+    issue: { number: 17, title: 'Build this', labels: [{ name: 'OpenCode' }] }
+  }
+
+  const result = await handleOpenedIssue(payload, config, mock.requestFetch)
+
+  assert.equal(result.commented, false)
+  assert.equal(result.dispatched, true)
+  const dispatch = mock.calls.find(call => call.path.endsWith('/actions/workflows/opencode.yml/dispatches'))
+  assert.deepEqual(JSON.parse(dispatch.body), { ref: 'trunk', inputs: { issue_number: '17' } })
+})
+
+test('opened eligible issue does not dispatch when the listener already handled the event', async () => {
+  const mock = repositoryMock(Buffer.from(repositoryWorkflow('central', 'runtime', sha)).toString('base64'))
+  const payload = {
+    action: 'opened', installation: { id: 9 }, repository: { name: 'project', owner: { login: 'user' }, default_branch: 'trunk' },
+    issue: { number: 17, title: 'Build this', labels: [{ name: 'OpenCode' }] }
+  }
+
+  const result = await handleOpenedIssue(payload, config, mock.requestFetch)
+
+  assert.equal(result.installed, false)
+  assert.equal(result.dispatched, false)
+  assert.equal(mock.calls.some(call => call.path.endsWith('/dispatches')), false)
+})
+
+test('opened issue keeps the title shortcut while posting missing-label guidance', async () => {
+  const mock = repositoryMock()
+  const payload = {
+    action: 'opened', installation: { id: 9 }, repository: { name: 'project', owner: { login: 'user' }, default_branch: 'trunk' },
+    issue: { number: 17, title: '/OpenCode Build this', labels: [] }
+  }
+
+  const result = await handleOpenedIssue(payload, config, mock.requestFetch)
+
+  assert.equal(result.commented, true)
+  assert.equal(result.dispatched, true)
 })
 
 test('setup creates the execution label without any issue interaction', async () => {

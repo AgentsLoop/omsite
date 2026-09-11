@@ -3,6 +3,7 @@ export { parseIssueRequest } from './issue-request.mjs'
 
 const API = 'https://api.github.com'
 const REQUIRED_INSTALLATION_PERMISSIONS = {
+  actions: 'write',
   contents: 'write',
   issues: 'write',
   workflows: 'write'
@@ -68,7 +69,7 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '',
     'on:',
     '  issues:',
-    '    types: [opened]',
+    '    types: [opened, labeled]',
     '  workflow_dispatch:',
     '    inputs:',
     '      issue_number:',
@@ -84,7 +85,7 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '',
     'jobs:',
     '  prepare:',
-    "    if: github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'OpenCode') || contains(github.event.issue.title, '/OpenCode')",
+    "    if: github.event_name == 'workflow_dispatch' || (github.event.action == 'opened' && (contains(github.event.issue.labels.*.name, 'OpenCode') || contains(github.event.issue.title, '/OpenCode'))) || (github.event.action == 'labeled' && github.event.label.name == 'OpenCode')",
     '    permissions:',
     '      contents: read',
     '      issues: write',
@@ -112,15 +113,49 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
   ].join('\n')
 }
 
-export function setupRepositories(event, payload) {
-  if (!payload.installation?.id) return []
-  const repositories = event === 'installation' && payload.action === 'created'
-    ? payload.repositories
-    : event === 'installation_repositories' && payload.action === 'added' ? payload.repositories_added : []
-  return (repositories || []).map(repository => {
-    const [owner, repo] = String(repository.full_name || '').split('/')
-    return { owner, repo }
-  }).filter(({ owner, repo }) => owner && repo)
+export function isOpenedIssueEvent(event, payload) {
+  return event === 'issues' && payload?.action === 'opened'
+}
+
+const LABEL_GUIDANCE_MARKER = '<!-- omgithub-open-code-label-guidance -->'
+const LABEL_GUIDANCE = `${LABEL_GUIDANCE_MARKER}\nThis issue does not have the \`OpenCode\` label. Ask a repository maintainer to add the \`OpenCode\` label to start OpenCode. By default, the issue author must have write, maintain, or admin access. Set the repository Actions variable \`OPENCODE_ACCESS=everyone\` to allow any issue author.`
+
+export async function handleOpenedIssue(payload, config, requestFetch = fetch) {
+  if (payload?.action !== 'opened' || !payload.installation?.id) throw new Error('Require an opened issue installation event')
+  const owner = payload.repository?.owner?.login
+  const repo = payload.repository?.name
+  const issueNumber = payload.issue?.number
+  if (!owner || !repo || !Number.isInteger(issueNumber)) throw new Error('Opened issue webhook is missing repository or issue data')
+
+  const result = await ensureIssueWorkflow({ owner, repo }, config, requestFetch)
+  const api = config.api || API
+  const headers = { ...commonHeaders, authorization: `Bearer ${result.installationToken}` }
+  const commentsPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/comments`
+  const labels = (payload.issue.labels || []).map(label => typeof label === 'string' ? label : label?.name)
+  const hasLabel = labels.some(label => String(label).toLowerCase() === 'opencode')
+  let commented = false
+  if (!hasLabel) {
+    const existing = await requestFetch(`${api}${commentsPath}`, { headers })
+    if (!existing.ok) throw new Error(`GitHub ${commentsPath} returned ${existing.status}`)
+    const comments = await existing.json()
+    if (!comments.some(comment => String(comment.body || '').includes(LABEL_GUIDANCE_MARKER))) {
+      const posted = await requestFetch(`${api}${commentsPath}`, { method: 'POST', headers, body: JSON.stringify({ body: LABEL_GUIDANCE }) })
+      if (!posted.ok) throw new Error(`GitHub ${commentsPath} returned ${posted.status}`)
+      commented = true
+    }
+  }
+
+  const eligible = hasLabel || String(payload.issue.title || '').includes('/OpenCode')
+  let dispatched = false
+  if (eligible && result.installed) {
+    const dispatchPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/workflows/opencode.yml/dispatches`
+    const dispatchedResponse = await requestFetch(`${api}${dispatchPath}`, {
+      method: 'POST', headers, body: JSON.stringify({ ref: result.repository.default_branch, inputs: { issue_number: String(issueNumber) } })
+    })
+    if (!dispatchedResponse.ok) throw new Error(`GitHub ${dispatchPath} returned ${dispatchedResponse.status}`)
+    dispatched = true
+  }
+  return { repository: result.repository.full_name, installed: result.installed, commented, dispatched }
 }
 
 async function ensureRepositoryLabel(owner, repo, token, api, commonHeaders, requestFetch) {
@@ -192,7 +227,7 @@ export async function ensureIssueWorkflow({ owner, repo }, config, requestFetch 
   if (content === workflow) return { installationToken, repository, workflowSha, installed: false }
   // Preserve the central repository's reviewed local caller.
   if (owner.toLowerCase() === centralOwner.toLowerCase() && repo.toLowerCase() === centralRepo.toLowerCase()) {
-    if (!content.includes('types: [opened]') || !content.includes('uses: ./.github/workflows/opencode-prepare.yml') || !content.includes('uses: ./.github/workflows/opencode-reusable.yml')) {
+    if (!content.includes('types: [opened, labeled]') || !content.includes('uses: ./.github/workflows/opencode-prepare.yml') || !content.includes('uses: ./.github/workflows/opencode-reusable.yml')) {
       throw new Error('Install and review the central repository issue listener before accepting requests')
     }
     return { installationToken, repository, workflowSha, installed: false }

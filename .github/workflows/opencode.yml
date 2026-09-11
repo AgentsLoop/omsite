@@ -3,7 +3,7 @@ run-name: "OpenCode #${{ github.event.issue.number || inputs.issue_number }}${{ 
 
 on:
   issues:
-    types: [opened]
+    types: [opened, labeled]
   workflow_dispatch:
     inputs:
       issue_number:
@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   prepare:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'OpenCode') || contains(github.event.issue.title, '/OpenCode')
+    if: github.event_name == 'workflow_dispatch' || (github.event.action == 'opened' && (contains(github.event.issue.labels.*.name, 'OpenCode') || contains(github.event.issue.title, '/OpenCode'))) || (github.event.action == 'labeled' && github.event.label.name == 'OpenCode')
     permissions:
       contents: read
       issues: write

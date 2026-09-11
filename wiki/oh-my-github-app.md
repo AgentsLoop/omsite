@@ -3,14 +3,18 @@
 ## Install the listener
 
 Use the public [Oh My Github App](https://github.com/apps/oh-my-github-app)
-as a repository setup helper. Handle installation creation and repositories
-added to an installation. Verify webhook signatures at the setup service.
+as a repository setup helper. Subscribe to issue events. Verify webhook
+signatures at the setup service. Do not modify a repository when the App is
+installed or when a repository is added to an installation.
 
-Grant Contents, Issues, and Workflows write access for setup. Create the
-`OpenCode` label and install `.github/workflows/opencode.yml` on the default
-branch. Pin central preparation and execution workflows to a resolved commit
-SHA. Use `OMG_FALLBACK_OWNER`, `OMG_FALLBACK_REPO`, and `OMG_FALLBACK_REF`
-to choose that revision. Keep repository workflow changes reviewable.
+Grant Actions, Contents, Issues, and Workflows write access. On the first
+opened issue, create the `OpenCode` label and install
+`.github/workflows/opencode.yml` on the default branch. Post label guidance
+from the webhook service when the issue has no `OpenCode` label. Do not post
+this guidance from GitHub Actions. Pin central preparation and execution
+workflows to a resolved commit SHA. Use `OMG_FALLBACK_OWNER`,
+`OMG_FALLBACK_REPO`, and `OMG_FALLBACK_REF` to choose that revision. Keep
+repository workflow changes reviewable.
 
 Install the generated caller manually when preferred. Configure the usual
 model and optional tunnel secrets in the repository. Run preparation and
