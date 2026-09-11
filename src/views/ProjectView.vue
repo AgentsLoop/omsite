@@ -13,7 +13,6 @@
       <nav class="mobile-pane-tabs" aria-label="Workspace panes"><button :class="mobilePane === 'chat' ? 'active' : ''" @click="mobilePane = 'chat'">Chat</button><button :class="mobilePane === 'preview' ? 'active' : ''" @click="mobilePane = 'preview'">Preview</button></nav>
       <div class="studio-grid">
         <section class="chat-panel" :class="{ 'mobile-hidden': mobilePane !== 'chat' }">
-          <div class="preview-toolbar"><span class="live-dot"></span><strong>OpenCode chat</strong><a v-if="project.opencode_url" :href="project.opencode_url" target="_blank">Open ↗</a></div>
           <details v-if="project.actions?.run_id && !project.opencode_url" class="actions-progress" open>
             <summary :class="{ failed: workflowFailed }"><span>{{ workflowIcon(project.actions.status) }}</span><strong>{{ workflowSummary }}</strong><a :href="project.actions.url" target="_blank" @click.stop>GitHub Actions ↗</a></summary>
             <div class="actions-jobs">
