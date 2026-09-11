@@ -21,6 +21,13 @@ test('switching from chat to preview advances the preview frame key', () => {
   })
 })
 
+test('selecting the active preview pane reloads the preview frame', () => {
+  assert.deepEqual(previewSelection.switchWorkspacePane?.('preview', 'preview', 5), {
+    pane: 'preview',
+    previewFrameKey: 6
+  })
+})
+
 test('refreshing the preview advances the preview frame key', () => {
   assert.equal(previewSelection.refreshPreviewFrame?.(4), 5)
 })

@@ -13,7 +13,7 @@ export function refreshPreviewFrame(previewFrameKey) {
 export function switchWorkspacePane(currentPane, nextPane, previewFrameKey) {
   return {
     pane: nextPane,
-    previewFrameKey: currentPane === 'chat' && nextPane === 'preview'
+    previewFrameKey: nextPane === 'preview'
       ? refreshPreviewFrame(previewFrameKey)
       : previewFrameKey
   }
