@@ -5,12 +5,7 @@
         <p class="eyebrow">OPEN SOURCE AI GAME STUDIO</p>
         <h1>Create games with AI</h1>
         <p class="hero-sub">Describe the game. Watch OpenCode build it live. Publish it to the web.</p>
-        <form class="prompt-box" @submit.prevent="create">
-          <span class="prompt-icon">✦</span>
-          <textarea v-model="prompt" :disabled="loading" rows="1" placeholder="Ask OmGithub to create a 3D football game…" @keydown.enter.exact.prevent="create"></textarea>
-          <button :disabled="loading || !prompt.trim()" aria-label="Create game"><span v-if="loading" class="spinner"></span><span v-else>↑</span></button>
-        </form>
-        <p v-if="error" class="form-error">{{ error }}</p>
+        <GenerationComposer :me="me" />
         <div class="capabilities">
           <div><b>◎</b><span><strong>Publish</strong><small>Permanent web link</small></span></div>
           <div><b>◈</b><span><strong>Live build</strong><small>Watch OpenCode work</small></span></div>
@@ -36,11 +31,11 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import GenerationComposer from '../components/GenerationComposer.vue'
 import GameCard from '../components/GameCard.vue'
 import { useJsonResource } from '../composables/useJsonResource'
-const props = defineProps({ me: Object })
-const router = useRouter(), prompt = ref(''), loading = ref(false), error = ref(''), sortMode = ref('latest')
+defineProps({ me: Object })
+const sortMode = ref('latest')
 const tagFilter = ref(''), ratingFilter = ref('')
 const { data, loading: loadingProjects, error: projectsError } = useJsonResource(() => '/api/projects')
 const projectTags = project => (project.tags || []).filter(tag => typeof tag === 'string').map(tag => tag.trim().toLowerCase()).filter(Boolean)
@@ -59,13 +54,4 @@ const projects = computed(() => {
     return stars || latestFirst(left, right)
   })
 })
-async function create() {
-  if (!prompt.value.trim() || loading.value) return
-  loading.value = true; error.value = ''
-  try {
-    const r = await fetch('/api/issues', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt: prompt.value }) })
-    const data = await r.json(); if (!r.ok) throw new Error(data.error || 'Could not create issue')
-    await router.push(data.omgithub_path)
-  } catch (e) { error.value = e.message; loading.value = false }
-}
 </script>

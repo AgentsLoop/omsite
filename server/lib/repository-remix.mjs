@@ -1,4 +1,5 @@
-import { repositoryWorkflow } from './github.mjs'
+import { repositoryWorkflow, parseIssueRequest } from './github.mjs'
+import { clonePublicRepository } from './repository-clone.mjs'
 
 function failure(message, status) {
   return Object.assign(new Error(message), { status })
@@ -16,17 +17,25 @@ async function optionalGithub(path, token, requestGithub) {
   }
 }
 
-export async function remixRepository({ owner, repo, prompt, user, origin, config, requestGithub }) {
+export async function remixRepository({ owner, repo, prompt, user, origin, config, requestGithub, cloneRepository = clonePublicRepository }) {
   const request = String(prompt || '').trim()
   if (request.length < 8 || request.length > 12000) throw failure('Prompt must be between 8 and 12,000 characters.', 400)
   if (!user?.token) throw failure('Sign in with GitHub to remix a repository.', 401)
+  const parsed = parseIssueRequest({ title: `/OpenCode ${request.split('\n')[0].slice(0, 110)}`, body: request })
+  if (parsed.branchError) throw failure(parsed.branchError, 400)
 
-  const path = repositoryPath(owner, repo)
-  const repository = await requestGithub(path, user.token)
+  let path = repositoryPath(owner, repo)
+  let repository = await requestGithub(path, user.token)
+  if (repository.private) throw failure('Only public repositories are supported.', 400)
   const canWrite = repository.permissions?.admin || repository.permissions?.maintain || repository.permissions?.push
-  if (!canWrite) throw failure('Your GitHub account cannot write to this repository.', 403)
+  if (!canWrite) {
+    repository = await cloneRepository({ repository, owner, repo, user, requestGithub })
+    const [targetOwner, targetRepo] = repository.full_name.split('/')
+    path = repositoryPath(targetOwner, targetRepo)
+  }
   if (repository.archived) throw failure('Archived repositories cannot be remixed.', 409)
   if (repository.has_issues === false) throw failure('Enable GitHub Issues before you remix this repository.', 409)
+  if (parsed.branchSpecified) await requestGithub(`${path}/branches/${encodeURIComponent(parsed.targetRef)}`, user.token)
 
   const centralOwner = config.fallbackOwner || 'AgentsLoop'
   const centralRepo = config.fallbackRepo || 'OhMyGithub'

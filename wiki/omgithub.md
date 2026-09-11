@@ -8,6 +8,10 @@ and follow build progress. Use this flow without signing in.
 
 ## Publish a public repository path
 
+Use **Deploy** on a profile repository card to publish its root. Use **Open** after a successful root deployment. Keep subdirectory publications separate from the root deployment state. Show only public repositories.
+
+Select **Remix** to choose a repository in the composer. Submit the prompt to reuse a writable repository or copy a public repository into your account. Select **Playground** to generate in `AgentsLoop/PlayGround` with the configured server credential. Install Git in the server runtime to support repository copies.
+
 Open `https://omgithub.com/<owner>/<repo>` to publish the repository's default
 branch. Open `https://omgithub.com/<owner>/<repo>/tree/<ref>/<path>` to publish
 a named branch or tag and a game directory. Prefer these named paths in links

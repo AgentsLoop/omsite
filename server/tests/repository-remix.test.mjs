@@ -45,18 +45,21 @@ test('install the pinned action, add the OpenCode label, and create a remix issu
   assert.equal(mock.calls.some(call => call.path.endsWith('/labels') && call.method === 'POST'), true)
 })
 
-test('make no repository changes without write permission', async () => {
+test('clone a non-writable repository before installing the workflow', async () => {
   const mock = githubMock({ canWrite: false })
 
-  await assert.rejects(() => remixRepository({
+  let cloned = false
+  const result = await remixRepository({
     owner: 'player',
     repo: 'game',
     prompt: 'Add a cooperative game mode',
     user: { login: 'player', token: 'user-token' },
     origin: 'https://omgithub.com',
     config: {},
-    requestGithub: mock.requestGithub
-  }), error => error.status === 403)
+    requestGithub: mock.requestGithub,
+    cloneRepository: async () => { cloned = true; return { full_name: 'player/game', default_branch: 'main', has_issues: true } }
+  })
 
-  assert.equal(mock.calls.length, 1)
+  assert.equal(cloned, true)
+  assert.equal(result.issue.number, 42)
 })

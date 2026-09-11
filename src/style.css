@@ -721,6 +721,11 @@ h3 {
   color: #8b8b8b;
   cursor: default;
 }
+.repository-actions { display: flex; gap: 10px; }
+.repository-actions .remix-button { flex: 1; text-align: center; text-decoration: none; }
+.composer-repository { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }
+.composer-repository select { max-width: 70%; padding: 9px 12px; border: 1px solid #666; border-radius: 8px; background: #222; color: #fff; }
+.composer-target { font-size: 13px; color: #aaa; }
 .store-page {
   background: #0c0c0d;
   color: #f6f6f3;

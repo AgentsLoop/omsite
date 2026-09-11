@@ -6,7 +6,7 @@ COPY . .
 RUN npm run build
 
 FROM node:22-alpine AS runtime
-RUN apk add --no-cache tini
+RUN apk add --no-cache tini git
 WORKDIR /app
 ENV NODE_ENV=production PORT=8787 DATA_DIR=/app/data
 COPY --chown=node:node package*.json ./

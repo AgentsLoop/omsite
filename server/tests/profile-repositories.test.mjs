@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { listProfileRepositories } from '../lib/profile-repositories.mjs'
 
-test('list own public and private repositories with the signed-in token', async () => {
+test('exclude private repositories even if GitHub returns them', async () => {
   const calls = []
   const requestGithub = async (path, token) => {
     calls.push({ path, token })
@@ -20,10 +20,9 @@ test('list own public and private repositories with the signed-in token', async 
   const rows = await listProfileRepositories('Player', { login: 'player', token: 'viewer-token' }, requestGithub)
 
   assert.equal(calls.length, 1)
-  assert.match(calls[0].path, /^\/user\/repos\?visibility=all/)
+  assert.match(calls[0].path, /^\/user\/repos\?visibility=public/)
   assert.equal(calls[0].token, 'viewer-token')
-  assert.equal(rows[0].private, true)
-  assert.equal(rows[0].can_remix, true)
+  assert.deepEqual(rows, [])
 })
 
 test('list public repositories without exposing the viewer token on another profile', async () => {

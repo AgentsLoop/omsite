@@ -6,7 +6,7 @@ import { basename, dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cookies, nonce, sign, verify } from './lib/auth.mjs'
 import { dispatchPublicBuild, normalizeBuildRunner } from './lib/github-build.mjs'
-import { ensureIssueWorkflow, parseIssueRequest, extractUrls, github, setupRepositories, verifyWebhookSignature } from './lib/github.mjs'
+import { ensureIssueWorkflow, extractUrls, github, setupRepositories, verifyWebhookSignature } from './lib/github.mjs'
 import { materializePublicProject, resolveLatestPublicCommit, resolvePublicCommit, validateProjectPath, validateSource, validateSourceEntry } from './lib/public-project.mjs'
 import { createStore } from './lib/store.mjs'
 import { createProjectSocial } from './lib/project-social.mjs'
@@ -15,7 +15,8 @@ import { createGithubCache } from './lib/github-cache.mjs'
 import { normalizeTags, validateManualPublishMetadata } from './lib/catalog-metadata.mjs'
 import { isDirectGameSource, normalizeSource } from './lib/catalog-import-lib.mjs'
 import { createTokenSignIn } from './lib/token-signin.mjs'
-import { listProfileRepositories } from './lib/profile-repositories.mjs'
+import { listProfileRepositories, withDeployments } from './lib/profile-repositories.mjs'
+import { generateIssue } from './lib/generation.mjs'
 import { remixRepository } from './lib/repository-remix.mjs'
 import { createSessionStore } from './lib/session-store.mjs'
 
@@ -26,8 +27,6 @@ const baseHost = new URL(origin).hostname.toLowerCase()
 const publicHosts = [...new Set([baseHost, ...String(process.env.PUBLIC_ALIASES || 'lolgames.net').split(',').map(value => value.trim().toLowerCase()).filter(Boolean)])]
 const dataDir = resolve(process.env.DATA_DIR || join(root, 'data'))
 const gamesDir = join(dataDir, 'games')
-const owner = process.env.GITHUB_OWNER || 'AgentsLoop'
-const repo = process.env.GITHUB_REPO || 'OhMyGithub'
 const githubToken = process.env.GITHUB_TOKEN || ''
 const buildEnabled = process.env.OMGHITHUB_BUILD_ENABLED !== 'false'
 const buildOwner = process.env.OMGHITHUB_BUILD_OWNER || 'AgentsLoop'
@@ -314,8 +313,29 @@ app.get('/api/profiles/:login', async (req, res, next) => {
       store.all()
     ])
     const projects = allProjects.filter(row => row.owner_login?.toLowerCase() === req.params.login.toLowerCase())
-    res.json({ profile, repositories, projects: projects.map(card) })
+    res.json({ profile, repositories: withDeployments(repositories, allProjects), projects: projects.map(card) })
   } catch (e) { next(e) }
+})
+
+app.get('/api/repositories', async (req, res, next) => {
+  try {
+    const user = userFor(req)
+    const repositories = user ? await listProfileRepositories(user.login, user, github) : []
+    res.json({ repositories: withDeployments(repositories, await store.all()) })
+  } catch (error) { next(error) }
+})
+
+app.post('/api/repositories/:owner/:repo/deploy', async (req, res, next) => {
+  try {
+    if (!sameOrigin(req)) return res.status(403).json({ error: 'Use the OmGithub site to deploy a repository.' })
+    if (limited(req)) return res.status(429).json({ error: 'Creation limit reached. Try again later.' })
+    const { owner, repo } = req.params
+    const repository = await github(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, githubToken)
+    if (repository.private) return res.status(400).json({ error: 'Only public repositories are supported.' })
+    const publicPath = namedPublicPath(owner, repo)
+    const publication = await startNamedPublication({ owner, repo, publicPath, latest: true })
+    res.status(publication.state === 'published' ? 200 : 202).json({ ...publicationPayload(publication), omgithub_path: publicPath })
+  } catch (error) { next(error) }
 })
 
 app.post('/api/repositories/:owner/:repo/remix', async (req, res, next) => {
@@ -334,7 +354,7 @@ app.post('/api/repositories/:owner/:repo/remix', async (req, res, next) => {
     res.status(201).json({
       number: result.issue.number,
       github_url: result.issue.html_url,
-      omgithub_path: `/${req.params.owner}/${req.params.repo}/issues/${result.issue.number}`,
+      omgithub_path: `/${result.repository.full_name}/issues/${result.issue.number}`,
       workflow_installed: result.workflowInstalled
     })
   } catch (e) { next(e) }
@@ -342,22 +362,12 @@ app.post('/api/repositories/:owner/:repo/remix', async (req, res, next) => {
 
 app.post('/api/issues', async (req, res, next) => {
   try {
+    if (!sameOrigin(req)) return res.status(403).json({ error: 'Use the OmGithub site to generate.' })
     if (limited(req)) return res.status(429).json({ error: 'Creation limit reached. Try again later.' })
     const prompt = String(req.body?.prompt || '').trim(); if (prompt.length < 8 || prompt.length > 12000) return res.status(400).json({ error: 'Prompt must be between 8 and 12,000 characters.' })
     const user = userFor(req)
     if (!user) return res.status(401).json({ error: 'Sign in with GitHub to create a game.' })
-    const token = user.token
-    const first = `/OpenCode ${prompt.split('\n')[0].slice(0, 110)}`
-    const body = `${prompt}\n\n---\nCreated with [OmGithub](${origin}) by @${user.login}.`
-    const parsed = parseIssueRequest({ title: first, body })
-    if (parsed.branchError) return res.status(400).json({ error: parsed.branchError })
-    const repository = await github(`/repos/${owner}/${repo}`, token)
-    const targetRef = parsed.branchSpecified ? parsed.targetRef : repository.default_branch
-    await github(`/repos/${owner}/${repo}/branches/${encodeURIComponent(targetRef)}`, token)
-    const issue = await github(`/repos/${owner}/${repo}/issues`, token, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: first, body, labels: ['Goal', 'OpenCode'] })
-    })
-    res.status(201).json({ number: issue.number, github_url: issue.html_url, omgithub_path: `/${owner}/${repo}/issues/${issue.number}`, requested: true })
+    res.status(201).json(await generateIssue({ selection: req.body?.repository, prompt, user, serverToken: githubToken, origin, config: githubApp, requestGithub: github }))
   } catch (e) { next(e) }
 })
 

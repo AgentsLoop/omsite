@@ -57,14 +57,13 @@ the authenticated `GITHUB_TOKEN`.
 ## Configuration
 
 - Set `GITHUB_TOKEN` for public repository builds and reads.
-- Require GitHub login for site issue submission. Create issues with the user's
-  GitHub token and `/OpenCode` in the title. Request labels through GitHub.
+- Require GitHub login for site issue submission. Use the user's token for selected public repositories. Use `GITHUB_TOKEN` for generation in `AgentsLoop/PlayGround` when no repository is selected. Grant that server token write and workflow access to Playground.
 - Set `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_WEBHOOK_SECRET`
   to install listeners through installation webhooks.
 - Set `OMG_FALLBACK_OWNER`, `OMG_FALLBACK_REPO`, and `OMG_FALLBACK_REF` to
   select the central reusable workflow for repository wrappers.
 - Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` to enable GitHub login.
-- Request the `read:user repo workflow` OAuth scopes. Use them to list private repositories and install the OpenCode workflow during a remix.
+- Request the `read:user repo workflow` OAuth scopes. List only public repositories. Use the token to copy public repositories and install the OpenCode workflow during a remix. Reject private repositories.
 - Open `https://omgithub.com/?token=GITHUB_TOKEN` to create a session from an
   existing GitHub token. Let the server validate the token and redirect to a
   clean profile URL. Do not share or bookmark the token URL.
