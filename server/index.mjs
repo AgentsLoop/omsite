@@ -463,7 +463,7 @@ app.get('/api/github/:owner/:repo/issues/:number', async (req, res, next) => {
     const projectPath = urls.project ? new URL(urls.project).pathname : ''
     const actions = await workflowProgress({ owner: req.params.owner, repo: req.params.repo, issueNumber: issue.number, issueCreatedAt: issue.created_at, requestGithub: requestPath => github(requestPath, githubToken) })
       .catch(error => ({ status: 'unavailable', error: error.message, jobs: [] }))
-    res.json({ number: issue.number, title: issue.title, body: issue.body, status: issue.labels.some(l => l.name === 'complete') ? 'complete' : issue.labels.some(l => l.name === 'failed') ? 'failed' : 'in progress', github_url: issue.html_url, opencode_url: urls.opencode, preview_url: urls.preview, project_path: projectPath, screenshots: urls.screenshots, actions })
+    res.json({ number: issue.number, title: issue.title, body: issue.body, status: issue.labels.some(l => l.name === 'complete') ? 'complete' : issue.labels.some(l => l.name === 'failed') ? 'failed' : 'in progress', github_url: issue.html_url, opencode_url: urls.opencode, preview_url: urls.preview, project_files_url: urls.files, branch_url: urls.branch, project_path: projectPath, screenshots: urls.screenshots, actions })
   } catch (e) { next(e) }
 })
 

@@ -1097,7 +1097,7 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, summary:focu
     min-height: 116px;
     padding: 10px 15px;
   }
-  .studio-actions a:first-child {
+  .studio-actions a:not(.branch-link) {
     display: none;
   }
   .progress-numbers {
@@ -1156,3 +1156,6 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, summary:focu
   .topbar { flex-wrap: wrap; height: auto; min-height: 76px; gap: 12px; padding-top: 12px; padding-bottom: 12px; }
   .topbar > .submit-game-button { font-size: 12px; padding: 10px; }
 }
+
+.shot-tabs { flex-wrap: wrap; }
+.preview-toolbar { min-height: 48px; height: auto; padding-top: 8px; padding-bottom: 8px; flex-wrap: wrap; }

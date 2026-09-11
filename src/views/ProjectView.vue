@@ -8,7 +8,7 @@
           <div class="progress-numbers"><span v-for="(step, index) in steps" :key="step.label" :class="step.done ? 'done' : step.active ? 'active' : ''">{{ index + 1 }}</span></div>
           <div class="current-progress"><strong>{{ currentStep.label }}</strong><small>{{ currentStep.copy }}</small></div>
         </div>
-        <div class="studio-actions"><a :href="project.github_url" target="_blank">View issue ↗</a><RouterLink v-if="project.project_path" :to="project.project_path">Open Project</RouterLink></div>
+        <div class="studio-actions"><a v-if="project.branch_url" class="branch-link" :href="project.branch_url" target="_blank" rel="noopener">View branch ↗</a><a :href="project.github_url" target="_blank">View issue ↗</a><RouterLink v-if="project.project_path" :to="project.project_path">Open Project</RouterLink></div>
       </header>
       <nav class="mobile-pane-tabs" aria-label="Workspace panes"><button :class="mobilePane === 'chat' ? 'active' : ''" @click="mobilePane = 'chat'">Chat</button><button :class="mobilePane === 'preview' ? 'active' : ''" @click="mobilePane = 'preview'">Preview</button></nav>
       <div class="studio-grid">
@@ -28,7 +28,7 @@
           <div v-else class="preview-wait"><div class="orbit"><span></span></div><h2>{{ workflowFailed ? 'GitHub Actions failed' : 'Preparing OpenCode' }}</h2><p>{{ workflowFailed ? `Failed at: ${project.actions.failed_step || 'Open the run for failure details.'}` : workflowSummary }}</p><a v-if="project.actions?.url" :href="project.actions.url" target="_blank">Open GitHub Actions ↗</a></div>
         </section>
         <section class="preview-panel" :class="{ 'mobile-hidden': mobilePane !== 'preview' }">
-          <div class="preview-toolbar"><span class="live-dot"></span><strong>{{ previewLabel }}</strong><div v-if="project.screenshots.length" class="shot-tabs"><button v-for="(shot, index) in project.screenshots" :key="shot" :class="displayedShot === shot ? 'selected' : ''" @click="displayedShot = shot">{{ index + 1 }}</button><button v-if="previewUrl" :class="!displayedShot ? 'selected' : ''" @click="displayedShot = ''">Live</button></div><a v-if="displayedShot || previewUrl" :href="displayedShot || previewUrl" target="_blank">Open ↗</a></div>
+          <div class="preview-toolbar"><span class="live-dot"></span><strong>{{ previewLabel }}</strong><div class="shot-tabs"><button v-if="project.project_files_url" :class="selectedPreview === 'files' ? 'selected' : ''" @click="selectedPreview = 'files'">Files</button><button v-for="(shot, index) in project.screenshots" :key="shot" :class="displayedShot === shot ? 'selected' : ''" @click="selectedPreview = shot">{{ index + 1 }}</button><button v-if="project.preview_url" :class="selectedPreview === 'game' ? 'selected' : ''" @click="selectedPreview = 'game'">Final Game</button></div><a v-if="displayedShot || previewUrl" :href="displayedShot || previewUrl" target="_blank">Open ↗</a></div>
           <img v-if="displayedShot" class="progress-shot" :src="displayedShot" alt="Latest game progress screenshot" @click="selectedShot = displayedShot" />
           <iframe v-else-if="previewUrl" :src="previewUrl" allow="fullscreen; clipboard-read; clipboard-write" title="Live project preview"></iframe>
           <div v-else class="preview-wait"><div class="orbit"><span></span></div><h2>Waiting for preview</h2><p>Progress screenshots appear here while OpenCode builds. The verified game replaces them when it is ready.</p></div>
@@ -42,16 +42,18 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { selectPreview } from '../preview-selection.mjs'
 import { useRoute } from 'vue-router'
 import { useJsonResource } from '../composables/useJsonResource'
-const route = useRoute(), selectedShot = ref(''), displayedShot = ref(''), mobilePane = ref('chat')
+const route = useRoute(), selectedShot = ref(''), selectedPreview = ref(''), mobilePane = ref('chat')
 const { data: project, loading, error } = useJsonResource(
   () => `/api/github/${encodeURIComponent(route.params.owner)}/${encodeURIComponent(route.params.repo)}/issues/${encodeURIComponent(route.params.number)}`,
   { pollMs: 8000 }
 )
 const cleanTitle = computed(() => (project.value?.title || '').replace(/^\/goal\s*/i, ''))
-const previewUrl = computed(() => project.value?.preview_url || '')
-const previewLabel = computed(() => displayedShot.value ? 'Build screenshot' : project.value?.preview_url ? 'Playable preview' : project.value?.screenshots?.length ? 'Build screenshot' : 'Waiting for preview')
+const displayedShot = computed(() => ['files', 'game', ''].includes(selectedPreview.value) ? '' : selectedPreview.value)
+const previewUrl = computed(() => selectedPreview.value === 'files' ? project.value?.project_files_url || '' : selectedPreview.value === 'game' ? project.value?.preview_url || '' : '')
+const previewLabel = computed(() => displayedShot.value ? 'Build screenshot' : selectedPreview.value === 'files' ? 'Project files' : selectedPreview.value === 'game' ? 'Final game' : project.value?.screenshots?.length ? 'Build screenshot' : 'Waiting for preview')
 const failedStates = new Set(['action_required', 'cancelled', 'failure', 'startup_failure', 'timed_out'])
 const workflowFailed = computed(() => failedStates.has(project.value?.actions?.status))
 const currentGithubAction = computed(() => project.value?.actions?.active_step || '')
@@ -84,8 +86,7 @@ const currentStep = computed(() => currentGithubAction.value
   ? { label: 'GitHub Actions', copy: currentGithubAction.value }
   : steps.value.find(step => step.active) || [...steps.value].reverse().find(step => step.done) || steps.value[0])
 watch(project, (current, previous) => {
-  if (!current) { selectedShot.value = ''; displayedShot.value = ''; return }
-  if (current.preview_url && !previous?.preview_url) displayedShot.value = ''
-  else if (!current.preview_url && current.screenshots.length && (!displayedShot.value || current.screenshots.length > (previous?.screenshots?.length || 0))) displayedShot.value = current.screenshots.at(-1)
+  selectedPreview.value = selectPreview(current, previous, selectedPreview.value)
+  if (!current) selectedShot.value = ''
 })
 </script>

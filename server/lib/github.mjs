@@ -26,14 +26,21 @@ export function extractUrls(issue, comments = []) {
   const urls = [...text.matchAll(/https:\/\/[^\s)<\"]+/g)].map(match => match[0].replace(/[.,]+$/, ''))
   const trycf = urls.filter(url => /\.trycloudflare\.com/i.test(url))
   const opencode = trycf.find(url => /\/session\/ses_/i.test(url)) || ''
-  const preview = [...trycf].reverse().find(url => !/\/session\/ses_/i.test(url)) || ''
+  const labeled = label => {
+    const lines = text.split('\n').filter(line => label.test(line))
+    return lines.reverse().map(line => line.match(/https:\/\/[^\s)<"]+/)?.[0]).find(Boolean) || ''
+  }
+  const files = labeled(/project files/i)
+  const preview = labeled(/final game|playable preview|^Preview:/i)
+  const branch = labeled(/created branch/i)
   const screenshots = [...new Set(urls.filter(url =>
     /raw\.githubusercontent\.com\/.+\/(?:screenshots|project%2Fscreenshots|project\/screenshots)\/.+\.(png|jpe?g|webp)/i.test(url) ||
     /github\.com\/user-attachments\/assets\//i.test(url) ||
+    /github\.com\/[^/]+\/[^/]+\/releases\/download\/.+\.(png|jpe?g|webp)/i.test(url) ||
     /user-images\.githubusercontent\.com\/.+\.(png|jpe?g|webp)/i.test(url)
   ))]
   const project = [...urls].reverse().find(url => /omgithub\.com\/[^/]+\/[^/]+\/tree\/[0-9a-f]{40}/i.test(url)) || ''
-  return { opencode, preview, screenshots, project }
+  return { opencode, preview, screenshots, project, files, branch }
 }
 function base64url(value) {
   return Buffer.from(value).toString('base64url')

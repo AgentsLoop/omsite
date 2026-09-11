@@ -110,3 +110,11 @@ test('setup creates the execution label without any issue interaction', async ()
   assert.equal(mock.calls.some(call => call.path.endsWith('/labels/OpenCode')), true)
   assert.equal(mock.calls.some(call => call.path.includes('/issues/')), false)
 })
+
+test('separates labeled build resources and release screenshots', () => {
+  const result = extractUrls({}, [{ body: 'Project files: https://files.trycloudflare.com\nFinal game: https://game.trycloudflare.com\nCreated branch: [opencode/123](https://github.com/user/repo/tree/opencode/123)\n![shot](https://github.com/user/repo/releases/download/run/final.png)\n![bad](null)' }])
+  assert.equal(result.files, 'https://files.trycloudflare.com')
+  assert.equal(result.preview, 'https://game.trycloudflare.com')
+  assert.equal(result.branch, 'https://github.com/user/repo/tree/opencode/123')
+  assert.equal(result.screenshots.length, 1)
+})

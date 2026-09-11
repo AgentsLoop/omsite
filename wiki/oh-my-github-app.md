@@ -43,3 +43,9 @@ selected branch and central workflow code from the revision that caller pins.
 
 Create site submissions with the signed-in user's GitHub token. Let the
 repository's Actions access variable control execution.
+
+## Select build resources
+
+Use **Files**, screenshot tabs, and **Final Game** in the issue preview.
+Keep the file-index URL separate from the verified app URL. Advance the default
+selection when a newer build stage arrives. Use **View branch** to open the result source.
