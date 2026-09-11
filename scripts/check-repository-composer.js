@@ -38,7 +38,8 @@ async page => {
   await page.waitForURL('**/player/game/issues/42')
   if (writes[0].body.repository.owner !== 'creator') throw new Error('Wrong selected repository')
   await page.goto('http://127.0.0.1:5193/')
-  await page.getByText('Generate in player/PlayGround.', { exact: false }).waitFor()
+  const playgroundTitle = await page.getByRole('combobox', { name: /^Repository/ }).getAttribute('title')
+  if (!playgroundTitle?.includes('player/PlayGround')) throw new Error('Playground target is not available to assistive text')
   await page.getByRole('textbox', { name: 'Generation request' }).fill('Create a maze game')
   await page.getByRole('button', { name: 'Generate', exact: true }).click()
   await page.waitForURL('**/player/game/issues/42')
@@ -55,10 +56,13 @@ async page => {
   await page.goto('http://127.0.0.1:5193/creator')
   await page.getByRole('button', { name: 'Remix', exact: true }).first().waitFor()
   if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error('Mobile horizontal overflow')
-  for (const selector of ['.repository-card', '.game-card', '.composer-repository select']) {
+  for (const selector of ['.repository-card', '.game-card', '.composer-repository']) {
     const color = await page.locator(selector).first().evaluate(el => getComputedStyle(el).backgroundColor)
     if (color === 'rgb(255, 255, 255)' || color === 'rgba(0, 0, 0, 0)') throw new Error('Missing dark surface: ' + selector)
   }
+  const composerBox = await page.locator('.prompt-box').first().evaluate(el => ({ display: getComputedStyle(el).display, radius: parseFloat(getComputedStyle(el).borderRadius), width: el.getBoundingClientRect().width }))
+  if (composerBox.display !== 'flex' || composerBox.radius < 18 || composerBox.width > 580) throw new Error('Composer is not a compact rounded panel')
+  if (!await page.locator('.composer-toolbar .composer-repository').count()) throw new Error('Repository selector is outside composer toolbar')
   await page.getByRole('combobox').selectOption('__new_project__')
   const dialog = page.getByRole('dialog', { name: 'New Project', exact: true })
   await dialog.waitFor()

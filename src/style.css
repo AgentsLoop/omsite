@@ -159,27 +159,24 @@ h3 {
 .prompt-box {
   width: min(810px, 100%);
   margin: auto;
-  display: grid;
-  grid-template-columns: 35px 1fr 48px;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 10px 10px 17px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
   border: 1px solid #38383a;
-  border-radius: 20px;
+  border-radius: 24px;
   background: rgba(31, 31, 32, 0.94);
-  box-shadow: 0 18px 65px #0008;
-}
-.prompt-icon {
-  color: var(--orange);
-  font-size: 20px;
+  box-shadow: 0 16px 50px #0006;
 }
 .prompt-box textarea {
+  width: 100%;
+  min-height: 78px;
   resize: none;
   background: transparent;
   color: white;
   border: 0;
   outline: 0;
-  padding: 11px 0;
+  padding: 0;
   font-size: 17px;
 }
 .prompt-box textarea::placeholder {
@@ -190,12 +187,15 @@ h3 {
   height: 44px;
   border: 0;
   border-radius: 50%;
-  background: #f3f3f0;
+  background: var(--orange);
+  color: #111;
   font-size: 25px;
   cursor: pointer;
 }
 .prompt-box button:disabled {
-  opacity: 0.35;
+  background: #444447;
+  color: #8e8e92;
+  opacity: 1;
 }
 .form-error {
   color: #ff9b9b;
@@ -732,9 +732,11 @@ h3 {
 .project-card-actions .remix-button { width: 100%; margin-top: 0; background: #29292b; border: 1px solid #48484b; color: #f6f6f3; }
 .remix-button:focus-visible, select:focus-visible { outline: 2px solid var(--orange); outline-offset: 3px; }
 .repository-actions .remix-button { flex: 1; text-align: center; text-decoration: none; }
-.composer-repository { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }
-.composer-repository select { max-width: 70%; padding: 9px 12px; border: 1px solid #666; border-radius: 8px; background: #222; color: #fff; }
-.composer-target { font-size: 13px; color: #aaa; }
+.composer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.composer-repository { display: flex; min-width: 0; align-items: center; gap: 7px; padding-left: 10px; border: 1px solid #444448; border-radius: 999px; background: #29292b; color: #b9b9bc; }
+.composer-repository select { min-width: 0; max-width: min(58vw, 360px); padding: 8px 30px 8px 0; border: 0; background: transparent; color: #f6f6f3; cursor: pointer; font: inherit; font-weight: 650; }
+.generation-composer > .form-error, .generation-composer > a { display: block; width: min(810px, 100%); margin: 10px auto 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .new-project-dialog { width: min(460px, calc(100% - 32px)); box-sizing: border-box; padding: 28px; border: 1px solid #555; border-radius: 18px; background: #19191b; color: #fff; text-align: left; }
 .new-project-dialog::backdrop { background: #000a; }
 .new-project-dialog h2 { margin: 0 0 12px; font-size: 26px; }
@@ -1110,6 +1112,10 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, summary:focu
   .profile-hero h1 {
     font-size: 38px;
   }
+  .prompt-box { padding: 15px; border-radius: 20px; }
+  .prompt-box textarea { min-height: 90px; font-size: 16px; }
+  .composer-repository { max-width: calc(100% - 56px); }
+  .composer-repository select { max-width: 58vw; }
 }
 
 .submit-game-button {

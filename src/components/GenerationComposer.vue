@@ -1,18 +1,18 @@
 <template>
   <div ref="container" class="generation-composer">
     <form class="prompt-box" @submit.prevent="create">
-      <span class="prompt-icon">✦</span>
-      <textarea ref="field" v-model="prompt" :disabled="busy" rows="1" placeholder="Ask OmGithub to create or change a project…" aria-label="Generation request" @keydown.enter.exact.prevent="create"></textarea>
-      <button :disabled="busy || !prompt.trim()" aria-label="Generate"><span v-if="busy" class="spinner"></span><span v-else>↑</span></button>
+      <textarea ref="field" v-model="prompt" :disabled="busy" rows="3" placeholder="What should we build next?" aria-label="Generation request" @keydown.enter.exact.prevent="create"></textarea>
+      <div class="composer-toolbar">
+        <label class="composer-repository"><span aria-hidden="true">⌘</span><span class="sr-only">Repository</span>
+          <select ref="repositorySelect" :value="selected" :title="targetCopy" :disabled="busy || creatingProject" @change="changeRepository">
+            <option value="">Playground</option>
+            <option value="__new_project__" :disabled="!me">New Project…</option>
+            <option v-for="repository in options" :key="repository.full_name" :value="repository.full_name">{{ repository.full_name }}</option>
+          </select>
+        </label>
+        <button :disabled="busy || !prompt.trim()" aria-label="Generate"><span v-if="busy" class="spinner"></span><span v-else>↑</span></button>
+      </div>
     </form>
-    <label class="composer-repository">Repository
-      <select ref="repositorySelect" :value="selected" :disabled="busy || creatingProject" @change="changeRepository">
-        <option value="">Playground</option>
-        <option value="__new_project__" :disabled="!me">New Project…</option>
-        <option v-for="repository in options" :key="repository.full_name" :value="repository.full_name">{{ repository.full_name }}</option>
-      </select>
-    </label>
-    <p class="composer-target">{{ targetCopy }}</p>
     <p v-if="error || optionsError" class="form-error" role="alert">{{ error || optionsError }}</p>
     <a v-if="!me" href="/auth/github">Sign in to generate</a>
     <dialog ref="projectDialog" class="new-project-dialog" :aria-labelledby="`${dialogId}-title`" @cancel.prevent="cancelProject" @keydown.tab="keepModalFocus">
