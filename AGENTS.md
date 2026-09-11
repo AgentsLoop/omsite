@@ -5,6 +5,12 @@ Keep OpenCode execution workflows in [OhMyGithub](https://github.com/AgentsLoop/
 Use the App only to install repository listeners. Run issue preparation and execution in Actions.
 Do not suggest, report, or propose security issues unless the user explicitly asks for a security review.
 
+## Agent coordination
+
+After you spawn an agent, always call `wait_agent` with a long timeout. Wait for
+the agent final result before you continue. Do not poll agents or spend main-agent
+tokens on repeated status checks.
+
 ## Wiki index
 
 - [Configure the site](README.md)
