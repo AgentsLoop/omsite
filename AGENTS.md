@@ -17,6 +17,10 @@ Do not suggest, report, or propose security issues unless the user explicitly as
 
 Validate every new or changed UI in the dark theme at desktop and mobile widths. Inspect rendered cards, inputs, dropdowns, modals, and disabled states. Use dark surface tokens and readable text; reject unintended white panels. Check the deployed build when fixing live-site UI.
 
+## Subagent coordination
+
+Assign each validation and deployment-monitoring workflow to one subagent. Do not let subagents spawn other subagents. Make the main agent wait for that subagent to finish before it continues.
+
 Run `actionlint .github/workflows/omgithub-build.yml` after workflow changes.
 Keep secrets in the deployment environment. Exclude `.env`, `data`, and dependencies from Git.
 Add per-command timing when writing shell scripts.
