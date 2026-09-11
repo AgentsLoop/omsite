@@ -19,7 +19,7 @@ Turn the user's latest correction into one durable, narrowly scoped instruction.
 1. Read the active instruction files and the relevant skill before editing.
 2. State the observed failure and the exact behavior that must replace it.
 3. Edit the smallest authoritative file. Strengthen or replace an ambiguous rule instead of adding a duplicate.
-4. Write direct, imperative English. Define the trigger, required action, and prohibited shortcut when each is necessary.
+4. Write every changed `SKILL.md` or `AGENTS.md` in a straightforward, extremely imperative style. Define the trigger, required action, and prohibited shortcut when each is necessary.
 5. Preserve unrelated instructions, frontmatter, metadata, and user changes.
 6. Do not generalize one correction beyond the scope stated by the user.
 
