@@ -5,3 +5,16 @@ export function selectPreview(current, previous, selected) {
   if (selected) return selected
   return current.preview_url ? 'game' : current.screenshots?.at(-1) || (current.project_files_url ? 'files' : '')
 }
+
+export function refreshPreviewFrame(previewFrameKey) {
+  return previewFrameKey + 1
+}
+
+export function switchWorkspacePane(currentPane, nextPane, previewFrameKey) {
+  return {
+    pane: nextPane,
+    previewFrameKey: currentPane === 'chat' && nextPane === 'preview'
+      ? refreshPreviewFrame(previewFrameKey)
+      : previewFrameKey
+  }
+}

@@ -10,7 +10,7 @@
         </div>
         <div class="studio-actions"><a v-if="project.branch_url" class="branch-link" :href="project.branch_url" target="_blank" rel="noopener">View branch ↗</a><a :href="project.github_url" target="_blank">View issue ↗</a><RouterLink v-if="project.project_path" :to="project.project_path">Open Project</RouterLink></div>
       </header>
-      <nav class="mobile-pane-tabs" aria-label="Workspace panes"><button :class="mobilePane === 'chat' ? 'active' : ''" @click="mobilePane = 'chat'">Chat</button><button :class="mobilePane === 'preview' ? 'active' : ''" @click="mobilePane = 'preview'">Preview</button></nav>
+      <nav class="mobile-pane-tabs" aria-label="Workspace panes"><button :class="mobilePane === 'chat' ? 'active' : ''" @click="showPane('chat')">Chat</button><button :class="mobilePane === 'preview' ? 'active' : ''" @click="showPane('preview')">Preview</button></nav>
       <div class="studio-grid">
         <section class="chat-panel" :class="{ 'mobile-hidden': mobilePane !== 'chat' }">
           <details v-if="project.actions?.run_id && !project.opencode_url" class="actions-progress" open>
@@ -28,9 +28,9 @@
           <div v-else class="preview-wait"><div class="orbit"><span></span></div><h2>{{ workflowFailed ? 'GitHub Actions failed' : 'Preparing OpenCode' }}</h2><p>{{ workflowFailed ? `Failed at: ${project.actions.failed_step || 'Open the run for failure details.'}` : workflowSummary }}</p><a v-if="project.actions?.url" :href="project.actions.url" target="_blank">Open GitHub Actions ↗</a></div>
         </section>
         <section class="preview-panel" :class="{ 'mobile-hidden': mobilePane !== 'preview' }">
-          <div class="preview-toolbar"><span class="live-dot"></span><strong>{{ previewLabel }}</strong><div class="shot-tabs"><button v-if="project.project_files_url" :class="selectedPreview === 'files' ? 'selected' : ''" @click="selectedPreview = 'files'">Files</button><button v-for="(shot, index) in project.screenshots" :key="shot" :class="displayedShot === shot ? 'selected' : ''" @click="selectedPreview = shot">{{ index + 1 }}</button><button v-if="project.preview_url" :class="selectedPreview === 'game' ? 'selected' : ''" @click="selectedPreview = 'game'">Final Game</button></div><a v-if="displayedShot || previewUrl" :href="displayedShot || previewUrl" target="_blank">Open ↗</a></div>
+          <div class="preview-toolbar"><span class="live-dot"></span><strong>{{ previewLabel }}</strong><div class="shot-tabs"><button v-if="project.project_files_url" :class="selectedPreview === 'files' ? 'selected' : ''" @click="selectedPreview = 'files'">Files</button><button v-for="(shot, index) in project.screenshots" :key="shot" :class="displayedShot === shot ? 'selected' : ''" @click="selectedPreview = shot">{{ index + 1 }}</button><button v-if="project.preview_url" :class="selectedPreview === 'game' ? 'selected' : ''" @click="selectedPreview = 'game'">Final Game</button></div><button v-if="previewUrl" class="preview-refresh" type="button" title="Refresh preview" aria-label="Refresh preview" @click="refreshPreview">↻</button><a v-if="displayedShot || previewUrl" :href="displayedShot || previewUrl" target="_blank">Open ↗</a></div>
           <img v-if="displayedShot" class="progress-shot" :src="displayedShot" alt="Latest game progress screenshot" @click="selectedShot = displayedShot" />
-          <iframe v-else-if="previewUrl" :src="previewUrl" allow="fullscreen; clipboard-read; clipboard-write" title="Live project preview"></iframe>
+          <iframe v-else-if="previewUrl" :key="previewFrameKey" :src="previewUrl" allow="fullscreen; clipboard-read; clipboard-write" title="Live project preview"></iframe>
           <div v-else class="preview-wait"><div class="orbit"><span></span></div><h2>Waiting for preview</h2><p>Progress screenshots appear here while OpenCode builds. The verified game replaces them when it is ready.</p></div>
         </section>
       </div>
@@ -42,10 +42,10 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { selectPreview } from '../preview-selection.mjs'
+import { refreshPreviewFrame, selectPreview, switchWorkspacePane } from '../preview-selection.mjs'
 import { useRoute } from 'vue-router'
 import { useJsonResource } from '../composables/useJsonResource'
-const route = useRoute(), selectedShot = ref(''), selectedPreview = ref(''), mobilePane = ref('chat')
+const route = useRoute(), selectedShot = ref(''), selectedPreview = ref(''), mobilePane = ref('chat'), previewFrameKey = ref(0)
 const { data: project, loading, error } = useJsonResource(
   () => `/api/github/${encodeURIComponent(route.params.owner)}/${encodeURIComponent(route.params.repo)}/issues/${encodeURIComponent(route.params.number)}`,
   { pollMs: 8000 }
@@ -72,6 +72,14 @@ function workflowIcon(state) {
   if (state === 'in_progress' || state === 'queued') return '●'
   if (state === 'skipped') return '−'
   return '○'
+}
+function refreshPreview() {
+  previewFrameKey.value = refreshPreviewFrame(previewFrameKey.value)
+}
+function showPane(nextPane) {
+  const next = switchWorkspacePane(mobilePane.value, nextPane, previewFrameKey.value)
+  mobilePane.value = next.pane
+  previewFrameKey.value = next.previewFrameKey
 }
 const steps = computed(() => {
   const p = project.value || {}; const complete = p.status === 'complete'

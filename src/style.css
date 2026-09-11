@@ -513,8 +513,24 @@ h3 {
   font-size: 12px;
 }
 .preview-toolbar a {
-  margin-left: auto;
   color: #aaa;
+}
+.preview-refresh {
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 1px solid #3b3b3d;
+  border-radius: 6px;
+  background: #242426;
+  color: #ddd;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.preview-refresh:hover,
+.preview-refresh:focus-visible {
+  border-color: var(--orange);
+  color: white;
 }
 .shot-tabs {
   display: flex;
