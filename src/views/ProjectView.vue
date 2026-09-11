@@ -14,8 +14,19 @@
       <div class="studio-grid">
         <section class="chat-panel" :class="{ 'mobile-hidden': mobilePane !== 'chat' }">
           <div class="preview-toolbar"><span class="live-dot"></span><strong>OpenCode chat</strong><a v-if="project.opencode_url" :href="project.opencode_url" target="_blank">Open ↗</a></div>
+          <details v-if="project.actions?.run_id && !project.opencode_url" class="actions-progress" open>
+            <summary :class="{ failed: workflowFailed }"><span>{{ workflowIcon(project.actions.status) }}</span><strong>{{ workflowSummary }}</strong><a :href="project.actions.url" target="_blank" @click.stop>GitHub Actions ↗</a></summary>
+            <div class="actions-jobs">
+              <section v-for="job in project.actions.jobs" :key="job.id">
+                <h3><span>{{ workflowIcon(job.conclusion || job.status) }}</span><a :href="job.url" target="_blank">{{ job.name }}</a></h3>
+                <ol>
+                  <li v-for="step in job.steps" :key="`${job.id}-${step.number}`" :class="step.conclusion || step.status"><span>{{ workflowIcon(step.conclusion || step.status) }}</span><span>{{ step.name }}</span><small>{{ step.conclusion || step.status }}</small></li>
+                </ol>
+              </section>
+            </div>
+          </details>
           <iframe v-if="project.opencode_url" :src="project.opencode_url" allow="clipboard-read; clipboard-write" title="Live OpenCode chat"></iframe>
-          <div v-else class="preview-wait"><div class="orbit"><span></span></div><h2>Preparing OpenCode</h2><p>The live chat appears here as soon as GitHub Actions publishes its secure session.</p></div>
+          <div v-else class="preview-wait"><div class="orbit"><span></span></div><h2>{{ workflowFailed ? 'GitHub Actions failed' : 'Preparing OpenCode' }}</h2><p>{{ workflowFailed ? `Failed at: ${project.actions.failed_step || 'Open the run for failure details.'}` : workflowSummary }}</p><a v-if="project.actions?.url" :href="project.actions.url" target="_blank">Open GitHub Actions ↗</a></div>
         </section>
         <section class="preview-panel" :class="{ 'mobile-hidden': mobilePane !== 'preview' }">
           <div class="preview-toolbar"><span class="live-dot"></span><strong>{{ previewLabel }}</strong><div v-if="project.screenshots.length" class="shot-tabs"><button v-for="(shot, index) in project.screenshots" :key="shot" :class="displayedShot === shot ? 'selected' : ''" @click="displayedShot = shot">{{ index + 1 }}</button><button v-if="previewUrl" :class="!displayedShot ? 'selected' : ''" @click="displayedShot = ''">Live</button></div><a v-if="displayedShot || previewUrl" :href="displayedShot || previewUrl" target="_blank">Open ↗</a></div>
@@ -42,6 +53,24 @@ const { data: project, loading, error } = useJsonResource(
 const cleanTitle = computed(() => (project.value?.title || '').replace(/^\/goal\s*/i, ''))
 const previewUrl = computed(() => project.value?.preview_url || '')
 const previewLabel = computed(() => displayedShot.value ? 'Build screenshot' : project.value?.preview_url ? 'Playable preview' : project.value?.screenshots?.length ? 'Build screenshot' : 'Waiting for preview')
+const failedStates = new Set(['action_required', 'cancelled', 'failure', 'startup_failure', 'timed_out'])
+const workflowFailed = computed(() => failedStates.has(project.value?.actions?.status))
+const workflowSummary = computed(() => {
+  const actions = project.value?.actions
+  if (!actions || actions.status === 'waiting') return 'Waiting for the GitHub Actions run.'
+  if (actions.status === 'unavailable') return 'GitHub Actions progress is temporarily unavailable.'
+  if (workflowFailed.value) return `Failed at ${actions.failed_step || 'GitHub Actions'}`
+  if (actions.active_step) return actions.active_step
+  if (actions.status === 'completed') return actions.conclusion === 'success' ? 'GitHub Actions completed' : `GitHub Actions: ${actions.conclusion}`
+  return 'GitHub Actions is starting.'
+})
+function workflowIcon(state) {
+  if (state === 'success') return '✓'
+  if (failedStates.has(state)) return '×'
+  if (state === 'in_progress' || state === 'queued') return '●'
+  if (state === 'skipped') return '−'
+  return '○'
+}
 const steps = computed(() => {
   const p = project.value || {}; const complete = p.status === 'complete'
   return [
