@@ -12,6 +12,7 @@ Do not suggest, report, or propose security issues unless the user explicitly as
 - [Publish projects](wiki/omgithub.md)
 - [Operate Supabase](wiki/supabase.md)
 - [Review the repository split](wiki/repository-split.md)
+- [Open Codex files in VS Code projects](wiki/vscode-project-opener.md)
 
 ## Verify UI changes
 
