@@ -1,25 +1,40 @@
 <template>
   <main>
-    <section class="hero pixel-field">
-      <div class="hero-inner">
-        <p class="eyebrow">OPEN SOURCE AI PROJECT STUDIO</p>
-        <h1>Create projects with AI</h1>
-        <p class="hero-sub">Describe your project. Watch OpenCode build it live. Publish it to the web.</p>
-        <GenerationComposer ref="composer" :me="me" />
-        <div class="capabilities">
-          <div><b>◎</b><span><strong>Publish</strong><small>Permanent web link</small></span></div>
-          <div><b>◈</b><span><strong>Live build</strong><small>Watch OpenCode work</small></span></div>
-          <div><b>▣</b><span><strong>Install</strong><small>Ready as a web app</small></span></div>
-          <div><b>&lt;/&gt;</b><span><strong>GitHub native</strong><small>Issues and immutable commits</small></span></div>
+    <section class="hero">
+      <div class="hero-grid" aria-hidden="true"></div>
+      <div class="hero-layout">
+        <div class="hero-copy">
+          <div class="hero-index"><span>01</span><span>AI project studio</span></div>
+          <p class="eyebrow"><span class="eyebrow-dot"></span> Open source · GitHub native</p>
+          <h1>Turn an idea into<br /><em>working software.</em></h1>
+          <p class="hero-sub">Describe what you want. OpenCode builds it in public, verifies it in a browser, and gives it a permanent home.</p>
+          <a class="hero-jump" href="#discover">Explore what people made <span aria-hidden="true">↓</span></a>
         </div>
+        <div class="hero-workbench">
+          <div class="workbench-label"><span>Start a build</span><span>⌘ Enter</span></div>
+          <GenerationComposer ref="composer" :me="me" />
+          <p class="composer-note">No setup. Your prompt becomes a GitHub issue and an immutable build.</p>
+        </div>
+      </div>
+      <div class="signal-strip" aria-label="Platform capabilities">
+        <div><span>01</span><strong>Describe</strong><small>Start with plain language</small></div>
+        <div><span>02</span><strong>Watch</strong><small>Follow the build live</small></div>
+        <div><span>03</span><strong>Verify</strong><small>See browser proof</small></div>
+        <div><span>04</span><strong>Publish</strong><small>Share a permanent link</small></div>
       </div>
     </section>
     <section id="discover" class="library">
-      <div class="section-heading"><div><p class="eyebrow orange">BUILT IN PUBLIC</p><h2>Projects created by other users</h2></div><label class="library-sort" for="discover-sort"><span>Sort by</span><select id="discover-sort" v-model="sortMode"><option value="latest">Latest</option><option value="stars">GitHub stars</option></select></label></div>
-      <div class="catalog-filters">
-        <label>Tag<select v-model="tagFilter"><option value="">All tags</option><option v-for="tag in tags" :key="tag" :value="tag">{{ tag }}</option></select></label>
-        <label>Rating<select v-model="ratingFilter"><option value="">Any rating</option><option value="8">★★★★☆ and up</option><option value="6">★★★☆☆ and up</option><option value="4">★★☆☆☆ and up</option></select></label>
-        <button v-if="tagFilter || ratingFilter" type="button" @click="tagFilter = ''; ratingFilter = ''">Clear filters</button>
+      <div class="catalog-header">
+        <div><p class="eyebrow"><span class="eyebrow-dot"></span> Community index</p><h2>Built in public.</h2><p>Playable experiments, useful tools, and strange ideas made real.</p></div>
+        <span class="catalog-count">{{ projects.length.toString().padStart(2, '0') }} / projects</span>
+      </div>
+      <div class="catalog-controls">
+        <div class="catalog-filters">
+          <label><span>Category</span><select v-model="tagFilter"><option value="">All projects</option><option v-for="tag in tags" :key="tag" :value="tag">{{ tag }}</option></select></label>
+          <label><span>Rating</span><select v-model="ratingFilter"><option value="">Any rating</option><option value="8">4+ stars</option><option value="6">3+ stars</option><option value="4">2+ stars</option></select></label>
+          <button v-if="tagFilter || ratingFilter" type="button" @click="tagFilter = ''; ratingFilter = ''">Reset</button>
+        </div>
+        <label class="library-sort" for="discover-sort"><span>Order</span><select id="discover-sort" v-model="sortMode"><option value="latest">Newest first</option><option value="stars">Most starred</option></select></label>
       </div>
       <p v-if="projectsError" class="form-error" role="alert">{{ projectsError }}</p>
       <div v-else-if="loadingProjects" class="cards-grid" aria-label="Loading projects"><div v-for="n in 3" :key="n" class="game-card skeleton"></div></div>

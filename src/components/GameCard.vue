@@ -6,7 +6,7 @@
       <span class="status-chip">{{ project.status || 'Published' }}</span>
       <span v-if="project.github_stars !== null && project.github_stars !== undefined" class="stars-chip">★ {{ formatStars(project.github_stars) }}</span>
     </div>
-    <div class="game-card-copy"><h3>{{ project.title }}</h3><p>{{ project.description || 'Created with OmGithub' }}</p><ProjectMetadata :project="project" compact-view /></div>
+    <div class="game-card-copy"><div class="game-card-heading"><h3>{{ project.title }}</h3><span class="card-arrow" aria-hidden="true">↗</span></div><p>{{ project.description || 'Created with OmGithub' }}</p><ProjectMetadata :project="project" compact-view /><span class="open-project">Open project</span></div>
   </RouterLink>
   <div v-if="repository" class="project-card-actions"><button class="remix-button" @click="$emit('remix', repository)">Remix</button></div>
   </article>
