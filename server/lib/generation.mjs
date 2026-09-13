@@ -1,3 +1,4 @@
+import { issueTitleFromPrompt } from './issue-request.mjs'
 import { remixRepository } from './repository-remix.mjs'
 import { ensurePlayground } from './repository-create.mjs'
 import { parseIssueRequest } from './github.mjs'
@@ -7,7 +8,7 @@ export async function generateIssue({ selection, user, ...options }) {
   if (selection != null && (!selection.owner || !selection.repo)) throw Object.assign(new Error('Select a valid repository.'), { status: 400 })
   const prompt = String(options.prompt || '').trim()
   if (prompt.length < 8 || prompt.length > 12000) throw Object.assign(new Error('Prompt must be between 8 and 12,000 characters.'), { status: 400 })
-  const parsed = parseIssueRequest({ title: `/OpenCode ${prompt.split('\n')[0].slice(0, 110)}`, body: prompt })
+  const parsed = parseIssueRequest({ title: issueTitleFromPrompt(prompt), body: prompt })
   if (parsed.branchError) throw Object.assign(new Error(parsed.branchError), { status: 400 })
   if (selection == null) await ensurePlayground({ user, requestGithub: options.requestGithub })
   const result = await remixRepository({ ...options,

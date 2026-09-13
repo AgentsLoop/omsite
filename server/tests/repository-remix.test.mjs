@@ -64,3 +64,38 @@ test('clone a non-writable repository before installing the workflow', async () 
   assert.equal(cloned, true)
   assert.equal(result.issue.number, 42)
 })
+
+test('preserve long prompt branch directives and validate the selected branch', async () => {
+  const mock = githubMock()
+  const calls = []
+  const prompt = 'Build ' + 'x'.repeat(150) + ' branch: release'
+  await remixRepository({ owner: 'player', repo: 'game', prompt, user: { token: 'test' }, config: {},
+    requestGithub: async (path, token, options = {}) => {
+      calls.push({ path, ...options })
+      if (path.endsWith('/branches/release')) return {}
+      return mock.requestGithub(path, token, options)
+    } })
+  assert.ok(calls.some(call => call.path.endsWith('/branches/release')))
+  const issue = JSON.parse(calls.find(call => call.path.endsWith('/issues')).body)
+  assert.match(issue.title, / branch: release$/)
+  assert.equal(issue.body, prompt)
+})
+
+test('preserve central native caller and reject missing or incompatible callers', async () => {
+  for (const content of ['types: [opened]\nuses: ./.github/workflows/opencode-prepare.yml\nuses: ./.github/workflows/opencode-reusable.yml', '', 'old caller']) {
+    const calls = []
+    const run = remixRepository({ owner: 'agentsloop', repo: 'ohmygithub', prompt: 'Build a maze game',
+      user: { token: 'test' }, config: {}, requestGithub: async (path, token, options = {}) => {
+        calls.push({ path, ...options })
+        if (path === '/repos/agentsloop/ohmygithub') return { full_name: 'AgentsLoop/OhMyGithub', default_branch: 'main', permissions: { push: true } }
+        if (path.includes('/commits/')) return { sha: workflowSha }
+        if (path.endsWith('opencode.yml?ref=main')) return { sha: 'old', content: Buffer.from(content).toString('base64') }
+        if (path.endsWith('/issues')) return { number: 4 }
+        return {}
+      } })
+    if (content.startsWith('types:')) assert.equal((await run).workflowInstalled, false)
+    else await assert.rejects(run, { status: 409 })
+    assert.ok(!calls.some(call => call.method === 'PUT'))
+    if (!content.startsWith('types:')) assert.ok(!calls.some(call => call.path.endsWith('/issues')))
+  }
+})

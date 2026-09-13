@@ -51,3 +51,8 @@ repository's Actions access variable control execution.
 Use **Files**, screenshot tabs, and **Final Game** in the issue preview.
 Keep the file-index URL separate from the verified app URL. Advance the default
 selection when a newer build stage arrives. Use **View branch** to open the result source.
+
+## Preserve submission routing
+
+Keep the central repository's native caller when submitting a remix there. Install and review a compatible native caller before accepting submissions.
+Parse the complete first prompt line before shortening the issue title. Preserve the full branch suffix and reject invalid or oversized directives before creating repositories or issues.

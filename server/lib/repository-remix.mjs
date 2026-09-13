@@ -1,3 +1,4 @@
+import { issueTitleFromPrompt } from './issue-request.mjs'
 import { repositoryWorkflow, parseIssueRequest } from './github.mjs'
 import { clonePublicRepository } from './repository-clone.mjs'
 
@@ -21,7 +22,7 @@ export async function remixRepository({ owner, repo, prompt, user, origin, confi
   const request = String(prompt || '').trim()
   if (request.length < 8 || request.length > 12000) throw failure('Prompt must be between 8 and 12,000 characters.', 400)
   if (!user?.token) throw failure('Sign in with GitHub to remix a repository.', 401)
-  const parsed = parseIssueRequest({ title: `/OpenCode ${request.split('\n')[0].slice(0, 110)}`, body: request })
+  const parsed = parseIssueRequest({ title: issueTitleFromPrompt(request), body: request })
   if (parsed.branchError) throw failure(parsed.branchError, 400)
 
   let path = repositoryPath(owner, repo)
@@ -51,7 +52,14 @@ export async function remixRepository({ owner, repo, prompt, user, origin, confi
   const existing = await optionalGithub(`${workflowPath}?ref=${encodeURIComponent(repository.default_branch)}`, user.token, requestGithub)
   const current = existing ? Buffer.from(existing.content || '', 'base64').toString() : ''
   let workflowInstalled = false
-  if (current !== workflow) {
+  const isCentral = repository.full_name.toLowerCase() === `${centralOwner}/${centralRepo}`.toLowerCase()
+  if (isCentral) {
+    if (!current.includes('types: [opened]') ||
+        !current.includes('uses: ./.github/workflows/opencode-prepare.yml') ||
+        !current.includes('uses: ./.github/workflows/opencode-reusable.yml')) {
+      throw failure('Install and review the central repository issue listener before accepting requests', 409)
+    }
+  } else if (current !== workflow) {
     await requestGithub(workflowPath, user.token, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
@@ -79,12 +87,11 @@ export async function remixRepository({ owner, repo, prompt, user, origin, confi
     }
   }
 
-  const firstLine = request.split('\n')[0].slice(0, 110)
   const issue = await requestGithub(`${path}/issues`, user.token, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      title: `/OpenCode ${firstLine}`,
+      title: issueTitleFromPrompt(request),
       body: request,
       labels: ['OpenCode']
     })

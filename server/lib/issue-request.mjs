@@ -17,3 +17,13 @@ export function parseIssueRequest(issue, defaultBranch = 'main') {
     branchError: invalid ? 'Invalid branch directive. End the issue title with `branch: <existing-branch>`.' : ''
   }
 }
+
+export function issueTitleFromPrompt(prompt) {
+  const firstLine = String(prompt).trim().split('\n')[0]
+  const parsed = parseIssueRequest({ title: firstLine })
+  if (parsed.branchError) throw Object.assign(new Error(parsed.branchError), { status: 400 })
+  const suffix = parsed.branchSpecified ? ` branch: ${parsed.targetRef}` : ''
+  const available = 256 - '/OpenCode '.length - suffix.length
+  if (available < 1) throw Object.assign(new Error('Branch directive is too long for a GitHub issue title.'), { status: 400 })
+  return `/OpenCode ${parsed.title.slice(0, Math.min(110, available))}${suffix}`
+}

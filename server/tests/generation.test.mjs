@@ -53,3 +53,10 @@ test('reject private repository selection before writing', async () => {
   await assert.rejects(() => remixRepository({ owner: 'player', repo: 'private', prompt: 'Change the game', user: { token: 'token' }, requestGithub: async () => { calls++; return { private: true } } }), /Only public/)
   assert.equal(calls, 1)
 })
+
+test('reject invalid branch suffix beyond title cutoff before creating Playground', async () => {
+  await assert.rejects(generateIssue({ user: { login: 'player', token: 'test' },
+    prompt: 'x'.repeat(150) + ' branch: invalid branch',
+    requestGithub: async () => { assert.fail('No GitHub changes before validation') }
+  }), { status: 400 })
+})
