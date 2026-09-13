@@ -101,6 +101,7 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '      contents: write',
     '      issues: write',
     '      actions: read',
+    '      pull-requests: write',
     `    uses: ${owner}/${repo}/.github/workflows/opencode-reusable.yml@${ref}`,
     '    with:',
     `      runtime_ref: ${ref}`,

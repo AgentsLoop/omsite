@@ -56,3 +56,5 @@ selection when a newer build stage arrives. Use **View branch** to open the resu
 
 Keep the central repository's native caller when submitting a remix there. Install and review a compatible native caller before accepting submissions.
 Parse the complete first prompt line before shortening the issue title. Preserve the full branch suffix and reject invalid or oversized directives before creating repositories or issues.
+
+Grant optional pull-request write access in generated callers for compatibility with older runtimes. Keep the central runtime free of a required pull-request grant so callers without it can still execute and deliver branches.

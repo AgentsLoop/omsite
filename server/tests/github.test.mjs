@@ -162,3 +162,8 @@ test('separates labeled build resources and release screenshots', () => {
   assert.equal(result.branch, 'https://github.com/user/repo/tree/opencode/123')
   assert.equal(result.screenshots.length, 1)
 })
+
+test('execution caller permits optional pull-request delivery', () => {
+  const execution = repositoryWorkflow('central', 'runtime', sha).split('  opencode:')[1]
+  assert.match(execution, /pull-requests: write/)
+})
