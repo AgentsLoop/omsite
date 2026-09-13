@@ -34,6 +34,10 @@ Do not print, log, commit, or place the token in a user-visible URL.
 Send the token only to OmGithub through the existing token sign-in route, then confirm the session with `/api/me` or the signed-in profile UI.
 Use `?exec=logout` on the OmGithub home route to end the test session.
 
+## Response references
+
+When you reference a workspace file in a response, use a Markdown link with the absolute file path and a one-based line anchor. Use the format `[label](/absolute/path#L<number>)`.
+
 ## Retry failed requests
 
 Create a new issue with the same title and body. Preserve execution and requested mode labels.
