@@ -20,7 +20,6 @@ async function optionalGithub(path, token, requestGithub) {
 
 export async function remixRepository({ owner, repo, prompt, user, origin, config, requestGithub, cloneRepository = clonePublicRepository }) {
   const request = String(prompt || '').trim()
-  if (request.length < 8 || request.length > 12000) throw failure('Prompt must be between 8 and 12,000 characters.', 400)
   if (!user?.token) throw failure('Sign in with GitHub to remix a repository.', 401)
   const parsed = parseIssueRequest({ title: issueTitleFromPrompt(request), body: request })
   if (parsed.branchError) throw failure(parsed.branchError, 400)

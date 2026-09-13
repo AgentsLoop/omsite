@@ -72,7 +72,3 @@ test('reuse Playground when a concurrent request creates it', async () => {
   } })
   assert.equal(result.full_name, repository.full_name)
 })
-
-test('invalid generation does not create a Playground repository', async () => {
-  await assert.rejects(() => generateIssue({ user, prompt: 'short', requestGithub: () => assert.fail('Unexpected GitHub call') }), error => error.status === 400)
-})

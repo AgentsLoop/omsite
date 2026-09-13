@@ -145,7 +145,6 @@ async function create() {
     }, 2000)
     return
   }
-  if (prompt.value.trim().length < 8 || prompt.value.trim().length > 12000) { error.value = 'Prompt must be between 8 and 12,000 characters.'; return }
   busy.value = true; error.value = ''
   try {
     const [owner, repo] = selected.value.split('/')

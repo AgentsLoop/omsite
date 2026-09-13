@@ -380,7 +380,7 @@ app.post('/api/issues', async (req, res, next) => {
   try {
     if (!sameOrigin(req)) return res.status(403).json({ error: 'Use the OmGithub site to generate.' })
     if (limited(req)) return res.status(429).json({ error: 'Creation limit reached. Try again later.' })
-    const prompt = String(req.body?.prompt || '').trim(); if (prompt.length < 8 || prompt.length > 12000) return res.status(400).json({ error: 'Prompt must be between 8 and 12,000 characters.' })
+    const prompt = String(req.body?.prompt || '').trim()
     const user = userFor(req)
     if (!user) return res.status(401).json({ error: 'Sign in with GitHub to create a game.' })
     res.status(201).json(await generateIssue({ selection: req.body?.repository, prompt, user, origin, config: githubApp, requestGithub: github }))

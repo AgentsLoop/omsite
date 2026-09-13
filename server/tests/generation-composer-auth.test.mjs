@@ -154,3 +154,10 @@ test('renders the preparation dialog without the redundant sign-in link', async 
   assert.ok(component.includes('@cancel.prevent="cancelSignIn"'))
   assert.ok(!component.includes('>Sign in to generate</a>'))
 })
+
+test('does not enforce a minimum or maximum prompt length in the composer', async () => {
+  const component = await readFile(componentUrl, 'utf8')
+  assert.ok(!component.includes('12,000'))
+  assert.ok(!component.includes('12000'))
+  assert.ok(!component.includes('Prompt must be between'))
+})

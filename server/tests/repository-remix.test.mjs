@@ -68,7 +68,7 @@ test('clone a non-writable repository before installing the workflow', async () 
 test('preserve long prompt branch directives and validate the selected branch', async () => {
   const mock = githubMock()
   const calls = []
-  const prompt = 'Build ' + 'x'.repeat(150) + ' branch: release'
+  const prompt = 'Build ' + 'x'.repeat(12001) + ' branch: release'
   await remixRepository({ owner: 'player', repo: 'game', prompt, user: { token: 'test' }, config: {},
     requestGithub: async (path, token, options = {}) => {
       calls.push({ path, ...options })
