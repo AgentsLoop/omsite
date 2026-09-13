@@ -24,7 +24,7 @@ async function loadComposer({ me, storage = new Map(), fetch = async () => ({ ok
     JSON,
     Promise,
     encodeURIComponent,
-    window: { sessionStorage, location: { assign: url => redirects.push(url) } },
+    window: { sessionStorage, location: { pathname: '/', search: '', hash: '', assign: url => redirects.push(url) } },
     ref: value => ({ value }),
     computed: getter => ({ get value() { return getter() } }),
     nextTick: async () => {},
@@ -92,7 +92,7 @@ test('saves an unauthenticated draft, prepares it, then redirects once', async (
   assert.equal(app.composer.signInStatus.value, 'Redirecting to GitHub sign-in…')
   assert.equal(app.timers[1].delay, 800)
   app.runTimer(1)
-  assert.deepEqual(app.redirects, ['/auth/github'])
+  assert.deepEqual(app.redirects, ['/auth/github?returnTo=%2F'])
 })
 
 test('cleans up the active sign-in timer when the composer unmounts', async () => {

@@ -16,6 +16,7 @@ import { createGithubCache } from './lib/github-cache.mjs'
 import { normalizeTags, validateManualPublishMetadata } from './lib/catalog-metadata.mjs'
 import { isDirectGameSource, normalizeSource } from './lib/catalog-import-lib.mjs'
 import { createTokenSignIn } from './lib/token-signin.mjs'
+import { oauthReturnFromReferer, validateOAuthReturn } from './lib/oauth-return.mjs'
 import { listProfileRepositories, withDeployments } from './lib/profile-repositories.mjs'
 import { generateIssue } from './lib/generation.mjs'
 import { createUserRepository } from './lib/repository-create.mjs'
@@ -259,18 +260,24 @@ function equalSecret(expected, actual) {
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'omgithub' }))
 app.get('/auth/github', (req, res) => {
   if (!process.env.GITHUB_CLIENT_ID) return res.status(503).send('GitHub login is not configured')
-  const state = nonce(); res.setHeader('set-cookie', `omgithub_oauth=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${origin.startsWith('https:') ? '; Secure' : ''}`)
+  const returnTo = validateOAuthReturn(req.query.returnTo) || oauthReturnFromReferer(req.headers.referer, origin) || '/'
+  const state = nonce()
+  const cookieFlags = `Path=/; HttpOnly; SameSite=Lax; Max-Age=600${origin.startsWith('https:') ? '; Secure' : ''}`
+  res.setHeader('set-cookie', [`omgithub_oauth=${state}; ${cookieFlags}`, `omgithub_oauth_return=${encodeURIComponent(returnTo)}; ${cookieFlags}`])
   const params = new URLSearchParams({ client_id: process.env.GITHUB_CLIENT_ID, redirect_uri: `${origin}/auth/github/callback`, scope: 'read:user repo workflow', state })
   res.redirect(`https://github.com/login/oauth/authorize?${params}`)
 })
 app.get('/auth/github/callback', async (req, res) => {
+  const oauthCookies = cookies(req.headers.cookie)
+  const cookieFlags = `Path=/; HttpOnly; SameSite=Lax; Max-Age=0${origin.startsWith('https:') ? '; Secure' : ''}`
+  res.append('set-cookie', `omgithub_oauth=; ${cookieFlags}`)
+  res.append('set-cookie', `omgithub_oauth_return=; ${cookieFlags}`)
   try {
-    if (typeof req.query.code !== 'string' || !req.query.code || typeof req.query.state !== 'string' || !equalSecret(cookies(req.headers.cookie).omgithub_oauth, req.query.state)) throw new Error('Invalid OAuth state')
-    res.append('set-cookie', `omgithub_oauth=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${origin.startsWith('https:') ? '; Secure' : ''}`)
+    if (typeof req.query.code !== 'string' || !req.query.code || typeof req.query.state !== 'string' || !equalSecret(oauthCookies.omgithub_oauth, req.query.state)) throw new Error('Invalid OAuth state')
     const tokenResponse = await fetch('https://github.com/login/oauth/access_token', { method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify({ client_id: process.env.GITHUB_CLIENT_ID, client_secret: process.env.GITHUB_CLIENT_SECRET, code: req.query.code, redirect_uri: `${origin}/auth/github/callback` }) })
     const tokenData = await tokenResponse.json(); if (!tokenData.access_token) throw new Error(tokenData.error_description || 'GitHub did not return a token')
     const profile = await github('/user', tokenData.access_token); setSession(res, { id: profile.id, login: profile.login, name: profile.name, avatar_url: profile.avatar_url, html_url: profile.html_url, token: tokenData.access_token })
-    res.redirect(`/${profile.login}`)
+    res.redirect(validateOAuthReturn(oauthCookies.omgithub_oauth_return) || '/')
   } catch (error) { res.status(400).send(`GitHub sign-in failed: ${error.message}`) }
 })
 

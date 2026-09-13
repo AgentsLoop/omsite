@@ -8,7 +8,7 @@ and follow build progress. Use this flow without signing in.
 
 ## Publish a public repository path
 
-Use **Remix** on a published project card or project page to select its source repository in the composer. Keep the repository selector visible on home and profile composers. Validate cards, selectors, and modals in the dark theme at desktop and mobile widths before delivery. Deploy the verified build and check the live asset version when fixing missing production UI.
+Use **Remix** on a published project card or project page to select its source repository in the composer. Keep the repository selector visible in the home composer. Validate cards, selectors, and modals in the dark theme at desktop and mobile widths before delivery. Deploy the verified build and check the live asset version when fixing missing production UI.
 
 Use **Deploy** on a profile repository card to publish its root. Use **Open** after a successful root deployment. Keep subdirectory publications separate from the root deployment state. Show only public repositories.
 
@@ -163,8 +163,9 @@ Keep `DATA_DIR` on persistent storage for game files and caches. Configure
 
 Submit a prompt while signed out. Check the dark preparation modal and spinner for two seconds,
 then check the redirect message before GitHub sign-in. Keep the prompt and selected
-repository in tab-scoped session storage. Restore both in the profile composer
-after sign-in. Require a new submit to start generation. Clear the saved draft
+repository in tab-scoped session storage. Restore both in the home composer
+after sign-in. Return to the starting path, query, and fragment after GitHub authentication. Require a new submit to start generation. Clear the saved draft
 only after successful issue creation. Keep the prompt on screen if storage fails.
+Use profile Remix actions to open the home composer with the repository selected.
 Check the saved prompt preview, setup steps, and mobile modal layout. Use Escape
 or the close button to cancel the redirect and return to the prompt.

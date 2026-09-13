@@ -14,16 +14,9 @@
       </div>
     </section>
 
-    <section class="profile-composer">
-      <p class="eyebrow orange">REMIX WITH OPENCODE</p>
-      <h2>Describe your change</h2>
-      <p>Choose a repository or generate in Playground.</p>
-      <GenerationComposer ref="composer" :me="me" />
-    </section>
-
     <section class="library profile-library">
       <div class="section-heading"><div><p class="eyebrow orange">CREATOR LIBRARY</p><h2>Published projects</h2></div><span>{{ projects.length }} projects</span></div>
-      <div class="cards-grid"><GameCard v-for="project in projects" :key="project.id" :project="project" @remix="composer?.selectRepository($event)" /></div>
+      <div class="cards-grid"><GameCard v-for="project in projects" :key="project.id" :project="project" @remix="remix" /></div>
       <div v-if="!loading && !projects.length" class="empty-library">No published projects yet.</div>
     </section>
 
@@ -47,7 +40,7 @@
           <div class="repository-actions">
             <RouterLink v-if="repository.deployment_status === 'published'" :to="repository.deployment_path" class="remix-button">Open</RouterLink>
             <button v-else class="remix-button" :disabled="!repository.can_deploy || Boolean(deploying)" @click="deploy(repository)">{{ deploying === repository.full_name ? 'Deploying…' : 'Deploy' }}</button>
-            <button class="remix-button" @click="composer?.selectRepository(repository)">Remix</button>
+            <button class="remix-button" @click="remix(repository)">Remix</button>
           </div>
         </article>
       </div>
@@ -62,13 +55,11 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import GameCard from '../components/GameCard.vue'
-import GenerationComposer from '../components/GenerationComposer.vue'
 import { useJsonResource } from '../composables/useJsonResource'
 
 const props = defineProps({ me: Object })
 const route = useRoute()
 const router = useRouter()
-const composer = ref(null)
 const deploying = ref('')
 const deployError = ref('')
 const { data, loading, error } = useJsonResource(() => `/api/profiles/${encodeURIComponent(route.params.login)}`)
@@ -77,6 +68,9 @@ const isOwnProfile = computed(() => Boolean(props.me?.login && profile.value?.lo
 const repositories = computed(() => data.value?.repositories || [])
 const projects = computed(() => data.value?.projects || [])
 
+function remix(repository) {
+  router.push({ path: '/', query: { remix: repository.full_name } })
+}
 async function deploy(repository) {
   if (deploying.value) return
   deploying.value = repository.full_name

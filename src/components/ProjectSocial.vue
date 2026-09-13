@@ -13,7 +13,7 @@
     <p v-if="loading" role="status">Loading reviews…</p>
     <p v-if="error" class="form-error" role="alert">{{ error }} <button v-if="!loaded" type="button" @click="load">Retry</button></p>
     <template v-if="loaded">
-      <a v-if="!me" class="review-login" href="/auth/github">Write a review</a>
+      <a v-if="!me" class="review-login" :href="`/auth/github?returnTo=${encodeURIComponent(route.fullPath)}`">Write a review</a>
       <form v-else class="review-form" @submit.prevent="save">
         <h3>{{ ownComment ? 'Update your review' : 'What did you think?' }}</h3>
         <fieldset :disabled="busy">
@@ -43,6 +43,8 @@
   </section>
 </template>
 <script setup>
+import { useRoute } from 'vue-router'
+const route = useRoute()
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import ProjectMetadata from './ProjectMetadata.vue'
 const props = defineProps({ project: { type: Object, required: true }, me: Object })

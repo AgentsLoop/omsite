@@ -141,7 +141,7 @@ async function create() {
     preparationDialog.value?.showModal()
     signInTimer = setTimeout(() => {
       signInStatus.value = 'Redirecting to GitHub sign-in…'
-      signInTimer = setTimeout(() => window.location.assign('/auth/github'), 800)
+      signInTimer = setTimeout(() => window.location.assign(`/auth/github?returnTo=${encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)}`), 800)
     }, 2000)
     return
   }

@@ -668,23 +668,6 @@ h3 {
 .profile-error {
   margin: 20px clamp(20px, 10vw, 180px) 0;
 }
-.profile-composer {
-  padding: 52px max(24px, calc((100vw - 1120px) / 2));
-  background: #111112;
-  color: #f6f6f3;
-  text-align: center;
-}
-.profile-composer h2 {
-  margin: 5px 0 7px;
-  font-size: clamp(28px, 4vw, 42px);
-}
-.profile-composer > p:not(.eyebrow):not(.form-error) {
-  margin: 0 0 24px;
-  color: #aaa;
-}
-.profile-composer .prompt-box {
-  margin: 0 auto;
-}
 .repository-library {
   padding-top: 56px;
   padding-bottom: 24px;
