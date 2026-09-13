@@ -44,7 +44,7 @@ async function loadComposer({ me, storage = new Map(), fetch = async () => ({ ok
       if (timer) { timer.cleared = true; clearedTimers.push(timer) }
     },
   })
-  const runnable = script.replace(/^import .*$/gm, '') + '\nglobalThis.__composer = { create, prompt, selected, additions, busy, error, signingIn, signInStatus }'
+  const runnable = script.replace(/^import .*$/gm, '') + '\nglobalThis.__composer = { create, prompt, selected, additions, busy, error, signingIn, signInStatus, preparationDialog, cancelSignIn }'
   vm.runInContext(runnable, context, { filename: 'GenerationComposer.vue' })
 
   return {
@@ -132,4 +132,25 @@ test('clears the saved draft only after a signed-in issue is created', async () 
   await app.composer.create()
   assert.equal(storage.has('omgithub.generation-draft'), false)
   assert.deepEqual(app.pushed, ['/generated'])
+})
+
+test('opens a modal and cancels sign-in without losing the saved prompt', async () => {
+  const app = await loadComposer()
+  let opened = false
+  app.composer.preparationDialog.value = { showModal() { opened = true }, close() { opened = false } }
+  app.composer.prompt.value = 'Create a colorful space game'
+  await app.composer.create()
+  assert.equal(opened, true)
+  app.composer.cancelSignIn()
+  assert.equal(opened, false)
+  assert.equal(app.composer.busy.value, false)
+  assert.equal(app.timers[0].cleared, true)
+  assert.equal(JSON.parse(app.storage.get('omgithub.generation-draft')).prompt, app.composer.prompt.value)
+})
+
+test('renders the preparation dialog without the redundant sign-in link', async () => {
+  const component = await readFile(componentUrl, 'utf8')
+  assert.ok(component.includes('class="preparation-dialog"'))
+  assert.ok(component.includes('@cancel.prevent="cancelSignIn"'))
+  assert.ok(!component.includes('>Sign in to generate</a>'))
 })

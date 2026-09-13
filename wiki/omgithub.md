@@ -161,8 +161,10 @@ Keep `DATA_DIR` on persistent storage for game files and caches. Configure
 
 ## Verify signed-out prompt recovery
 
-Submit a prompt while signed out. Check the preparation spinner for two seconds,
+Submit a prompt while signed out. Check the dark preparation modal and spinner for two seconds,
 then check the redirect message before GitHub sign-in. Keep the prompt and selected
 repository in tab-scoped session storage. Restore both in the profile composer
 after sign-in. Require a new submit to start generation. Clear the saved draft
 only after successful issue creation. Keep the prompt on screen if storage fails.
+Check the saved prompt preview, setup steps, and mobile modal layout. Use Escape
+or the close button to cancel the redirect and return to the prompt.

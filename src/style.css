@@ -1173,4 +1173,38 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, summary:focu
 .shot-tabs { flex-wrap: wrap; }
 .preview-toolbar { min-height: 48px; height: auto; padding-top: 8px; padding-bottom: 8px; flex-wrap: wrap; }
 
-.composer-status { color: var(--muted); font-size: 0.9rem; margin: 12px 0; }
+
+
+.preparation-dialog { color: #f5f5f5; background: radial-gradient(ellipse at 50% 0%, #ff671914, transparent 50%), #181818; border: 1px solid #414141; border-radius: 24px; padding: 28px; width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box; text-align: left; box-shadow: 0 32px 120px #000b; }
+.preparation-dialog::backdrop { background: #080808cc; backdrop-filter: blur(8px); }
+.preparation-topline { display: flex; align-items: center; justify-content: space-between; }
+.preparation-topline > span { display: flex; align-items: center; gap: 8px; color: #bcbcbc; font-size: 10px; letter-spacing: 2px; font-weight: 700; }
+.preparation-topline i { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 12px #ff671966; }
+.preparation-topline button { border: 1px solid #414141; border-radius: 50%; width: 30px; height: 30px; background: #242424; color: #ccc; font-size: 21px; cursor: pointer; }
+.preparation-topline button:hover { background: #353535; color: white; }
+.preparation-orbit { width: 68px; height: 68px; margin: 24px auto; display: grid; place-items: center; position: relative; color: var(--orange); font-size: 34px; background: #ff67190d; border-radius: 50%; }
+.preparation-orbit::before { content: ''; position: absolute; inset: -5px; border: 1px solid #ff671929; border-top-color: var(--orange); border-radius: 50%; animation: preparation-spin 2s linear infinite; }
+.preparation-dialog h2 { margin: 0; font-size: clamp(23px, 5vw, 29px); letter-spacing: -1px; text-align: center; line-height: 1.2; }
+.preparation-subtitle { color: #aaa; text-align: center; font-size: 14px; margin: 10px 0 24px; }
+.preparation-prompt { padding: 16px; border: 1px solid #393939; border-radius: 12px; background: #222; }
+.preparation-prompt > span { font-size: 9px; letter-spacing: 1.8px; color: #aaa; font-weight: 700; }
+.preparation-prompt p { color: #ededed; font-size: 14px; line-height: 1.5; margin: 8px 0 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 84px; overflow-y: auto; }
+.preparation-prompt small { color: #bbb; font-size: 11px; overflow-wrap: anywhere; }
+.preparation-steps { padding: 0; margin: 24px 0; list-style: none; display: grid; gap: 20px; }
+.preparation-steps li { display: flex; align-items: center; gap: 12px; color: #929292; }
+.step-mark { width: 28px; height: 28px; flex: 0 0 28px; display: grid; place-items: center; border: 1px solid #444; border-radius: 50%; font-size: 11px; }
+.preparation-steps strong { display: block; font-size: 13px; font-weight: 600; line-height: 1.4; }
+.preparation-steps small { display: block; font-size: 11px; color: #999; margin-top: 3px; line-height: 1.4; }
+.preparation-steps .complete { color: #ddd; }
+.complete .step-mark { color: #8edbb4; background: #8edbb410; border-color: #8edbb433; }
+.step-tag { color: #8edbb4; margin-left: auto; font-size: 9px; letter-spacing: 1px; }
+.preparation-steps .active { color: #ff985e; }
+.active .step-mark { color: var(--orange); border-color: #ff671955; }
+.preparation-steps .spinner { width: 13px; height: 13px; border-color: #ff671933; border-top-color: #ff985e; }
+.preparation-track { height: 3px; background: #333; border-radius: 4px; overflow: hidden; }
+.preparation-track > span { display: block; height: 100%; width: 35%; background: var(--orange); transition: width 0.8s ease; }
+.preparation-track > span.redirecting { width: 75%; }
+.preparation-note { color: #aaa; text-align: center; font-size: 11px; line-height: 1.6; margin: 14px 8px 0; }
+@keyframes preparation-spin { to { transform: rotate(360deg); } }
+@media (max-width: 480px) { .preparation-dialog { padding: 22px; border-radius: 20px; } .preparation-orbit { margin: 20px auto; } }
+@media (prefers-reduced-motion: reduce) { .preparation-orbit::before { animation: none; } .preparation-track > span { transition: none; } }

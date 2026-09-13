@@ -13,9 +13,21 @@
         <button :disabled="busy || !prompt.trim()" aria-label="Generate"><span v-if="busy" class="spinner"></span><span v-else>↑</span></button>
       </div>
     </form>
-    <p v-if="signingIn" class="composer-status" role="status">{{ signInStatus }}</p>
     <p v-if="error || optionsError" class="form-error" role="alert">{{ error || optionsError }}</p>
-    <a v-if="!me" href="/auth/github">Sign in to generate</a>
+    <dialog ref="preparationDialog" class="preparation-dialog" :aria-labelledby="`${dialogId}-prepare-title`" :aria-describedby="`${dialogId}-prepare-note`" @cancel.prevent="cancelSignIn">
+      <div class="preparation-topline"><span><i></i> PROJECT SETUP</span><button type="button" aria-label="Cancel sign-in" @click="cancelSignIn">×</button></div>
+      <div class="preparation-orbit" aria-hidden="true"><span>✦</span></div>
+      <h2 :id="`${dialogId}-prepare-title`">Let’s bring your idea to life.</h2>
+      <p class="preparation-subtitle">Your next project starts here.</p>
+      <div class="preparation-prompt"><span>YOUR PROJECT</span><p>{{ prompt }}</p><small>⌘ {{ selected || 'Playground' }}</small></div>
+      <ol class="preparation-steps">
+        <li class="complete"><span class="step-mark">✓</span><div><strong>Prompt saved</strong><small>Your idea is ready to continue.</small></div><span class="step-tag">DONE</span></li>
+        <li class="active"><span class="step-mark"><span class="spinner"></span></span><div><strong role="status">{{ signInStatus }}</strong><small>Connecting your project to GitHub.</small></div></li>
+        <li><span class="step-mark">3</span><div><strong>Start your build</strong><small>Continue after GitHub sign-in.</small></div></li>
+      </ol>
+      <div class="preparation-track" aria-hidden="true"><span :class="{ redirecting: signInStatus.startsWith('Redirecting') }"></span></div>
+      <p :id="`${dialogId}-prepare-note`" class="preparation-note">Opening GitHub shortly. Your prompt will be waiting when you return.</p>
+    </dialog>
     <dialog ref="projectDialog" class="new-project-dialog" :aria-labelledby="`${dialogId}-title`" @cancel.prevent="cancelProject" @keydown.tab="keepModalFocus">
       <form @submit.prevent="createProject">
         <h2 :id="`${dialogId}-title`">New Project</h2>
@@ -40,7 +52,7 @@ const props = defineProps({ me: Object })
 const router = useRouter()
 const prompt = ref(''), selected = ref(''), additions = ref([]), busy = ref(false), error = ref('')
 const draftKey = 'omgithub.generation-draft'
-const signingIn = ref(false), signInStatus = ref('')
+const signingIn = ref(false), signInStatus = ref(''), preparationDialog = ref(null)
 let signInTimer
 try {
   const draft = JSON.parse(window.sessionStorage.getItem(draftKey) || 'null')
@@ -108,6 +120,12 @@ async function createProject() {
   } catch (failure) { projectError.value = failure.message }
   finally { creatingProject.value = false }
 }
+function cancelSignIn() {
+  clearTimeout(signInTimer)
+  preparationDialog.value?.close()
+  signingIn.value = false; busy.value = false
+  nextTick(() => field.value?.focus())
+}
 async function create() {
   if (busy.value || creatingProject.value || projectDialog.value?.open) return
   if (!prompt.value.trim()) return
@@ -120,6 +138,7 @@ async function create() {
     }
     busy.value = true; signingIn.value = true; error.value = ''
     signInStatus.value = 'Preparing your request…'
+    preparationDialog.value?.showModal()
     signInTimer = setTimeout(() => {
       signInStatus.value = 'Redirecting to GitHub sign-in…'
       signInTimer = setTimeout(() => window.location.assign('/auth/github'), 800)
