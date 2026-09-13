@@ -9,8 +9,7 @@ installed or when a repository is added to an installation.
 
 Grant Actions, Contents, Issues, and Workflows write access. Install
 `.github/workflows/opencode.yml` on the default branch when an issue opens with
-an `OpenCode` label or a `/OpenCode` title, or when an issue receives the
-`OpenCode` label. Ignore all other issues. Pin central preparation and
+an `OpenCode` label or a `/OpenCode` title. Ignore all other issues. Pin central preparation and
 execution workflows to a resolved commit SHA. Use `OMG_FALLBACK_OWNER`,
 `OMG_FALLBACK_REPO`, and `OMG_FALLBACK_REF` to choose that revision. Keep
 repository workflow changes reviewable.
@@ -36,8 +35,8 @@ Validate author access and resolve the target branch on the Actions runner.
 Use one `issues.opened` run per issue. Serialize jobs with Actions concurrency.
 When `branch:` selects another branch, dispatch the caller at that branch and
 stop the default-branch run. Run preparation and OpenCode in the dispatched run.
-Start an existing issue from Actions → OpenCode → Run workflow and enter its
-issue number. Read the current issue and branch on each manual start.
+Create a new issue with the same title and body when retrying a failed request.
+Attach the original execution and requested mode labels. Keep status labels out of the new issue.
 
 Append `branch: <existing-branch>` to select project checkout. Freeze its
 commit during preparation and use the branch as the result base. Load the

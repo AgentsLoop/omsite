@@ -56,13 +56,13 @@ function repositoryMock(existing = null) {
 
 test('native wrapper isolates validation and passes every validated execution input', () => {
   const workflow = repositoryWorkflow('central', 'runtime', sha)
-  assert.match(workflow, /types: \[opened, labeled\]/)
+  assert.match(workflow, /types: \[opened\]/)
   assert.match(workflow, /workflow_dispatch/)
   assert.doesNotMatch(workflow, /dispatches|secrets: inherit/)
   const prepare = workflow.split('  prepare:')[1].split('  opencode:')[0]
   assert.doesNotMatch(prepare, /secrets/)
   assert.match(prepare, /github.event.issue.labels/)
-  assert.match(prepare, /github.event.label.name == 'OpenCode'/)
+  assert.doesNotMatch(prepare, /github.event.label.name/)
   assert.match(prepare, /\/OpenCode/)
   assert.match(prepare, new RegExp(`runtime_ref: ${sha}`))
   assert.match(workflow, /if: needs.prepare.outputs.approved == 'true'/)
@@ -104,7 +104,7 @@ test('only OpenCode issue events request repository setup', () => {
   assert.equal(isActionableIssueEvent('issues', { ...payload, action: 'opened', issue }), false)
   assert.equal(isActionableIssueEvent('issues', { ...payload, action: 'opened', issue: { ...issue, title: '/OpenCode Build this' } }), true)
   assert.equal(isActionableIssueEvent('issues', { ...payload, action: 'opened', issue: { ...issue, labels: [{ name: 'OpenCode' }] } }), true)
-  assert.equal(isActionableIssueEvent('issues', { ...payload, action: 'labeled', issue, label: { name: 'OpenCode' } }), true)
+  assert.equal(isActionableIssueEvent('issues', { ...payload, action: 'labeled', issue, label: { name: 'OpenCode' } }), false)
   assert.equal(isActionableIssueEvent('issues', { ...payload, action: 'labeled', issue, label: { name: 'bug' } }), false)
 })
 

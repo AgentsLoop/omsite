@@ -33,3 +33,7 @@ Run `gh auth status` to confirm the account. Retrieve its token with `gh auth to
 Do not print, log, commit, or place the token in a user-visible URL.
 Send the token only to OmGithub through the existing token sign-in route, then confirm the session with `/api/me` or the signed-in profile UI.
 Use `?exec=logout` on the OmGithub home route to end the test session.
+
+## Retry failed requests
+
+Create a new issue with the same title and body. Preserve execution and requested mode labels.

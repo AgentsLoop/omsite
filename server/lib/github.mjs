@@ -69,7 +69,7 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '',
     'on:',
     '  issues:',
-    '    types: [opened, labeled]',
+    '    types: [opened]',
     '  workflow_dispatch:',
     '    inputs:',
     '      issue_number:',
@@ -85,7 +85,7 @@ export function repositoryWorkflow(owner = 'AgentsLoop', repo = 'OhMyGithub', re
     '',
     'jobs:',
     '  prepare:',
-    "    if: github.event_name == 'workflow_dispatch' || (github.event.action == 'opened' && (contains(github.event.issue.labels.*.name, 'OpenCode') || contains(github.event.issue.title, '/OpenCode'))) || (github.event.action == 'labeled' && github.event.label.name == 'OpenCode')",
+    "    if: github.event_name == 'workflow_dispatch' || (github.event.action == 'opened' && (contains(github.event.issue.labels.*.name, 'OpenCode') || contains(github.event.issue.title, '/OpenCode')))",
     '    permissions:',
     '      contents: read',
     '      issues: write',
@@ -120,11 +120,11 @@ function hasOpenCodeLabel(labels = []) {
 export function isActionableIssueEvent(event, payload) {
   if (event !== 'issues') return false
   if (payload?.action === 'opened') return hasOpenCodeLabel(payload.issue?.labels) || String(payload.issue?.title || '').includes('/OpenCode')
-  return payload?.action === 'labeled' && String(payload.label?.name).toLowerCase() === 'opencode'
+  return false
 }
 
 export async function handleActionableIssue(payload, config, requestFetch = fetch) {
-  if (!payload.installation?.id || !['opened', 'labeled'].includes(payload.action)) throw new Error('Require an actionable issue installation event')
+  if (!payload.installation?.id || payload.action !== 'opened') throw new Error('Require an actionable issue installation event')
   const owner = payload.repository?.owner?.login
   const repo = payload.repository?.name
   const issueNumber = payload.issue?.number
@@ -214,7 +214,7 @@ export async function ensureIssueWorkflow({ owner, repo }, config, requestFetch 
   if (content === workflow) return { installationToken, repository, workflowSha, installed: false }
   // Preserve the central repository's reviewed local caller.
   if (owner.toLowerCase() === centralOwner.toLowerCase() && repo.toLowerCase() === centralRepo.toLowerCase()) {
-    if (!content.includes('types: [opened, labeled]') || !content.includes('uses: ./.github/workflows/opencode-prepare.yml') || !content.includes('uses: ./.github/workflows/opencode-reusable.yml')) {
+    if (!content.includes('types: [opened]') || !content.includes('uses: ./.github/workflows/opencode-prepare.yml') || !content.includes('uses: ./.github/workflows/opencode-reusable.yml')) {
       throw new Error('Install and review the central repository issue listener before accepting requests')
     }
     return { installationToken, repository, workflowSha, installed: false }
