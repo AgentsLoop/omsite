@@ -26,13 +26,18 @@ export function extractUrls(issue, comments = []) {
   const text = [issue.body || '', ...comments.map(c => c.body || '')].join('\n')
   const urls = [...text.matchAll(/https:\/\/[^\s)<\"]+/g)].map(match => match[0].replace(/[.,]+$/, ''))
   const trycf = urls.filter(url => /\.trycloudflare\.com/i.test(url))
-  const opencode = trycf.find(url => /\/session\/ses_/i.test(url)) || ''
-  const labeled = label => {
+  const labeled = (label, accept = () => true) => {
     const lines = text.split('\n').filter(line => label.test(line))
-    return lines.reverse().map(line => line.match(/https:\/\/[^\s)<"]+/)?.[0]).find(Boolean) || ''
+    return lines.reverse().map(line => line.match(/https:\/\/[^\s)<"]+/)?.[0]).find(url => url && accept(url)) || ''
   }
+  const sessionUrl = url => /\.trycloudflare\.com\/.*session\/ses_/i.test(url)
+  const validation = labeled(/validation.*(?:opencode|session|chat)/i, sessionUrl)
+  const opencode = validation || [...trycf].reverse().find(sessionUrl) || ''
   const files = labeled(/project files/i)
-  const preview = labeled(/final game|playable preview|^Preview:/i)
+  const preview = labeled(/final game|playable preview|^Preview:/i, url =>
+    !/\.(png|jpe?g|webp|gif|svg|avif)(?:[?#]|$)/i.test(url) &&
+    !/github\.com\/user-attachments\/assets\//i.test(url)
+  )
   const branch = labeled(/created branch/i)
   const screenshots = [...new Set(urls.filter(url =>
     /raw\.githubusercontent\.com\/.+\/(?:screenshots|project%2Fscreenshots|project\/screenshots)\/.+\.(png|jpe?g|webp)/i.test(url) ||

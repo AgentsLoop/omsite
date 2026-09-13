@@ -167,3 +167,20 @@ test('execution caller permits optional pull-request delivery', () => {
   const execution = repositoryWorkflow('central', 'runtime', sha).split('  opencode:')[1]
   assert.match(execution, /pull-requests: write/)
 })
+
+test('switches to validation chat and excludes final screenshot downloads from playable preview', () => {
+  const result = extractUrls({}, [
+    { body: 'OpenCode Web UI: https://chat.trycloudflare.com/project/session/ses_build' },
+    { body: 'Validation OpenCode Web UI: https://chat.trycloudflare.com/project/session/ses_validate' },
+    { body: 'Final game: https://game.trycloudflare.com\n![Final game screenshot: world.png](https://github.com/owner/repo/releases/download/logs/world.png)' },
+    { body: '![Final game screenshot](https://github.com/user-attachments/assets/screenshot)' }
+  ])
+  assert.equal(result.opencode, 'https://chat.trycloudflare.com/project/session/ses_validate')
+  assert.equal(result.preview, 'https://game.trycloudflare.com')
+  assert.equal(result.screenshots.length, 2)
+})
+
+test('does not offer an image-only report as a playable game', () => {
+  const result = extractUrls({}, [{ body: 'Final game: https://host.trycloudflare.com/screenshot.png' }])
+  assert.equal(result.preview, '')
+})

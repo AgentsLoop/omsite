@@ -13,7 +13,7 @@
       <nav class="mobile-pane-tabs" aria-label="Workspace panes"><button :class="mobilePane === 'chat' ? 'active' : ''" @click="showPane('chat')">Chat</button><button :class="mobilePane === 'preview' ? 'active' : ''" @click="showPane('preview')">Preview</button></nav>
       <div class="studio-grid">
         <section class="chat-panel" :class="{ 'mobile-hidden': mobilePane !== 'chat' }">
-          <iframe v-if="project.opencode_url" :src="project.opencode_url" allow="clipboard-read; clipboard-write" title="Live OpenCode chat"></iframe>
+          <iframe v-if="project.opencode_url" :key="project.opencode_url" :src="project.opencode_url" allow="clipboard-read; clipboard-write" title="Live OpenCode chat"></iframe>
           <div v-else class="preview-wait workflow-wait">
             <div class="orbit"><span></span></div>
             <h2>{{ workflowFailed ? 'GitHub Actions failed' : 'Preparing OpenCode' }}</h2>
@@ -79,6 +79,7 @@ const currentStep = computed(() => currentGithubAction.value
   : steps.value.find(step => step.active) || [...steps.value].reverse().find(step => step.done) || steps.value[0])
 watch(project, (current, previous) => {
   selectedPreview.value = selectPreview(current, previous, selectedPreview.value)
+  if (current?.opencode_url && previous?.opencode_url && current.opencode_url !== previous.opencode_url) mobilePane.value = 'chat'
   if (!current) selectedShot.value = ''
 })
 </script>

@@ -169,3 +169,10 @@ only after successful issue creation. Keep the prompt on screen if storage fails
 Use profile Remix actions to open the home composer with the repository selected.
 Check the saved prompt preview, setup steps, and mobile modal layout. Use Escape
 or the close button to cancel the redirect and return to the prompt.
+
+## Verify validation chat and final game
+
+Select the shared validation session for the chat iframe when its link appears
+in an issue comment. Switch the mobile workspace to Chat on session changes.
+Use the playable preview link for Final Game. Keep final screenshot attachments
+in the numbered screenshot tabs. Exclude image downloads from playable URLs.
