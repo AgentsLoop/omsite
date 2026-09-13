@@ -158,3 +158,11 @@ Use [the site setup guide](../README.md) for configuration. Deploy the
 Keep `DATA_DIR` on persistent storage for game files and caches. Configure
 `SUPABASE_DB_URL` for the project catalog and social records. Follow
 [the Supabase operations guide](supabase.md).
+
+## Verify signed-out prompt recovery
+
+Submit a prompt while signed out. Check the preparation spinner for two seconds,
+then check the redirect message before GitHub sign-in. Keep the prompt and selected
+repository in tab-scoped session storage. Restore both in the profile composer
+after sign-in. Require a new submit to start generation. Clear the saved draft
+only after successful issue creation. Keep the prompt on screen if storage fails.

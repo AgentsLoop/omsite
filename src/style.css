@@ -1172,3 +1172,5 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, summary:focu
 
 .shot-tabs { flex-wrap: wrap; }
 .preview-toolbar { min-height: 48px; height: auto; padding-top: 8px; padding-bottom: 8px; flex-wrap: wrap; }
+
+.composer-status { color: var(--muted); font-size: 0.9rem; margin: 12px 0; }
